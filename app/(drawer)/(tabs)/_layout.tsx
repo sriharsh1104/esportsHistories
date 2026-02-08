@@ -63,6 +63,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="shop"
+        options={{
+          title: 'Shop',
+          tabBarIcon: ({ color }) => <TabBarIcon name="shopping-bag" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
@@ -74,6 +81,13 @@ export default function TabLayout() {
         options={{
           title: 'Settings',
           tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="game"
+        options={{
+          title: 'Games',
+          tabBarButton: () => null,
         }}
       />
     </Tabs>

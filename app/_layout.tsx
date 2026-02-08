@@ -79,6 +79,7 @@ function RootLayoutNav() {
           <Stack.Screen name="(drawer)" />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="edit-profile" />
+          <Stack.Screen name="addresses" />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
         </WalletProvider>

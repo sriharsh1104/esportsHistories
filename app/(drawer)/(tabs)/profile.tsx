@@ -144,6 +144,18 @@ export default function ProfileScreen() {
         </Card>
 
         <Card
+          onPress={() => router.push('/addresses')}
+          style={[styles.card, { marginTop: 0 }]}
+        >
+          <Text style={[styles.cardTitle, { color: colors.text }]}>
+            Addresses
+          </Text>
+          <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
+            Add delivery addresses, use current location
+          </Text>
+        </Card>
+
+        <Card
           onPress={() => router.push('/(auth)/change-password')}
           style={[styles.card, { marginTop: 0 }]}
         >

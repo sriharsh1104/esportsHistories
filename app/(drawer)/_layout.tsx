@@ -87,7 +87,7 @@ function CustomDrawerContent(props: { navigation?: any }) {
             key={game.id}
             onPress={() => {
               closeDrawer();
-              router.push(`/(drawer)/game/${game.slug}` as any);
+              router.push(`/(drawer)/(tabs)/game/${game.slug}` as any);
             }}
             style={({ pressed }) => ({
               flexDirection: 'row',
@@ -140,13 +140,6 @@ export default function DrawerLayout() {
           drawerLabel: 'Games',
           title: 'Select Games',
           drawerIcon: ({ color }) => <FontAwesome name="gamepad" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="game/[slug]"
-        options={{
-          drawerItemStyle: { display: 'none' },
-          title: 'Game',
         }}
       />
     </Drawer>

@@ -33,7 +33,15 @@ export default {
       output: 'static',
       favicon: './assets/images/favicon.png',
     },
-    plugins: ['expo-router'],
+    plugins: [
+      'expo-router',
+      [
+        'expo-location',
+        {
+          locationWhenInUsePermission: 'Allow Esports Histories to use your location for address.',
+        },
+      ],
+    ],
     experiments: { typedRoutes: true },
     extra: {
       apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3000/api',

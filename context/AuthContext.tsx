@@ -4,6 +4,7 @@ import type {
   SignupCredentials,
   UpdateProfileData,
   User,
+  UserAddress,
 } from '@/types/auth';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
@@ -15,6 +16,7 @@ type AuthContextType = {
   signup: (c: SignupCredentials) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
+  updateAddresses: (addresses: UserAddress[]) => Promise<void>;
   refreshUser: () => Promise<void>;
 };
 
@@ -59,6 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
   }, []);
 
+  const updateAddresses = useCallback(async (addresses: UserAddress[]) => {
+    const updated = await authService.updateAddresses(addresses);
+    setUser(updated);
+  }, []);
+
   const refreshUser = useCallback(loadStoredAuth, [loadStoredAuth]);
 
   const value: AuthContextType = {
@@ -69,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signup,
     logout,
     updateProfile,
+    updateAddresses,
     refreshUser,
   };
 

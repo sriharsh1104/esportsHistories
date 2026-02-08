@@ -7,6 +7,7 @@ import type {
   SignupCredentials,
   UpdateProfileData,
   User,
+  UserAddress,
 } from '@/types/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
@@ -70,9 +71,14 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
     fullName: data.fullName !== undefined ? data.fullName : stored.user.fullName,
     phone: data.phone !== undefined ? data.phone : stored.user.phone,
     upiId: data.upiId !== undefined ? data.upiId : stored.user.upiId,
+    addresses: data.addresses !== undefined ? data.addresses : stored.user.addresses,
   };
   await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
   return updated;
+}
+
+export async function updateAddresses(addresses: UserAddress[]): Promise<User> {
+  return updateProfile({ addresses });
 }
 
 export async function changePassword(

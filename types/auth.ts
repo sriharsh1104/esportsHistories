@@ -1,3 +1,14 @@
+export type UserAddress = {
+  id: string;
+  label?: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+  phone?: string;
+};
+
 export type User = {
   id: string;
   email: string;
@@ -6,6 +17,7 @@ export type User = {
   phone?: string;
   upiId?: string;
   avatarUrl?: string;
+  addresses?: UserAddress[];
 };
 
 export type UpdateProfileData = {
@@ -13,6 +25,7 @@ export type UpdateProfileData = {
   fullName?: string;
   phone?: string;
   upiId?: string;
+  addresses?: UserAddress[];
 };
 
 export type AuthState = {
