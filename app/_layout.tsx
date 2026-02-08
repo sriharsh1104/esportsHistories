@@ -5,6 +5,8 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
@@ -13,13 +15,13 @@ import { ResponsiveProvider } from '@/context/ResponsiveContext';
 import { WalletProvider } from '@/context/WalletContext';
 
 export {
-    // Catch any errors thrown by the Layout component.
-    ErrorBoundary
+  // Catch any errors thrown by the Layout component.
+  ErrorBoundary
 } from 'expo-router';
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: '(drawer)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -68,12 +70,13 @@ function RootLayoutNav() {
   };
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <ThemeProvider value={navTheme}>
       <ResponsiveProvider>
         <AuthProvider>
         <WalletProvider>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(drawer)" />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="edit-profile" />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
@@ -82,5 +85,6 @@ function RootLayoutNav() {
       </AuthProvider>
         </ResponsiveProvider>
     </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

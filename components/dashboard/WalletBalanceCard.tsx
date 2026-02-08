@@ -29,7 +29,7 @@ export function WalletBalanceCard() {
   );
 
   return (
-    <Pressable onPress={() => router.push('/(tabs)/wallet')}>
+    <Pressable onPress={() => router.push('/(drawer)/(tabs)/wallet')}>
       <Card style={styles.card}>
         <View style={styles.row}>
           <FontAwesome

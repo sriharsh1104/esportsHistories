@@ -67,7 +67,7 @@ export default function SignupScreen() {
         displayName: displayName.trim(),
         confirmPassword,
       });
-      router.replace('/(tabs)');
+      router.replace('/(drawer)/(tabs)');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Signup failed');
     } finally {

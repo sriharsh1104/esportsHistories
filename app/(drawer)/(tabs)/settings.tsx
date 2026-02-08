@@ -52,7 +52,7 @@ export default function SettingsScreen() {
             <SettingsRow
               icon="user"
               label="Profile"
-              onPress={() => router.push('/(tabs)/profile')}
+              onPress={() => router.push('/(drawer)/(tabs)/profile')}
             />
             <SettingsRow
               icon="lock"

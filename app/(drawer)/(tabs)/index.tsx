@@ -91,7 +91,7 @@ export default function DashboardScreen() {
         </Text>
         <View style={styles.cardsRow}>
           <View style={styles.cardFlex}>
-            <Card onPress={() => {}} style={styles.quickCard}>
+            <Card onPress={() => router.push('/(drawer)/games')} style={styles.quickCard}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>PC Games</Text>
               <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
                 LoL, Dota 2, CS2, Valorant
@@ -99,10 +99,10 @@ export default function DashboardScreen() {
             </Card>
           </View>
           <View style={styles.cardFlex}>
-            <Card onPress={() => {}} style={styles.quickCard}>
+            <Card onPress={() => router.push('/(drawer)/games')} style={styles.quickCard}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>Mobile Games</Text>
               <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-                Mobile Legends, PUBG Mobile, Free Fire
+                BGMI, Free Fire, MLBB
               </Text>
             </Card>
           </View>
