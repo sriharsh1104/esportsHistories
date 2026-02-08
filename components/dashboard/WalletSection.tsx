@@ -1,19 +1,26 @@
 import { Button, Card } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
-import { useWallet } from '@/context/WalletContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { useWallet } from '@/context/WalletContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   Text,
   TextInput,
   View,
-  ActivityIndicator,
 } from 'react-native';
+
+type TopUpMethod = 'upi' | 'card' | 'qr';
+
+const TOP_UP_OPTIONS: { id: TopUpMethod; icon: string; label: string; desc: string }[] = [
+  { id: 'upi', icon: 'credit-card', label: 'UPI', desc: 'GPay, PhonePe, Paytm' },
+  { id: 'card', icon: 'credit-card-alt', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay' },
+  { id: 'qr', icon: 'qrcode', label: 'QR Code', desc: 'Scan to pay' },
+];
 
 export function WalletSection() {
   const { balance, topUp, withdraw, isLoading } = useWallet();
@@ -22,6 +29,7 @@ export function WalletSection() {
   const colors = Colors[scheme];
   const [modalType, setModalType] = useState<'topup' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
+  const [topUpMethod, setTopUpMethod] = useState<TopUpMethod>('upi');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -49,6 +57,14 @@ export function WalletSection() {
         fontSize: w(16),
         color: colors.text,
         marginBottom: h(16),
+      },
+      payOpt: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        padding: w(14),
+        borderRadius: w(12),
+        borderWidth: 2,
+        marginBottom: h(10),
       },
     }),
     [w, h, colors]
@@ -80,6 +96,7 @@ export function WalletSection() {
   const closeModal = () => {
     setModalType(null);
     setAmount('');
+    setTopUpMethod('upi');
     setError('');
   };
 
@@ -149,6 +166,43 @@ export function WalletSection() {
             >
               {modalType === 'topup' ? 'Top Up Wallet' : 'Withdraw'}
             </Text>
+            {modalType === 'topup' && (
+              <>
+                <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text, marginBottom: h(10) }}>
+                  Payment method
+                </Text>
+                {TOP_UP_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.id}
+                    onPress={() => setTopUpMethod(opt.id)}
+                    style={[
+                      styles.payOpt,
+                      {
+                        backgroundColor: colors.cardBg,
+                        borderColor: topUpMethod === opt.id ? colors.tint : colors.border,
+                      },
+                    ]}
+                  >
+                    <FontAwesome
+                      name={opt.icon as any}
+                      size={w(22)}
+                      color={colors.tint}
+                      style={{ marginRight: w(12) }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: w(15), fontWeight: '600', color: colors.text }}>
+                        {opt.label}
+                      </Text>
+                      <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>{opt.desc}</Text>
+                    </View>
+                    {topUpMethod === opt.id && (
+                      <FontAwesome name="check-circle" size={w(20)} color={colors.tint} />
+                    )}
+                  </Pressable>
+                ))}
+                <View style={{ height: h(8) }} />
+              </>
+            )}
             <TextInput
               placeholder="Enter amount (₹)"
               placeholderTextColor={colors.tabIconDefault}

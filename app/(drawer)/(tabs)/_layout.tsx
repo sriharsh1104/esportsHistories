@@ -1,3 +1,4 @@
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { LogoutButton } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -6,7 +7,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
@@ -45,7 +46,12 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: true,
         headerLeft: () => <DrawerToggle />,
-        headerRight: () => <LogoutButton />,
+        headerRight: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ThemeToggle />
+            <LogoutButton />
+          </View>
+        ),
       }}
     >
       <Tabs.Screen

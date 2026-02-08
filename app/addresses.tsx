@@ -127,6 +127,7 @@ export default function AddressesScreen() {
         state: state.trim(),
         pincode: pincode.trim(),
         phone: phone.trim(),
+        isDefault: addresses.length === 0,
       };
       await updateAddresses([...addresses, newAddr]);
       setLine1('');
@@ -179,9 +180,25 @@ export default function AddressesScreen() {
                   key={addr.id}
                   style={[
                     styles.addrCard,
-                    { backgroundColor: colors.cardBg, borderColor: colors.border },
+                    {
+                      backgroundColor: colors.cardBg,
+                      borderColor: addr.isDefault ? colors.tint : colors.border,
+                      borderWidth: addr.isDefault ? 2 : 1,
+                    },
                   ]}
                 >
+                  {addr.isDefault && (
+                    <Text
+                      style={{
+                        fontSize: w(12),
+                        fontWeight: '600',
+                        color: colors.tint,
+                        marginBottom: h(4),
+                      }}
+                    >
+                      DEFAULT
+                    </Text>
+                  )}
                   <Text style={[styles.addrText, { color: colors.text }]}>
                     {addr.line1}
                     {addr.line2 ? `, ${addr.line2}` : ''}
@@ -194,12 +211,24 @@ export default function AddressesScreen() {
                       📞 {addr.phone}
                     </Text>
                   ) : null}
-                  <Pressable
-                    onPress={() => handleRemoveAddress(addr.id)}
-                    style={{ marginTop: h(8) }}
-                  >
-                    <Text style={{ fontSize: w(13), color: '#dc3545' }}>Remove</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', marginTop: h(8), gap: w(16) }}>
+                    {!addr.isDefault && (
+                      <Pressable
+                        onPress={() => {
+                          const updated = addresses.map((a) => ({
+                            ...a,
+                            isDefault: a.id === addr.id,
+                          }));
+                          updateAddresses(updated);
+                        }}
+                      >
+                        <Text style={{ fontSize: w(13), color: colors.tint }}>Set as default</Text>
+                      </Pressable>
+                    )}
+                    <Pressable onPress={() => handleRemoveAddress(addr.id)}>
+                      <Text style={{ fontSize: w(13), color: '#dc3545' }}>Remove</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ))}
             </View>

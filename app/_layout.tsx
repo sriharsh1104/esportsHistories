@@ -12,6 +12,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider } from '@/context/AuthContext';
 import { ResponsiveProvider } from '@/context/ResponsiveContext';
+import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
 import { WalletProvider } from '@/context/WalletContext';
 
 export {
@@ -48,7 +49,11 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <AppThemeProvider>
+      <RootLayoutNav />
+    </AppThemeProvider>
+  );
 }
 
 function RootLayoutNav() {

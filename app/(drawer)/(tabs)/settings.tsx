@@ -3,14 +3,23 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import type { ThemePreference } from '@/context/ThemeContext';
+import { useTheme } from '@/context/ThemeContext';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+
+const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+  { id: 'system', label: 'System (Device)' },
+];
 
 export default function SettingsScreen() {
   const { isAuthenticated, logout } = useAuth();
-  const scheme = useColorScheme() ?? 'light';
+  const { theme, setTheme } = useTheme();
+  const scheme = useColorScheme();
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const extra = Constants.expoConfig?.extra;
@@ -67,7 +76,39 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>
           PREFERENCES
         </Text>
-        <Card style={styles.card} padded={false}>
+        <Card style={styles.card}>
+          <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text, marginBottom: h(10) }}>
+            Theme
+          </Text>
+          <View style={{ flexDirection: 'row', gap: w(6), flexWrap: 'wrap' }}>
+            {THEME_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.id}
+                onPress={() => setTheme(opt.id)}
+                style={{
+                  paddingVertical: h(6),
+                  paddingHorizontal: w(12),
+                  borderRadius: w(16),
+                  backgroundColor: theme === opt.id ? colors.tint : colors.border + '40',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: w(12),
+                    fontWeight: '500',
+                    color: theme === opt.id ? '#fff' : colors.text,
+                  }}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={{ fontSize: w(11), color: colors.tabIconDefault, marginTop: h(6) }}>
+            System follows your device dark/light mode
+          </Text>
+        </Card>
+        <Card style={[styles.card, { marginTop: h(12) }]} padded={false}>
           <SettingsRow
             icon="bell"
             label="Notifications"

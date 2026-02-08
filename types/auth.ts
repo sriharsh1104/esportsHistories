@@ -7,6 +7,7 @@ export type UserAddress = {
   state: string;
   pincode: string;
   phone?: string;
+  isDefault?: boolean;
 };
 
 export type User = {
