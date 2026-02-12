@@ -11,6 +11,7 @@ import {
   type ShopItem,
 } from '@/data/shop';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
@@ -206,7 +207,7 @@ export default function ShopIndexScreen() {
             filteredItems.map((item) => (
               <Card
                 key={item.id}
-                onPress={() => router.push(`/(drawer)/(tabs)/shop/${item.id}` as any)}
+                onPress={() => router.push(ROUTES.SHOP_ITEM(item.id))}
                 style={styles.itemCard}
                 padded={false}
               >
@@ -222,8 +223,7 @@ export default function ShopIndexScreen() {
                         {item.name}
                       </Text>
                       <Text style={[styles.itemOrg, { color: colors.tabIconDefault }]}>
-                        {item.org}
-                        {item.player ? ` • ${item.player}` : ''}
+                        {`${item.org || ''}${item.player ? ` • ${item.player}` : ''}`}
                       </Text>
                     </View>
                     <Text style={[styles.itemPrice, { color: colors.tint }]}>

@@ -2,6 +2,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { ROUTES } from '@/constants/routes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import React from 'react';
@@ -17,7 +18,7 @@ export function LogoutButton() {
 
   const handleLogout = async () => {
     await logout();
-    router.replace('/(auth)/login');
+    router.replace(ROUTES.LOGIN);
   };
 
   return (

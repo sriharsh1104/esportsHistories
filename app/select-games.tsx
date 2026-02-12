@@ -1,4 +1,5 @@
 import { BackButton, Button, Screen } from '@/components/ui';
+import { ROUTES } from '@/constants/routes';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -112,7 +113,7 @@ export default function SelectGamesScreen() {
       await updateProfile({ onboardingStep: 'done' });
     }
     if (isFromSettings) router.back();
-    else router.replace('/(drawer)/(tabs)');
+    else router.replace(ROUTES.HOME);
   };
 
   const handleSkip = () => {
@@ -121,7 +122,7 @@ export default function SelectGamesScreen() {
       setSelectedGameIds(mobileGames.slice(0, 3).map((g) => g.id));
     }
     if (isFromSettings) router.back();
-    else router.replace('/(drawer)/(tabs)');
+    else router.replace(ROUTES.HOME);
   };
 
   return (

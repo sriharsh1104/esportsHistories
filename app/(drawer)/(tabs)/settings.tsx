@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import Constants from 'expo-constants';
+import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
@@ -54,17 +55,17 @@ export default function SettingsScreen() {
             <SettingsRow
               icon="user"
               label="Profile"
-              onPress={() => router.push('/(drawer)/(tabs)/profile')}
+              onPress={() => router.push(ROUTES.PROFILE)}
             />
             <SettingsRow
               icon="credit-card"
               label="Wallet"
-              onPress={() => router.push('/(drawer)/(tabs)/wallet')}
+              onPress={() => router.push(ROUTES.WALLET)}
             />
             <SettingsRow
               icon="lock"
               label="Change password"
-              onPress={() => router.push('/(auth)/change-password')}
+              onPress={() => router.push(ROUTES.CHANGE_PASSWORD)}
             />
           </Card>
         </View>
@@ -79,7 +80,7 @@ export default function SettingsScreen() {
             icon="gamepad"
             label="Games to follow"
             value={selectedGameIds.length > 0 ? `${selectedGameIds.length} selected` : 'Not set'}
-            onPress={() => router.push('/select-games?from=settings')}
+            onPress={() => router.push(ROUTES.SELECT_GAMES_SETTINGS)}
             showArrow={true}
           />
         </Card>
@@ -102,17 +103,17 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="question-circle"
             label="Help & FAQ"
-            onPress={() => router.push('/help-faq')}
+            onPress={() => router.push(ROUTES.HELP_FAQ)}
           />
           <SettingsRow
             icon="shield"
             label="Privacy Policy"
-            onPress={() => router.push('/privacy-policy')}
+            onPress={() => router.push(ROUTES.PRIVACY_POLICY)}
           />
           <SettingsRow
             icon="file-text"
             label="Terms of Service"
-            onPress={() => router.push('/terms')}
+            onPress={() => router.push(ROUTES.TERMS)}
           />
         </Card>
       </View>
@@ -139,7 +140,7 @@ export default function SettingsScreen() {
           fullWidth
           onPress={async () => {
             await logout();
-            router.replace('/(auth)/login');
+            router.replace(ROUTES.LOGIN);
           }}
           style={styles.logoutBtn}
         />

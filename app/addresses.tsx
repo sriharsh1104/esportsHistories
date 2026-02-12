@@ -8,6 +8,7 @@ import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import type { UserAddress } from '@/types/auth';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as Location from 'expo-location';
+import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
@@ -157,7 +158,7 @@ export default function AddressesScreen() {
   };
 
   if (!user) {
-    router.replace('/(auth)/login');
+    router.replace(ROUTES.LOGIN);
     return null;
   }
 
@@ -201,11 +202,10 @@ export default function AddressesScreen() {
                     </Text>
                   )}
                   <Text style={[styles.addrText, { color: colors.text }]}>
-                    {addr.line1}
-                    {addr.line2 ? `, ${addr.line2}` : ''}
+                    {`${addr.line1 || ''}${addr.line2 ? `, ${addr.line2}` : ''}`}
                   </Text>
                   <Text style={[styles.addrText, { color: colors.tabIconDefault }]}>
-                    {addr.city}, {addr.state} - {addr.pincode}
+                    {`${addr.city || ''}, ${addr.state || ''} - ${addr.pincode || ''}`}
                   </Text>
                   {addr.phone ? (
                     <Text style={[styles.addrText, { color: colors.tint, marginTop: h(4) }]}>

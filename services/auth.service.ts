@@ -1,6 +1,6 @@
 /**
  * Auth service - replace with real API calls.
- * Uses AsyncStorage for token persistence.
+ * Uses commonService for storage and token management.
  */
 import type {
   GameProfile,
@@ -10,35 +10,30 @@ import type {
   User,
   UserAddress,
 } from '@/types/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
+import { commonService, setToken, clearToken } from './common.service';
 
 const TOKEN_KEY = '@esports_auth_token';
 const USER_KEY = '@esports_user';
 const MOCK_USERS_KEY = '@esports_mock_users';
-const API_BASE = Constants.expoConfig?.extra?.apiBaseUrl || 'http://localhost:3000/api';
 
 async function getMockUsers(): Promise<Record<string, User>> {
-  try {
-    const raw = await AsyncStorage.getItem(MOCK_USERS_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, User>) : {};
-  } catch {
-    return {};
-  }
+  const users = await commonService.getItem<Record<string, User>>(MOCK_USERS_KEY);
+  return users ?? {};
 }
 
 async function saveMockUser(email: string, user: User): Promise<void> {
   const users = await getMockUsers();
   users[email.toLowerCase()] = user;
-  await AsyncStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
+  await commonService.setItem(MOCK_USERS_KEY, users);
 }
 
 export async function login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
-  // TODO: Replace with actual API call
+  // TODO: Replace with actual API call via api.service
   const res = await mockApiCall('/auth/login', credentials);
   if (res.success && res.data) {
-    await AsyncStorage.setItem(TOKEN_KEY, res.data.token);
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(res.data.user));
+    await commonService.setItem(TOKEN_KEY, res.data.token);
+    await commonService.setItem(USER_KEY, res.data.user);
+    setToken(res.data.token);
     return res.data;
   }
   throw new Error(res.message || 'Login failed');
@@ -49,24 +44,28 @@ export async function signup(
 ): Promise<{ user: User; token: string }> {
   const res = await mockApiCall('/auth/signup', credentials);
   if (res.success && res.data) {
-    await AsyncStorage.setItem(TOKEN_KEY, res.data.token);
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(res.data.user));
+    await commonService.setItem(TOKEN_KEY, res.data.token);
+    await commonService.setItem(USER_KEY, res.data.user);
+    setToken(res.data.token);
     return res.data;
   }
   throw new Error(res.message || 'Signup failed');
 }
 
 export async function logout(): Promise<void> {
-  await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+  await commonService.multiRemove([TOKEN_KEY, USER_KEY]);
+  clearToken();
 }
 
 export async function getStoredAuth(): Promise<{ user: User; token: string } | null> {
-  const [token, userStr] = await AsyncStorage.multiGet([TOKEN_KEY, USER_KEY]);
-  const t = token[1];
-  const u = userStr[1];
+  const stored = await commonService.multiGet([TOKEN_KEY, USER_KEY]);
+  const t = stored[TOKEN_KEY];
+  const u = stored[USER_KEY];
   if (t && u) {
     try {
-      return { token: t, user: JSON.parse(u) as User };
+      const user = JSON.parse(u) as User;
+      setToken(t);
+      return { token: t, user };
     } catch {
       await logout();
     }
@@ -93,7 +92,7 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
     onboardingStep:
       data.onboardingStep !== undefined ? data.onboardingStep : stored.user.onboardingStep,
   };
-  await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
+  await commonService.setItem(USER_KEY, updated);
   await saveMockUser(updated.email, updated);
   return updated;
 }

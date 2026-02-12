@@ -4,6 +4,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
 import React from 'react';
 import { Text, View } from 'react-native';
@@ -26,7 +27,7 @@ export default function WalletScreen() {
           </Text>
           <Button
             title="Sign in"
-            onPress={() => router.push('/(auth)/login')}
+            onPress={() => router.push(ROUTES.LOGIN)}
             fullWidth
             style={{ maxWidth: w(200) }}
           />

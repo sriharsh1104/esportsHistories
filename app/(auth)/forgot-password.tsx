@@ -1,6 +1,7 @@
 import { BackButton, Button, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { requestPasswordReset } from '@/services/auth.service';
 import { useAppDispatch } from '@/store/hooks';
@@ -58,7 +59,7 @@ export default function ForgotPasswordScreen() {
           </Text>
           <Button
             title="Back to sign in"
-            onPress={() => router.replace('/(auth)/login')}
+            onPress={() => router.replace(ROUTES.LOGIN)}
             fullWidth
             style={styles.btn}
           />
@@ -96,7 +97,7 @@ export default function ForgotPasswordScreen() {
             style={styles.btn}
           />
 
-          <Pressable onPress={() => router.push('/(auth)/login')}>
+          <Pressable onPress={() => router.push(ROUTES.LOGIN)}>
             <Text style={[styles.backLink, { color: colors.accent }]}>
               Back to sign in
             </Text>

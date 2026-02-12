@@ -1,6 +1,7 @@
 import { BackButton, Button, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useAppDispatch } from '@/store/hooks';
@@ -69,7 +70,7 @@ export default function SignupScreen() {
         displayName: displayName.trim(),
         confirmPassword,
       });
-      router.replace('/edit-profile?from=signup');
+      router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Signup failed');
     } finally {
@@ -137,7 +138,7 @@ export default function SignupScreen() {
             <Text style={[styles.footerText, { color: colors.tabIconDefault }]}>
               Already have an account?{' '}
             </Text>
-            <Pressable onPress={() => router.push('/(auth)/login')}>
+            <Pressable onPress={() => router.push(ROUTES.LOGIN)}>
               <Text style={[styles.footerLink, { color: colors.accent }]}>Sign in</Text>
             </Pressable>
           </View>

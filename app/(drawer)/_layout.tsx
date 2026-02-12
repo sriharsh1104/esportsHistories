@@ -1,5 +1,6 @@
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { ROUTES } from "@/constants/routes";
 import { useAuth } from "@/context/AuthContext";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { useWallet } from "@/context/WalletContext";
@@ -17,9 +18,9 @@ import {
 } from "react-native";
 
 const MENU_ITEMS = [
-  { icon: "user" as const, label: "Profile", route: "/(drawer)/(tabs)/profile" },
-  { icon: "credit-card" as const, label: "Wallet", route: "/(drawer)/(tabs)/wallet" },
-  { icon: "cog" as const, label: "Settings", route: "/(drawer)/(tabs)/settings" },
+  { icon: "user" as const, label: "Profile", route: ROUTES.PROFILE },
+  { icon: "credit-card" as const, label: "Wallet", route: ROUTES.WALLET },
+  { icon: "cog" as const, label: "Settings", route: ROUTES.SETTINGS },
 ];
 
 function CustomDrawerContent(props: { navigation?: any }) {
@@ -40,7 +41,7 @@ function CustomDrawerContent(props: { navigation?: any }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Pressable
-        onPress={() => isAuthenticated && nav("/(drawer)/(tabs)/profile")}
+        onPress={() => isAuthenticated && nav(ROUTES.PROFILE)}
         style={{
           padding: w(20),
           paddingTop: h(48),
@@ -160,9 +161,9 @@ export default function DrawerLayout() {
     if (!isAuthenticated || !user) return;
     const step = user.onboardingStep;
     if (step === 'profile') {
-      router.replace('/edit-profile?from=signup');
+      router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
     } else if (step === 'games') {
-      router.replace('/select-games?from=onboarding');
+      router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
     }
   }, [isAuthenticated, user?.onboardingStep]);
 

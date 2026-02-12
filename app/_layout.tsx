@@ -5,8 +5,15 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import { Provider } from 'react-redux';
 import 'react-native-gesture-handler';
+
+// Suppress design/library warnings that we cannot fix in our code
+LogBox.ignoreLogs([
+  'props.pointerEvents is deprecated. Use style.pointerEvents',
+  'Unexpected text node: . A text node cannot be a child of a <View>',
+]);
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
@@ -81,32 +88,32 @@ function RootLayoutNav() {
 
   return (
     <Provider store={store}>
-    <GestureHandlerRootView style={{ flex: 1 }}>
-    <ThemeProvider value={navTheme}>
-      <ResponsiveProvider>
-        <AuthProvider>
-        <SelectedGamesProvider>
-        <FollowedPlayersProvider>
-        <WalletProvider>
-        <GlobalLoader />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(drawer)" />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="select-games" options={{ headerShown: false }} />
-          <Stack.Screen name="edit-profile" />
-          <Stack.Screen name="addresses" />
-          <Stack.Screen name="privacy-policy" />
-          <Stack.Screen name="terms" />
-          <Stack.Screen name="help-faq" />
-          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-        </Stack>
-        </WalletProvider>
-        </FollowedPlayersProvider>
-        </SelectedGamesProvider>
-      </AuthProvider>
-        </ResponsiveProvider>
-    </ThemeProvider>
-    </GestureHandlerRootView>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider value={navTheme}>
+          <ResponsiveProvider>
+            <AuthProvider>
+              <SelectedGamesProvider>
+                <FollowedPlayersProvider>
+                  <WalletProvider>
+                    <GlobalLoader />
+                    <Stack screenOptions={{ headerShown: false }}>
+                      <Stack.Screen name="(drawer)" />
+                      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                      <Stack.Screen name="select-games" options={{ headerShown: false }} />
+                      <Stack.Screen name="edit-profile" />
+                      <Stack.Screen name="addresses" />
+                      <Stack.Screen name="privacy-policy" />
+                      <Stack.Screen name="terms" />
+                      <Stack.Screen name="help-faq" />
+                      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+                    </Stack>
+                  </WalletProvider>
+                </FollowedPlayersProvider>
+              </SelectedGamesProvider>
+            </AuthProvider>
+          </ResponsiveProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
     </Provider>
   );
 }

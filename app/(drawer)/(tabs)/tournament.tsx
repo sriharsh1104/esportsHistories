@@ -10,6 +10,7 @@ import { MOCK_PLAYERS } from '@/data/players';
 import { MOCK_TOURNAMENTS } from '@/data/tournaments';
 import type { Tournament } from '@/data/tournaments';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -167,7 +168,7 @@ export default function TournamentScreen() {
           MANAGE FOLLOWS
         </Text>
         <Card
-          onPress={() => router.push('/select-games?from=tournament')}
+          onPress={() => router.push(ROUTES.SELECT_GAMES_TOURNAMENT)}
           style={{
             ...styles.followCard,
             borderColor: colors.tint,

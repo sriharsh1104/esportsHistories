@@ -5,6 +5,7 @@ import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
+import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
@@ -42,7 +43,7 @@ export default function FollowScreen() {
           </Text>
           <Button
             title="Sign in"
-            onPress={() => router.push('/(auth)/login')}
+            onPress={() => router.push(ROUTES.LOGIN)}
             fullWidth
             style={styles.btn}
           />
@@ -62,7 +63,7 @@ export default function FollowScreen() {
 
       <View style={styles.section}>
         <Card
-          onPress={() => router.push('/select-games?from=follow')}
+          onPress={() => router.push(ROUTES.SELECT_GAMES_FOLLOW)}
           style={[
             styles.card,
             {

@@ -1,4 +1,5 @@
 import { BackButton, Button, CustomPhoneInput, Input, Screen } from '@/components/ui';
+import { ROUTES } from '@/constants/routes';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -156,7 +157,7 @@ export default function EditProfileScreen() {
         ...(from === 'signup' && { onboardingStep: 'games' as const }),
       });
       if (from === 'signup') {
-        router.replace('/select-games?from=onboarding');
+        router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
       } else {
         router.back();
       }

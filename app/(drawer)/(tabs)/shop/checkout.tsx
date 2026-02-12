@@ -8,6 +8,7 @@ import { getItemById } from '@/data/shop';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { ROUTES } from '@/constants/routes';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
@@ -108,7 +109,7 @@ export default function CheckoutScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Sign in to checkout</Text>
         <Button
           title="Sign in"
-          onPress={() => router.replace('/(auth)/login')}
+          onPress={() => router.replace(ROUTES.LOGIN)}
           style={{ marginTop: h(16) }}
         />
       </Screen>
@@ -152,7 +153,7 @@ export default function CheckoutScreen() {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery address</Text>
         {addresses.length === 0 ? (
           <Pressable
-            onPress={() => router.push('/addresses')}
+            onPress={() => router.push(ROUTES.ADDRESSES)}
             style={[
               styles.addrCard,
               {
@@ -185,11 +186,10 @@ export default function CheckoutScreen() {
                 ]}
               >
                 <Text style={[styles.addrText, { color: colors.text }]}>
-                  {addr.line1}
-                  {addr.line2 ? `, ${addr.line2}` : ''}
+                  {`${addr.line1 || ''}${addr.line2 ? `, ${addr.line2}` : ''}`}
                 </Text>
                 <Text style={[styles.addrText, { color: colors.tabIconDefault }]}>
-                  {addr.city}, {addr.state} - {addr.pincode}
+                  {`${addr.city || ''}, ${addr.state || ''} - ${addr.pincode || ''}`}
                 </Text>
                 {addr.phone ? (
                   <Text style={[styles.addrText, { color: colors.tint, marginTop: h(4) }]}>
@@ -199,7 +199,7 @@ export default function CheckoutScreen() {
               </Pressable>
             ))}
             <Pressable
-              onPress={() => router.push('/addresses')}
+              onPress={() => router.push(ROUTES.ADDRESSES)}
               style={{ marginBottom: h(16) }}
             >
               <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.tint }}>
@@ -225,11 +225,10 @@ export default function CheckoutScreen() {
             <Text style={{ fontSize: w(16), fontWeight: '600', color: colors.text }}>Wallet</Text>
             <View>
               <Text style={{ fontSize: w(13), color: colors.tabIconDefault }}>
-                Balance: ₹{balance.toLocaleString('en-IN')}
-                {product && balance < product.price && ' • Top up to use'}
+                {`Balance: ₹${balance.toLocaleString('en-IN')}${product && balance < product.price ? ' • Top up to use' : ''}`}
               </Text>
               {product && balance < product.price && (
-                <Pressable onPress={() => router.push('/(drawer)/(tabs)/wallet')} style={{ marginTop: h(4) }}>
+                <Pressable onPress={() => router.push(ROUTES.WALLET)} style={{ marginTop: h(4) }}>
                   <Text style={{ fontSize: w(13), fontWeight: '600', color: colors.tint }}>Add money to wallet</Text>
                 </Pressable>
               )}

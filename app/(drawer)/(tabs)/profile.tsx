@@ -1,6 +1,7 @@
 import { Button, Card, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { ALL_GAMES } from '@/data/games';
@@ -79,7 +80,7 @@ export default function ProfileScreen() {
           </Text>
           <Button
             title="Sign in"
-            onPress={() => router.push('/(auth)/login')}
+            onPress={() => router.push(ROUTES.LOGIN)}
             fullWidth
             style={styles.btn}
           />
@@ -92,7 +93,7 @@ export default function ProfileScreen() {
     <Screen padded maxForm>
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.push('/edit-profile')}
+          onPress={() => router.push(ROUTES.EDIT_PROFILE)}
           style={[styles.avatar, { backgroundColor: colors.tint }]}
         >
           <Text style={styles.avatarText}>
@@ -175,7 +176,7 @@ export default function ProfileScreen() {
               </View>
             ))
           ) : (
-            <Pressable onPress={() => router.push('/edit-profile')}>
+            <Pressable onPress={() => router.push(ROUTES.EDIT_PROFILE)}>
               <Text style={{ fontSize: w(13), color: colors.tabIconDefault }}>
                 No game profiles yet. Tap to add from Edit Profile.
               </Text>
@@ -184,7 +185,7 @@ export default function ProfileScreen() {
         </Card>
 
         <Card
-          onPress={() => router.push('/edit-profile')}
+          onPress={() => router.push(ROUTES.EDIT_PROFILE)}
           style={styles.card}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>
@@ -196,7 +197,7 @@ export default function ProfileScreen() {
         </Card>
 
         <Card
-          onPress={() => router.push('/addresses')}
+          onPress={() => router.push(ROUTES.ADDRESSES)}
           style={[styles.card, { marginTop: 0 }]}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>
@@ -208,7 +209,7 @@ export default function ProfileScreen() {
         </Card>
 
         <Card
-          onPress={() => router.push('/(auth)/change-password')}
+          onPress={() => router.push(ROUTES.CHANGE_PASSWORD)}
           style={[styles.card, { marginTop: 0 }]}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>
@@ -225,7 +226,7 @@ export default function ProfileScreen() {
           fullWidth
           onPress={async () => {
             await logout();
-            router.replace('/(auth)/login');
+            router.replace(ROUTES.LOGIN);
           }}
           style={styles.logoutBtn}
         />

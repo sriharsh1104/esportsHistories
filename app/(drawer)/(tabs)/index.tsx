@@ -1,4 +1,5 @@
 import { NewsSection, WalletBalanceCard } from '@/components/dashboard';
+import { ROUTES } from '@/constants/routes';
 import { Button, Card, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -67,13 +68,13 @@ export default function NewsScreen() {
               title="Sign in"
               fullWidth
               style={styles.authBtn}
-              onPress={() => router.push('/(auth)/login')}
+              onPress={() => router.push(ROUTES.LOGIN)}
             />
             <Button
               title="Sign up"
               variant="outline"
               fullWidth
-              onPress={() => router.push('/(auth)/signup')}
+              onPress={() => router.push(ROUTES.SIGNUP)}
             />
           </Card>
         </View>
@@ -90,7 +91,7 @@ export default function NewsScreen() {
           <Button
             title="Select games"
             variant="outline"
-            onPress={() => router.push('/select-games')}
+            onPress={() => router.push(ROUTES.SELECT_GAMES)}
           />
         </Card>
       )}
@@ -114,7 +115,7 @@ export default function NewsScreen() {
             <View style={styles.cardsRow}>
               {hasPc && (
                 <View style={styles.cardFlex}>
-                  <Card onPress={() => router.push('/(drawer)/(tabs)/game')} style={styles.quickCard}>
+                  <Card onPress={() => router.push(ROUTES.GAME)} style={styles.quickCard}>
                     <Text style={[styles.cardTitle, { color: colors.text }]}>PC Games</Text>
                     <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
                       LoL, Dota 2, CS2, Valorant
@@ -124,7 +125,7 @@ export default function NewsScreen() {
               )}
               {hasMobile && (
                 <View style={styles.cardFlex}>
-                  <Card onPress={() => router.push('/(drawer)/(tabs)/game')} style={styles.quickCard}>
+                  <Card onPress={() => router.push(ROUTES.GAME)} style={styles.quickCard}>
                     <Text style={[styles.cardTitle, { color: colors.text }]}>Mobile Games</Text>
                     <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
                       BGMI, Free Fire, MLBB

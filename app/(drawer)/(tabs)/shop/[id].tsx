@@ -2,6 +2,7 @@ import { BackButton, Button, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { ROUTES } from '@/constants/routes';
 import { getItemById } from '@/data/shop';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
@@ -48,8 +49,7 @@ export default function ProductDetailScreen() {
         />
         <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
         <Text style={[styles.meta, { color: colors.tabIconDefault }]}>
-          {item.org}
-          {item.player ? ` • ${item.player}` : ''}
+          {`${item.org || ''}${item.player ? ` • ${item.player}` : ''}`}
         </Text>
         <Text style={[styles.price, { color: colors.tint }]}>
           ₹{item.price.toLocaleString('en-IN')}
@@ -59,7 +59,7 @@ export default function ProductDetailScreen() {
           fullWidth
           onPress={() =>
             router.push({
-              pathname: '/(drawer)/(tabs)/shop/checkout',
+              pathname: ROUTES.SHOP_CHECKOUT,
               params: { productId: item.id },
             } as any)
           }

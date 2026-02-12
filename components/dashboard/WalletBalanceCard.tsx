@@ -3,6 +3,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useWallet } from '@/context/WalletContext';
+import { ROUTES } from '@/constants/routes';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
@@ -29,7 +30,7 @@ export function WalletBalanceCard() {
   );
 
   return (
-    <Pressable onPress={() => router.push('/(drawer)/(tabs)/wallet')}>
+    <Pressable onPress={() => router.push(ROUTES.WALLET)}>
       <Card style={styles.card}>
         <View style={styles.row}>
           <FontAwesome

@@ -123,15 +123,34 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: "Settings", href: null }}
+        options={{
+          title: "Settings",
+          href: null,
+          tabBarIcon: () => null,
+        }}
       />
-      <Tabs.Screen name="wallet" options={{ title: "Wallet", href: null }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile", href: null }} />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: "Wallet",
+          href: null,
+          tabBarIcon: ({ color }) => <TabBarIcon name="credit-card" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          href: null,
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="game"
         options={{
           title: "Games",
           href: null,
+          tabBarIcon: ({ color }) => <TabBarIcon name="gamepad" color={color} />,
         }}
       />
     </Tabs>

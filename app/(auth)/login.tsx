@@ -1,6 +1,7 @@
 import { Button, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
@@ -55,11 +56,11 @@ export default function LoginScreen() {
       const user = await login({ email: email.trim(), password });
       const step = user.onboardingStep;
       if (step === 'profile') {
-        router.replace('/edit-profile?from=signup');
+        router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
       } else if (step === 'games') {
-        router.replace('/select-games?from=onboarding');
+        router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
       } else {
-        router.replace(hasSelectedGames ? '/(drawer)/(tabs)' : '/select-games');
+        router.replace(hasSelectedGames ? ROUTES.HOME : ROUTES.SELECT_GAMES);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed');
@@ -99,7 +100,7 @@ export default function LoginScreen() {
             error={error && password ? error : undefined}
           />
 
-          <Pressable onPress={() => router.push('/(auth)/forgot-password')}>
+          <Pressable onPress={() => router.push(ROUTES.FORGOT_PASSWORD)}>
             <Text style={[styles.forgotLink, { color: colors.accent }]}>
               Forgot password?
             </Text>
@@ -116,7 +117,7 @@ export default function LoginScreen() {
             <Text style={[styles.footerText, { color: colors.tabIconDefault }]}>
               Don't have an account?{' '}
             </Text>
-            <Pressable onPress={() => router.push('/(auth)/signup')}>
+            <Pressable onPress={() => router.push(ROUTES.SIGNUP)}>
               <Text style={[styles.footerLink, { color: colors.accent }]}>Sign up</Text>
             </Pressable>
           </View>
