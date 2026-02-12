@@ -33,7 +33,7 @@ export function WalletBalanceCard() {
       <Card style={styles.card}>
         <View style={styles.row}>
           <FontAwesome
-            name="wallet"
+            name="credit-card"
             size={w(24)}
             color={colors.tint}
             style={styles.icon}

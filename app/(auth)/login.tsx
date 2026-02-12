@@ -4,6 +4,8 @@ import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -12,7 +14,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const dispatch = useAppDispatch();
   const { login } = useAuth();
   const { hasSelectedGames } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
@@ -48,14 +50,14 @@ export default function LoginScreen() {
       setError('Password is required');
       return;
     }
-    setLoading(true);
+    dispatch(showLoader());
     try {
       await login({ email: email.trim(), password });
       router.replace(hasSelectedGames ? '/(drawer)/(tabs)' : '/select-games');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed');
     } finally {
-      setLoading(false);
+      dispatch(hideLoader());
     }
   };
 
@@ -99,7 +101,6 @@ export default function LoginScreen() {
           <Button
             title="Sign in"
             onPress={handleSubmit}
-            loading={loading}
             fullWidth
             style={styles.btn}
           />

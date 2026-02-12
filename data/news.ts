@@ -6,6 +6,7 @@ export type NewsItem = {
   game: string;
   gameId: string;
   timeAgo: string;
+  sortOrder: number; // lower = more recent
 };
 
 export const MOCK_NEWS: NewsItem[] = [
@@ -17,6 +18,7 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'Valorant',
     gameId: 'valorant',
     timeAgo: '2h ago',
+    sortOrder: 1,
   },
   {
     id: '2',
@@ -26,6 +28,7 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'MLBB',
     gameId: 'mlbb',
     timeAgo: '5h ago',
+    sortOrder: 2,
   },
   {
     id: '3',
@@ -35,6 +38,7 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'Dota 2',
     gameId: 'dota2',
     timeAgo: '8h ago',
+    sortOrder: 3,
   },
   {
     id: '4',
@@ -44,6 +48,7 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'PUBG Mobile',
     gameId: 'bgmi',
     timeAgo: '1d ago',
+    sortOrder: 5,
   },
   {
     id: '5',
@@ -53,6 +58,7 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'League of Legends',
     gameId: 'lol',
     timeAgo: '2d ago',
+    sortOrder: 6,
   },
   {
     id: '6',
@@ -62,6 +68,7 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'BGMI',
     gameId: 'bgmi',
     timeAgo: '3h ago',
+    sortOrder: 2,
   },
   {
     id: '7',
@@ -71,6 +78,7 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'Free Fire',
     gameId: 'freefire',
     timeAgo: '6h ago',
+    sortOrder: 4,
   },
   {
     id: '8',
@@ -80,5 +88,6 @@ export const MOCK_NEWS: NewsItem[] = [
     game: 'CS2',
     gameId: 'cs2',
     timeAgo: '1d ago',
+    sortOrder: 5,
   },
 ];

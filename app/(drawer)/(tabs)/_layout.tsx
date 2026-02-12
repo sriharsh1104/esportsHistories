@@ -3,11 +3,14 @@ import { LogoutButton } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { useSelectedGames } from '@/context/SelectedGamesContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Pressable, View } from 'react-native';
+
+const MOBILE_GAME_IDS = ['bgmi', 'freefire', 'mlbb', 'codm', 'coc', 'cr', 'wildrift'];
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
@@ -15,6 +18,19 @@ function TabBarIcon(props: {
 }) {
   const { w } = useResponsive();
   return <FontAwesome size={w(24)} style={{ marginBottom: -4 }} {...props} />;
+}
+
+function FollowTabIcon({ color }: { color: string }) {
+  const { selectedGameIds } = useSelectedGames();
+  const { w } = useResponsive();
+  const firstGameId = selectedGameIds[0];
+  const iconName =
+    firstGameId && MOBILE_GAME_IDS.includes(firstGameId)
+      ? 'mobile'
+      : firstGameId
+        ? 'desktop'
+        : 'heart';
+  return <FontAwesome name={iconName as any} size={w(24)} color={color} style={{ marginBottom: -4 }} />;
 }
 
 function DrawerToggle() {
@@ -39,6 +55,7 @@ function DrawerToggle() {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { w } = useResponsive();
 
   return (
     <Tabs
@@ -52,20 +69,16 @@ export default function TabLayout() {
             <LogoutButton />
           </View>
         ),
+        tabBarShowLabel: false,
+        tabBarStyle: { paddingHorizontal: w(16) },
+        tabBarItemStyle: { flex: 1 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          title: 'Wallet',
-          tabBarIcon: ({ color }) => <TabBarIcon name="wallet" color={color} />,
+          title: 'News',
+          tabBarIcon: ({ color }) => <TabBarIcon name="newspaper-o" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -76,10 +89,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="follow"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
+          title: 'Follow',
+          tabBarIcon: ({ color }) => <FollowTabIcon color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tournament"
+        options={{
+          title: 'Tournament',
+          tabBarIcon: ({ color }) => <TabBarIcon name="trophy" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -90,10 +110,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="wallet"
+        options={{ title: 'Wallet', href: null }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{ title: 'Profile', href: null }}
+      />
+      <Tabs.Screen
         name="game"
         options={{
           title: 'Games',
-          tabBarButton: () => null,
+          href: null,
         }}
       />
     </Tabs>

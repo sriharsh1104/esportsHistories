@@ -3,6 +3,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { requestPasswordReset } from '@/services/auth.service';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -11,7 +13,7 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const dispatch = useAppDispatch();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -35,14 +37,14 @@ export default function ForgotPasswordScreen() {
       setError('Email is required');
       return;
     }
-    setLoading(true);
+    dispatch(showLoader());
     try {
       await requestPasswordReset(email.trim());
       setSuccess(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
-      setLoading(false);
+      dispatch(hideLoader());
     }
   };
 
@@ -90,7 +92,6 @@ export default function ForgotPasswordScreen() {
           <Button
             title="Send reset link"
             onPress={handleSubmit}
-            loading={loading}
             fullWidth
             style={styles.btn}
           />

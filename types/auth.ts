@@ -10,6 +10,13 @@ export type UserAddress = {
   isDefault?: boolean;
 };
 
+export type GameProfile = {
+  id: string;
+  gameId: string;
+  gameName: string;
+  gameUid: string;
+};
+
 export type User = {
   id: string;
   email: string;
@@ -19,6 +26,7 @@ export type User = {
   upiId?: string;
   avatarUrl?: string;
   addresses?: UserAddress[];
+  gameProfiles?: GameProfile[];
 };
 
 export type UpdateProfileData = {
@@ -27,6 +35,7 @@ export type UpdateProfileData = {
   phone?: string;
   upiId?: string;
   addresses?: UserAddress[];
+  gameProfiles?: GameProfile[];
 };
 
 export type AuthState = {

@@ -3,6 +3,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useWallet } from '@/context/WalletContext';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useMemo, useState } from 'react';
 import {
@@ -31,7 +33,7 @@ export function WalletSection() {
   const [amount, setAmount] = useState('');
   const [topUpMethod, setTopUpMethod] = useState<TopUpMethod>('upi');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const dispatch = useAppDispatch();
 
   const styles = useMemo(
     () => ({
@@ -77,7 +79,7 @@ export function WalletSection() {
       setError('Enter valid amount');
       return;
     }
-    setLoading(true);
+    dispatch(showLoader());
     try {
       if (modalType === 'topup') {
         await topUp(val);
@@ -89,7 +91,7 @@ export function WalletSection() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed');
     } finally {
-      setLoading(false);
+      dispatch(hideLoader());
     }
   };
 
@@ -105,7 +107,7 @@ export function WalletSection() {
       <Card style={styles.card}>
         <View style={styles.row}>
           <FontAwesome
-            name="wallet"
+            name="credit-card"
             size={w(24)}
             color={colors.tint}
             style={styles.icon}
@@ -227,7 +229,6 @@ export function WalletSection() {
               <Button
                 title={modalType === 'topup' ? 'Add' : 'Withdraw'}
                 onPress={handleSubmit}
-                loading={loading}
                 style={styles.btn}
               />
             </View>

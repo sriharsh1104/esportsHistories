@@ -3,6 +3,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { changePassword } from '@/services/auth.service';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
@@ -12,7 +14,7 @@ export default function ChangePasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const dispatch = useAppDispatch();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -46,14 +48,14 @@ export default function ChangePasswordScreen() {
       setError('New passwords do not match');
       return;
     }
-    setLoading(true);
+    dispatch(showLoader());
     try {
       await changePassword(currentPassword, newPassword);
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Change password failed');
     } finally {
-      setLoading(false);
+      dispatch(hideLoader());
     }
   };
 
@@ -100,7 +102,6 @@ export default function ChangePasswordScreen() {
           <Button
             title="Update password"
             onPress={handleSubmit}
-            loading={loading}
             fullWidth
             style={styles.btn}
           />

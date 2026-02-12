@@ -2,13 +2,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import React from 'react';
-import {
-    ActivityIndicator,
-    Pressable,
-    Text,
-    TextStyle,
-    ViewStyle
-} from 'react-native';
+import { Pressable, Text, TextStyle, ViewStyle } from 'react-native';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
 
@@ -17,7 +11,6 @@ type ButtonProps = {
   onPress: () => void;
   variant?: ButtonVariant;
   disabled?: boolean;
-  loading?: boolean;
   fullWidth?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
@@ -30,7 +23,6 @@ export function Button({
   onPress,
   variant = 'primary',
   disabled = false,
-  loading = false,
   fullWidth = false,
   style,
   textStyle,
@@ -74,7 +66,7 @@ export function Button({
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={disabled}
       style={({ pressed }) => [
         {
           flexDirection: 'row',
@@ -93,17 +85,11 @@ export function Button({
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={getTextColor()} size="small" />
-      ) : (
-        <>
-          {leftIcon}
-          <Text style={[{ fontSize: w(16), fontWeight: '600', color: getTextColor() }, textStyle]}>
-            {title}
-          </Text>
-          {rightIcon}
-        </>
-      )}
+      {leftIcon}
+      <Text style={[{ fontSize: w(16), fontWeight: '600', color: getTextColor() }, textStyle]}>
+        {title}
+      </Text>
+      {rightIcon}
     </Pressable>
   );
 }

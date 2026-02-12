@@ -9,7 +9,7 @@ import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
 
-export default function DashboardScreen() {
+export default function NewsScreen() {
   const { user, isAuthenticated } = useAuth();
   const { selectedGameIds } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
@@ -44,12 +44,12 @@ export default function DashboardScreen() {
     <Screen padded scroll maxContent>
       <View style={styles.header}>
         <Text style={[styles.greeting, { color: colors.text }]}>
-          {isAuthenticated && user
-            ? `Hey, ${user.displayName}`
-            : 'Welcome to Esports Histories'}
+          {isAuthenticated && user ? `Hey, ${user.displayName}` : 'Esports News'}
         </Text>
         <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
-          {isAuthenticated ? 'Your esports news hub' : 'Sign in to get started'}
+          {isAuthenticated
+            ? 'Latest news for your followed games'
+            : 'Sign in to get personalized news'}
         </Text>
       </View>
 
@@ -60,7 +60,7 @@ export default function DashboardScreen() {
               Create an account
             </Text>
             <Text style={[styles.authDesc, { color: colors.tabIconDefault }]}>
-              Sign up to save favorites and get personalized news
+              Sign up to save favorites and get personalized esports news
             </Text>
             <Button
               title="Sign in"
@@ -78,11 +78,24 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {isAuthenticated && (
-        <View style={[styles.sections, { marginBottom: h(24) }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Wallet
+      {isAuthenticated && selectedGameIds.length === 0 && (
+        <Card style={{ padding: w(16), marginBottom: h(16) }}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>
+            Follow games for news
           </Text>
+          <Text style={[styles.cardDesc, { color: colors.tabIconDefault, marginBottom: h(12) }]}>
+            Go to Settings → Games to follow and select your favorite games
+          </Text>
+          <Button
+            title="Open Settings"
+            variant="outline"
+            onPress={() => router.push('/(drawer)/(tabs)/settings')}
+          />
+        </Card>
+      )}
+
+      {isAuthenticated && (
+        <View style={[styles.sections, { marginBottom: h(16) }]}>
           <WalletBalanceCard />
         </View>
       )}
@@ -95,10 +108,8 @@ export default function DashboardScreen() {
         const showQuickLinks = hasPc || hasMobile;
 
         return showQuickLinks ? (
-          <View style={styles.sections}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Quick links
-            </Text>
+          <View style={[styles.sections, { marginBottom: h(16) }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Browse games</Text>
             <View style={styles.cardsRow}>
               {hasPc && (
                 <View style={styles.cardFlex}>
@@ -125,7 +136,7 @@ export default function DashboardScreen() {
         ) : null;
       })()}
 
-      <View style={[styles.sections, { marginTop: h(24) }]}>
+      <View style={styles.sections}>
         <NewsSection />
       </View>
     </Screen>

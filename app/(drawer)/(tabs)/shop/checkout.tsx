@@ -5,6 +5,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useWallet } from '@/context/WalletContext';
 import { getItemById } from '@/data/shop';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -40,7 +42,7 @@ export default function CheckoutScreen() {
     });
   }, [addresses]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('wallet');
-  const [placing, setPlacing] = useState(false);
+  const dispatch = useAppDispatch();
 
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
 
@@ -83,7 +85,7 @@ export default function CheckoutScreen() {
   const handlePlaceOrder = async () => {
     if (!product || !selectedAddress) return;
     if (paymentMethod === 'wallet' && balance < product.price) return;
-    setPlacing(true);
+    dispatch(showLoader());
     try {
       if (paymentMethod === 'wallet') {
         await withdraw(product.price);
@@ -95,7 +97,7 @@ export default function CheckoutScreen() {
     } catch (e) {
       // Handle error
     } finally {
-      setPlacing(false);
+      dispatch(hideLoader());
     }
   };
 
@@ -218,7 +220,7 @@ export default function CheckoutScreen() {
             },
           ]}
         >
-          <FontAwesome name="wallet" size={w(24)} color={colors.tint} style={{ marginRight: w(12) }} />
+          <FontAwesome name="credit-card" size={w(24)} color={colors.tint} style={{ marginRight: w(12) }} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: w(16), fontWeight: '600', color: colors.text }}>Wallet</Text>
             <View>
@@ -315,7 +317,6 @@ export default function CheckoutScreen() {
           }
           fullWidth
           disabled={!selectedAddress || (paymentMethod === 'wallet' && balance < product.price)}
-          loading={placing}
           onPress={handlePlaceOrder}
           style={styles.payBtn}
         />

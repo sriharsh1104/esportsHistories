@@ -3,6 +3,7 @@
  * Uses AsyncStorage for token persistence.
  */
 import type {
+  GameProfile,
   LoginCredentials,
   SignupCredentials,
   UpdateProfileData,
@@ -72,6 +73,7 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
     phone: data.phone !== undefined ? data.phone : stored.user.phone,
     upiId: data.upiId !== undefined ? data.upiId : stored.user.upiId,
     addresses: data.addresses !== undefined ? data.addresses : stored.user.addresses,
+    gameProfiles: data.gameProfiles !== undefined ? data.gameProfiles : stored.user.gameProfiles,
   };
   await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
   return updated;

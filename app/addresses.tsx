@@ -1,8 +1,10 @@
-import { BackButton, Button, Input, Screen } from '@/components/ui';
+import { BackButton, Button, CustomPhoneInput, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import type { UserAddress } from '@/types/auth';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as Location from 'expo-location';
@@ -26,8 +28,7 @@ export default function AddressesScreen() {
   const [pincode, setPincode] = useState('');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [useLocationLoading, setUseLocationLoading] = useState(false);
+  const dispatch = useAppDispatch();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -68,7 +69,7 @@ export default function AddressesScreen() {
 
   const handleUseCurrentLocation = async () => {
     setError('');
-    setUseLocationLoading(true);
+    dispatch(showLoader());
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -95,7 +96,7 @@ export default function AddressesScreen() {
         setError('Location not available on web. Use a mobile device.');
       }
     } finally {
-      setUseLocationLoading(false);
+      dispatch(hideLoader());
     }
   };
 
@@ -117,7 +118,7 @@ export default function AddressesScreen() {
       setError('Contact number required for delivery partner to call');
       return;
     }
-    setLoading(true);
+    dispatch(showLoader());
     try {
       const newAddr: UserAddress = {
         id: Date.now().toString(),
@@ -140,7 +141,7 @@ export default function AddressesScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
-      setLoading(false);
+      dispatch(hideLoader());
     }
   };
 
@@ -240,7 +241,6 @@ export default function AddressesScreen() {
             </Text>
             <Pressable
               onPress={handleUseCurrentLocation}
-              disabled={useLocationLoading}
               style={[
                 styles.useLocationBtn,
                 { borderColor: colors.tint, backgroundColor: colors.tint + '15' },
@@ -259,7 +259,7 @@ export default function AddressesScreen() {
                   color: colors.tint,
                 }}
               >
-                {useLocationLoading ? 'Getting location...' : 'Use my current location'}
+                Use my current location
               </Text>
             </Pressable>
             <Input
@@ -298,18 +298,16 @@ export default function AddressesScreen() {
               onChangeText={setPincode}
               keyboardType="number-pad"
             />
-            <Input
+            <CustomPhoneInput
               label="Contact number"
               placeholder="For delivery partner to call"
               value={phone}
               onChangeText={setPhone}
-              keyboardType="phone-pad"
-              leftIcon="phone"
+              error={error?.includes('Contact') ? error : undefined}
             />
             <Button
               title="Add address"
               onPress={handleAddAddress}
-              loading={loading}
               fullWidth
               style={{ marginTop: h(16) }}
             />

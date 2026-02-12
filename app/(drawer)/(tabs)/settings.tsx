@@ -4,23 +4,14 @@ import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
-import type { ThemePreference } from '@/context/ThemeContext';
-import { useTheme } from '@/context/ThemeContext';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Pressable, Text, View } from 'react-native';
-
-const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
-  { id: 'light', label: 'Light' },
-  { id: 'dark', label: 'Dark' },
-  { id: 'system', label: 'System (Device)' },
-];
+import { Text, View } from 'react-native';
 
 export default function SettingsScreen() {
   const { isAuthenticated, logout } = useAuth();
   const { selectedGameIds } = useSelectedGames();
-  const { theme, setTheme } = useTheme();
   const scheme = useColorScheme();
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -66,6 +57,11 @@ export default function SettingsScreen() {
               onPress={() => router.push('/(drawer)/(tabs)/profile')}
             />
             <SettingsRow
+              icon="credit-card"
+              label="Wallet"
+              onPress={() => router.push('/(drawer)/(tabs)/wallet')}
+            />
+            <SettingsRow
               icon="lock"
               label="Change password"
               onPress={() => router.push('/(auth)/change-password')}
@@ -87,48 +83,7 @@ export default function SettingsScreen() {
             showArrow={true}
           />
         </Card>
-        <Card style={[styles.card, { overflow: 'visible' as const }]}>
-          <Text
-            style={{
-              fontSize: w(14),
-              fontWeight: '600',
-              color: colors.text,
-              marginBottom: h(10),
-              paddingTop: 2,
-              lineHeight: w(20),
-            }}
-          >
-            Theme
-          </Text>
-          <View style={{ flexDirection: 'row', gap: w(6), flexWrap: 'wrap' }}>
-            {THEME_OPTIONS.map((opt) => (
-              <Pressable
-                key={opt.id}
-                onPress={() => setTheme(opt.id)}
-                style={{
-                  paddingVertical: h(6),
-                  paddingHorizontal: w(12),
-                  borderRadius: w(16),
-                  backgroundColor: theme === opt.id ? colors.tint : colors.border + '40',
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: w(12),
-                    fontWeight: '500',
-                    color: theme === opt.id ? '#fff' : colors.text,
-                  }}
-                >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <Text style={{ fontSize: w(11), color: colors.tabIconDefault, marginTop: h(6) }}>
-            System follows your device dark/light mode
-          </Text>
-        </Card>
-        <Card style={[styles.card, { marginTop: h(12) }]} padded={false}>
+        <Card style={styles.card} padded={false}>
           <SettingsRow
             icon="bell"
             label="Notifications"
@@ -147,17 +102,17 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="question-circle"
             label="Help & FAQ"
-            onPress={() => {}}
+            onPress={() => router.push('/help-faq')}
           />
           <SettingsRow
             icon="shield"
             label="Privacy Policy"
-            onPress={() => {}}
+            onPress={() => router.push('/privacy-policy')}
           />
           <SettingsRow
             icon="file-text"
             label="Terms of Service"
-            onPress={() => {}}
+            onPress={() => router.push('/terms')}
           />
         </Card>
       </View>

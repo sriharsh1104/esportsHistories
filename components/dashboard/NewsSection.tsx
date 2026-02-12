@@ -75,8 +75,11 @@ export function NewsSection() {
   const { selectedGameIds } = useSelectedGames();
 
   const filteredNews = useMemo(() => {
-    if (selectedGameIds.length === 0) return MOCK_NEWS;
-    return MOCK_NEWS.filter((item) => selectedGameIds.includes(item.gameId));
+    const list =
+      selectedGameIds.length === 0
+        ? MOCK_NEWS
+        : MOCK_NEWS.filter((item) => selectedGameIds.includes(item.gameId));
+    return [...list].sort((a, b) => a.sortOrder - b.sortOrder);
   }, [selectedGameIds]);
 
   return (
