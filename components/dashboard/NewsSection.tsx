@@ -2,6 +2,7 @@ import { Card } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { useSelectedGames } from '@/context/SelectedGamesContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useMemo } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -71,6 +72,12 @@ export function NewsSection() {
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
+  const { selectedGameIds } = useSelectedGames();
+
+  const filteredNews = useMemo(() => {
+    if (selectedGameIds.length === 0) return MOCK_NEWS;
+    return MOCK_NEWS.filter((item) => selectedGameIds.includes(item.gameId));
+  }, [selectedGameIds]);
 
   return (
     <View>
@@ -90,7 +97,7 @@ export function NewsSection() {
         nestedScrollEnabled
         style={{ maxHeight: 400 }}
       >
-        {MOCK_NEWS.map((item) => (
+        {filteredNews.map((item) => (
           <NewsCard key={item.id} item={item} />
         ))}
       </ScrollView>

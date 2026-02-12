@@ -12,6 +12,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider } from '@/context/AuthContext';
 import { ResponsiveProvider } from '@/context/ResponsiveContext';
+import { SelectedGamesProvider } from '@/context/SelectedGamesContext';
 import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
 import { WalletProvider } from '@/context/WalletContext';
 
@@ -79,15 +80,18 @@ function RootLayoutNav() {
     <ThemeProvider value={navTheme}>
       <ResponsiveProvider>
         <AuthProvider>
+        <SelectedGamesProvider>
         <WalletProvider>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(drawer)" />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="select-games" options={{ headerShown: false }} />
           <Stack.Screen name="edit-profile" />
           <Stack.Screen name="addresses" />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
         </WalletProvider>
+        </SelectedGamesProvider>
       </AuthProvider>
         </ResponsiveProvider>
     </ThemeProvider>

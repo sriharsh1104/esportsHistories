@@ -2,6 +2,7 @@ import { Button, Card, Screen, SettingsRow } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
+import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import type { ThemePreference } from '@/context/ThemeContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -18,6 +19,7 @@ const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
 
 export default function SettingsScreen() {
   const { isAuthenticated, logout } = useAuth();
+  const { selectedGameIds } = useSelectedGames();
   const { theme, setTheme } = useTheme();
   const scheme = useColorScheme();
   const { w, h } = useResponsive();
@@ -76,8 +78,26 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>
           PREFERENCES
         </Text>
-        <Card style={styles.card}>
-          <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text, marginBottom: h(10) }}>
+        <Card style={[styles.card, { marginBottom: h(12) }]} padded={false}>
+          <SettingsRow
+            icon="gamepad"
+            label="Games to follow"
+            value={selectedGameIds.length > 0 ? `${selectedGameIds.length} selected` : 'Not set'}
+            onPress={() => router.push('/select-games?from=settings')}
+            showArrow={true}
+          />
+        </Card>
+        <Card style={[styles.card, { overflow: 'visible' as const }]}>
+          <Text
+            style={{
+              fontSize: w(14),
+              fontWeight: '600',
+              color: colors.text,
+              marginBottom: h(10),
+              paddingTop: 2,
+              lineHeight: w(20),
+            }}
+          >
             Theme
           </Text>
           <View style={{ flexDirection: 'row', gap: w(6), flexWrap: 'wrap' }}>

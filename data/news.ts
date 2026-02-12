@@ -4,6 +4,7 @@ export type NewsItem = {
   excerpt: string;
   category: 'pc' | 'mobile';
   game: string;
+  gameId: string;
   timeAgo: string;
 };
 
@@ -14,6 +15,7 @@ export const MOCK_NEWS: NewsItem[] = [
     excerpt: 'Tenz leads Team Liquid to victory in nail-biting overtime finish...',
     category: 'pc',
     game: 'Valorant',
+    gameId: 'valorant',
     timeAgo: '2h ago',
   },
   {
@@ -22,6 +24,7 @@ export const MOCK_NEWS: NewsItem[] = [
     excerpt: 'Top 16 teams from across the globe compete for $500K prize pool...',
     category: 'mobile',
     game: 'MLBB',
+    gameId: 'mlbb',
     timeAgo: '5h ago',
   },
   {
@@ -30,6 +33,7 @@ export const MOCK_NEWS: NewsItem[] = [
     excerpt: 'Underdog teams shake up regional qualifiers in EU and SEA...',
     category: 'pc',
     game: 'Dota 2',
+    gameId: 'dota2',
     timeAgo: '8h ago',
   },
   {
@@ -38,6 +42,7 @@ export const MOCK_NEWS: NewsItem[] = [
     excerpt: 'New format and increased prize pool for upcoming season...',
     category: 'mobile',
     game: 'PUBG Mobile',
+    gameId: 'bgmi',
     timeAgo: '1d ago',
   },
   {
@@ -46,6 +51,34 @@ export const MOCK_NEWS: NewsItem[] = [
     excerpt: 'Group of Death confirmed as top seeds face each other early...',
     category: 'pc',
     game: 'League of Legends',
+    gameId: 'lol',
     timeAgo: '2d ago',
+  },
+  {
+    id: '6',
+    title: 'BGMI India Series Finals This Weekend',
+    excerpt: 'Top 24 squads battle for the championship crown...',
+    category: 'mobile',
+    game: 'BGMI',
+    gameId: 'bgmi',
+    timeAgo: '3h ago',
+  },
+  {
+    id: '7',
+    title: 'Free Fire India Championship Announced',
+    excerpt: 'Garena announces regional competitive circuit...',
+    category: 'mobile',
+    game: 'Free Fire',
+    gameId: 'freefire',
+    timeAgo: '6h ago',
+  },
+  {
+    id: '8',
+    title: 'CS2 Major Stockholm Highlights',
+    excerpt: 'NAVI dominates in historic third Major victory...',
+    category: 'pc',
+    game: 'CS2',
+    gameId: 'cs2',
+    timeAgo: '1d ago',
   },
 ];

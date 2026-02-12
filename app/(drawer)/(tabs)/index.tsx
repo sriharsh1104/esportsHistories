@@ -4,12 +4,14 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
 
 export default function DashboardScreen() {
   const { user, isAuthenticated } = useAuth();
+  const { selectedGameIds } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
   const { w, h, isTablet } = useResponsive();
   const colors = Colors[scheme];
@@ -85,29 +87,43 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      <View style={styles.sections}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Quick links
-        </Text>
-        <View style={styles.cardsRow}>
-          <View style={styles.cardFlex}>
-            <Card onPress={() => router.push('/(drawer)/(tabs)/game')} style={styles.quickCard}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>PC Games</Text>
-              <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-                LoL, Dota 2, CS2, Valorant
-              </Text>
-            </Card>
+      {(() => {
+        const pcIds = ['valorant', 'r6', 'cs2', 'dota2', 'lol', 'fc', 'pes', 'tekken'];
+        const mobileIds = ['bgmi', 'freefire', 'mlbb', 'codm', 'coc', 'cr', 'wildrift'];
+        const hasPc = selectedGameIds.length === 0 || selectedGameIds.some((id) => pcIds.includes(id));
+        const hasMobile = selectedGameIds.length === 0 || selectedGameIds.some((id) => mobileIds.includes(id));
+        const showQuickLinks = hasPc || hasMobile;
+
+        return showQuickLinks ? (
+          <View style={styles.sections}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Quick links
+            </Text>
+            <View style={styles.cardsRow}>
+              {hasPc && (
+                <View style={styles.cardFlex}>
+                  <Card onPress={() => router.push('/(drawer)/(tabs)/game')} style={styles.quickCard}>
+                    <Text style={[styles.cardTitle, { color: colors.text }]}>PC Games</Text>
+                    <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
+                      LoL, Dota 2, CS2, Valorant
+                    </Text>
+                  </Card>
+                </View>
+              )}
+              {hasMobile && (
+                <View style={styles.cardFlex}>
+                  <Card onPress={() => router.push('/(drawer)/(tabs)/game')} style={styles.quickCard}>
+                    <Text style={[styles.cardTitle, { color: colors.text }]}>Mobile Games</Text>
+                    <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
+                      BGMI, Free Fire, MLBB
+                    </Text>
+                  </Card>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.cardFlex}>
-            <Card onPress={() => router.push('/(drawer)/(tabs)/game')} style={styles.quickCard}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Mobile Games</Text>
-              <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-                BGMI, Free Fire, MLBB
-              </Text>
-            </Card>
-          </View>
-        </View>
-      </View>
+        ) : null;
+      })()}
 
       <View style={[styles.sections, { marginTop: h(24) }]}>
         <NewsSection />

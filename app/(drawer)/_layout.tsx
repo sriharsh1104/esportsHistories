@@ -1,6 +1,7 @@
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
+import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { GAME_CATEGORIES } from '@/data/games';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DrawerActions } from '@react-navigation/native';
@@ -16,9 +17,14 @@ function CustomDrawerContent(props: { navigation?: any }) {
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const [activeTab, setActiveTab] = useState<PlatformTab>('mobile');
+  const { selectedGameIds } = useSelectedGames();
 
-  const mobileGames = GAME_CATEGORIES.find((c) => c.id === 'mobile')?.games ?? [];
-  const pcGames = GAME_CATEGORIES.find((c) => c.id === 'pc')?.games ?? [];
+  const allMobile = GAME_CATEGORIES.find((c) => c.id === 'mobile')?.games ?? [];
+  const allPc = GAME_CATEGORIES.find((c) => c.id === 'pc')?.games ?? [];
+  const filterBySelected = (list: typeof allMobile) =>
+    selectedGameIds.length === 0 ? list : list.filter((g) => selectedGameIds.includes(g.id));
+  const mobileGames = filterBySelected(allMobile);
+  const pcGames = filterBySelected(allPc);
   const games = activeTab === 'mobile' ? mobileGames : pcGames;
 
   const closeDrawer = () => props.navigation?.dispatch(DrawerActions.closeDrawer());

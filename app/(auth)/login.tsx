@@ -2,6 +2,7 @@ import { Button, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
+import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -13,6 +14,7 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { hasSelectedGames } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -49,7 +51,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login({ email: email.trim(), password });
-      router.replace('/(drawer)/(tabs)');
+      router.replace(hasSelectedGames ? '/(drawer)/(tabs)' : '/select-games');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed');
     } finally {
