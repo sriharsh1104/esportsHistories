@@ -1,113 +1,144 @@
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
-import { useResponsive } from '@/context/ResponsiveContext';
-import { useSelectedGames } from '@/context/SelectedGamesContext';
-import { GAME_CATEGORIES } from '@/data/games';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DrawerActions } from '@react-navigation/native';
-import { router } from 'expo-router';
-import { Drawer } from 'expo-router/drawer';
-import React, { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useColorScheme } from "@/components/useColorScheme";
+import Colors from "@/constants/Colors";
+import { useAuth } from "@/context/AuthContext";
+import { useResponsive } from "@/context/ResponsiveContext";
+import { useWallet } from "@/context/WalletContext";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { DrawerActions } from "@react-navigation/native";
+import { router } from "expo-router";
+import { Drawer } from "expo-router/drawer";
+import React, { useEffect } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 
-type PlatformTab = 'pc' | 'mobile';
+const MENU_ITEMS = [
+  { icon: "user" as const, label: "Profile", route: "/(drawer)/(tabs)/profile" },
+  { icon: "credit-card" as const, label: "Wallet", route: "/(drawer)/(tabs)/wallet" },
+  { icon: "cog" as const, label: "Settings", route: "/(drawer)/(tabs)/settings" },
+];
 
 function CustomDrawerContent(props: { navigation?: any }) {
-  const scheme = useColorScheme() ?? 'light';
+  const scheme = useColorScheme() ?? "light";
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
-  const [activeTab, setActiveTab] = useState<PlatformTab>('mobile');
-  const { selectedGameIds } = useSelectedGames();
+  const { user, isAuthenticated } = useAuth();
+  const { balance, isLoading } = useWallet();
 
-  const allMobile = GAME_CATEGORIES.find((c) => c.id === 'mobile')?.games ?? [];
-  const allPc = GAME_CATEGORIES.find((c) => c.id === 'pc')?.games ?? [];
-  const filterBySelected = (list: typeof allMobile) =>
-    selectedGameIds.length === 0 ? list : list.filter((g) => selectedGameIds.includes(g.id));
-  const mobileGames = filterBySelected(allMobile);
-  const pcGames = filterBySelected(allPc);
-  const games = activeTab === 'mobile' ? mobileGames : pcGames;
+  const closeDrawer = () =>
+    props.navigation?.dispatch(DrawerActions.closeDrawer());
 
-  const closeDrawer = () => props.navigation?.dispatch(DrawerActions.closeDrawer());
+  const nav = (route: string) => {
+    closeDrawer();
+    router.push(route as any);
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: h(48) }}>
-      <View style={{ paddingHorizontal: w(20), paddingBottom: h(20) }}>
-        <Text style={{ fontSize: w(20), fontWeight: '700', color: colors.text }}>
-          Games
-        </Text>
-        <View
-          style={{
-            flexDirection: 'row',
-            marginTop: h(16),
-            backgroundColor: colors.border + '40',
-            borderRadius: w(8),
-            padding: w(4),
-          }}
-        >
-          <Pressable
-            onPress={() => setActiveTab('mobile')}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Pressable
+        onPress={() => isAuthenticated && nav("/(drawer)/(tabs)/profile")}
+        style={{
+          padding: w(20),
+          paddingTop: h(48),
+          paddingBottom: h(16),
+          backgroundColor: colors.tint + "15",
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View
             style={{
-              flex: 1,
-              paddingVertical: h(10),
-              borderRadius: w(6),
-              backgroundColor: activeTab === 'mobile' ? colors.tint : 'transparent',
-              alignItems: 'center',
+              width: w(56),
+              height: w(56),
+              borderRadius: w(28),
+              backgroundColor: colors.tint,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            <Text
-              style={{
-                fontSize: w(14),
-                fontWeight: '600',
-                color: activeTab === 'mobile' ? '#fff' : colors.text,
-              }}
-            >
-              Mobile
+            <Text style={{ fontSize: w(24), fontWeight: "700", color: "#fff" }}>
+              {isAuthenticated && user
+                ? user.displayName.charAt(0).toUpperCase()
+                : "?"}
             </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActiveTab('pc')}
-            style={{
-              flex: 1,
-              paddingVertical: h(10),
-              borderRadius: w(6),
-              backgroundColor: activeTab === 'pc' ? colors.tint : 'transparent',
-              alignItems: 'center',
-            }}
-          >
+          </View>
+          <View style={{ flex: 1, marginLeft: w(14) }}>
             <Text
-              style={{
-                fontSize: w(14),
-                fontWeight: '600',
-                color: activeTab === 'pc' ? '#fff' : colors.text,
-              }}
-            >
-              PC
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        {games.map((game) => (
-          <Pressable
-            key={game.id}
-            onPress={() => {
-              closeDrawer();
-              router.push(`/(drawer)/(tabs)/game/${game.slug}` as any);
-            }}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: h(12),
-              paddingHorizontal: w(20),
-              backgroundColor: pressed ? colors.border + '40' : 'transparent',
-            })}
-          >
-            <Text
-              style={{ fontSize: w(15), fontWeight: '500', color: colors.text, flex: 1 }}
+              style={{ fontSize: w(18), fontWeight: "700", color: colors.text }}
               numberOfLines={1}
             >
-              {game.name}
+              {isAuthenticated && user
+                ? user.fullName || user.displayName
+                : "Guest"}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: h(6) }}>
+              <FontAwesome name="star" size={w(14)} color={colors.accent} />
+              {isLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.tint}
+                  style={{ marginLeft: w(8) }}
+                />
+              ) : (
+                <Text
+                  style={{
+                    fontSize: w(13),
+                    color: colors.tabIconDefault,
+                    marginLeft: w(6),
+                  }}
+                >
+                  ₹{balance.toFixed(2)}
+                </Text>
+              )}
+            </View>
+          </View>
+          {isAuthenticated && (
+            <FontAwesome
+              name="chevron-right"
+              size={w(14)}
+              color={colors.tabIconDefault}
+            />
+          )}
+        </View>
+      </Pressable>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: h(8), paddingBottom: h(24) }}
+      >
+        {MENU_ITEMS.map((item) => (
+          <Pressable
+            key={item.label}
+            onPress={() => nav(item.route)}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: h(14),
+              paddingHorizontal: w(20),
+              backgroundColor: pressed ? colors.border + "40" : "transparent",
+            })}
+          >
+            <FontAwesome
+              name={item.icon}
+              size={w(20)}
+              color={colors.tint}
+              style={{ width: w(28), textAlign: "center" }}
+            />
+            <Text
+              style={{
+                fontSize: w(15),
+                fontWeight: "500",
+                color: colors.text,
+                flex: 1,
+              }}
+            >
+              {item.label}
             </Text>
             <FontAwesome
               name="chevron-right"
@@ -123,29 +154,46 @@ function CustomDrawerContent(props: { navigation?: any }) {
 
 export default function DrawerLayout() {
   const colorScheme = useColorScheme();
+  const { user, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    const step = user.onboardingStep;
+    if (step === 'profile') {
+      router.replace('/edit-profile?from=signup');
+    } else if (step === 'games') {
+      router.replace('/select-games?from=onboarding');
+    }
+  }, [isAuthenticated, user?.onboardingStep]);
 
   return (
     <Drawer
       screenOptions={{
         headerShown: true,
-        drawerActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        drawerActiveTintColor: Colors[colorScheme ?? "light"].tint,
       }}
-      drawerContent={(props) => <CustomDrawerContent navigation={props.navigation} />}
+      drawerContent={(props) => (
+        <CustomDrawerContent navigation={props.navigation} />
+      )}
     >
       <Drawer.Screen
         name="(tabs)"
         options={{
-          drawerLabel: 'Dashboard',
+          drawerLabel: "Dashboard",
           headerShown: false,
-          drawerIcon: ({ color }) => <FontAwesome name="home" size={22} color={color} />,
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="home" size={22} color={color} />
+          ),
         }}
       />
       <Drawer.Screen
         name="games"
         options={{
-          drawerLabel: 'Games',
-          title: 'Select Games',
-          drawerIcon: ({ color }) => <FontAwesome name="gamepad" size={22} color={color} />,
+          drawerLabel: "Games",
+          title: "Select Games",
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="gamepad" size={22} color={color} />
+          ),
         }}
       />
     </Drawer>

@@ -12,7 +12,7 @@ type AuthContextType = {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (c: LoginCredentials) => Promise<void>;
+  login: (c: LoginCredentials) => Promise<User>;
   signup: (c: SignupCredentials) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
@@ -44,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (credentials: LoginCredentials) => {
     const { user: u } = await authService.login(credentials);
     setUser(u);
+    return u;
   }, []);
 
   const signup = useCallback(async (credentials: SignupCredentials) => {

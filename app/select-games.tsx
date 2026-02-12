@@ -1,6 +1,7 @@
 import { BackButton, Button, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { GAME_CATEGORIES } from '@/data/games';
@@ -66,6 +67,8 @@ function GameChip({
 export default function SelectGamesScreen() {
   const { from } = useLocalSearchParams<{ from?: string }>();
   const isFromSettings = from === 'settings';
+  const isOnboarding = from === 'onboarding';
+  const { updateProfile } = useAuth();
   const { selectedGameIds, toggleGame, isGameSelected, setSelectedGameIds } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
@@ -103,13 +106,17 @@ export default function SelectGamesScreen() {
     [w, h, colors.border]
   );
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (selectedGameIds.length === 0) return;
+    if (isOnboarding) {
+      await updateProfile({ onboardingStep: 'done' });
+    }
     if (isFromSettings) router.back();
     else router.replace('/(drawer)/(tabs)');
   };
 
   const handleSkip = () => {
+    if (isOnboarding) return;
     if (selectedGameIds.length === 0) {
       setSelectedGameIds(mobileGames.slice(0, 3).map((g) => g.id));
     }
@@ -123,8 +130,9 @@ export default function SelectGamesScreen() {
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>Choose your games</Text>
         <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
-          Select up to {MAX_GAMES} games to get personalized news. You can change this later in
-          Settings.
+          {isOnboarding
+            ? 'Select at least 1 game to get personalized news. You can change this later in Settings.'
+            : `Select up to ${MAX_GAMES} games to get personalized news. You can change this later in Settings.`}
         </Text>
         <Text style={[styles.counter, { color: colors.accent }]}>
           {selectedGameIds.length} / {MAX_GAMES} selected
@@ -197,7 +205,7 @@ export default function SelectGamesScreen() {
           disabled={selectedGameIds.length === 0}
           style={{ marginBottom: h(12) }}
         />
-        {!isFromSettings && (
+        {!isFromSettings && !isOnboarding && (
           <Button
             title={selectedGameIds.length === 0 ? 'Skip & add default games' : 'Skip'}
             variant="outline"

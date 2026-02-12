@@ -15,7 +15,23 @@ import Constants from 'expo-constants';
 
 const TOKEN_KEY = '@esports_auth_token';
 const USER_KEY = '@esports_user';
+const MOCK_USERS_KEY = '@esports_mock_users';
 const API_BASE = Constants.expoConfig?.extra?.apiBaseUrl || 'http://localhost:3000/api';
+
+async function getMockUsers(): Promise<Record<string, User>> {
+  try {
+    const raw = await AsyncStorage.getItem(MOCK_USERS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, User>) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveMockUser(email: string, user: User): Promise<void> {
+  const users = await getMockUsers();
+  users[email.toLowerCase()] = user;
+  await AsyncStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
+}
 
 export async function login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
   // TODO: Replace with actual API call
@@ -74,8 +90,11 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
     upiId: data.upiId !== undefined ? data.upiId : stored.user.upiId,
     addresses: data.addresses !== undefined ? data.addresses : stored.user.addresses,
     gameProfiles: data.gameProfiles !== undefined ? data.gameProfiles : stored.user.gameProfiles,
+    onboardingStep:
+      data.onboardingStep !== undefined ? data.onboardingStep : stored.user.onboardingStep,
   };
   await AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
+  await saveMockUser(updated.email, updated);
   return updated;
 }
 
@@ -102,15 +121,16 @@ async function mockApiCall(endpoint: string, body: object): Promise<{
   await new Promise((r) => setTimeout(r, 800));
   if (endpoint.includes('login')) {
     const { email, password } = body as LoginCredentials;
-    if (email && password.length >= 6) {
+    if (!email || password.length < 6) {
+      return { success: false, message: 'Invalid email or password' };
+    }
+    const users = await getMockUsers();
+    const existing = users[email.trim().toLowerCase()];
+    if (existing) {
       return {
         success: true,
         data: {
-          user: {
-            id: '1',
-            email,
-            displayName: email.split('@')[0],
-          },
+          user: existing,
           token: 'mock-jwt-token',
         },
       };
@@ -125,14 +145,17 @@ async function mockApiCall(endpoint: string, body: object): Promise<{
     if (creds.password.length < 6) {
       return { success: false, message: 'Password must be at least 6 characters' };
     }
+    const user: User = {
+      id: '1',
+      email: creds.email.trim(),
+      displayName: creds.displayName?.trim() || creds.email.split('@')[0],
+      onboardingStep: 'profile',
+    };
+    await saveMockUser(user.email, user);
     return {
       success: true,
       data: {
-        user: {
-          id: '1',
-          email: creds.email,
-          displayName: creds.displayName || creds.email.split('@')[0],
-        },
+        user,
         token: 'mock-jwt-token',
       },
     };

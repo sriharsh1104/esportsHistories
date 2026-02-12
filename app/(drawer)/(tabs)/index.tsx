@@ -26,7 +26,7 @@ export default function NewsScreen() {
       authTitle: { fontSize: w(18), fontWeight: '600' as const, marginBottom: h(8) },
       authDesc: { fontSize: w(14), marginBottom: h(16) },
       authBtn: { marginBottom: h(12) },
-      sections: { flex: 1 },
+      section: { marginBottom: h(24) },
       sectionTitle: { fontSize: w(18), fontWeight: '600' as const, marginBottom: h(16) },
       quickCard: { marginBottom: h(12) },
       cardsRow: {
@@ -36,6 +36,7 @@ export default function NewsScreen() {
       cardFlex: isTablet ? { flex: 1, minWidth: 200 } : {},
       cardTitle: { fontSize: w(16), fontWeight: '600' as const, marginBottom: h(4) },
       cardDesc: { fontSize: w(14) },
+      newsSection: { marginTop: h(8), marginBottom: h(32) },
     }),
     [w, h, isTablet]
   );
@@ -81,21 +82,21 @@ export default function NewsScreen() {
       {isAuthenticated && selectedGameIds.length === 0 && (
         <Card style={{ padding: w(16), marginBottom: h(16) }}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>
-            Follow games for news
+            Select games to see news
           </Text>
           <Text style={[styles.cardDesc, { color: colors.tabIconDefault, marginBottom: h(12) }]}>
-            Go to Settings → Games to follow and select your favorite games
+            Select at least 1 game to follow and get personalized news
           </Text>
           <Button
-            title="Open Settings"
+            title="Select games"
             variant="outline"
-            onPress={() => router.push('/(drawer)/(tabs)/settings')}
+            onPress={() => router.push('/select-games')}
           />
         </Card>
       )}
 
       {isAuthenticated && (
-        <View style={[styles.sections, { marginBottom: h(16) }]}>
+        <View style={styles.section}>
           <WalletBalanceCard />
         </View>
       )}
@@ -103,12 +104,12 @@ export default function NewsScreen() {
       {(() => {
         const pcIds = ['valorant', 'r6', 'cs2', 'dota2', 'lol', 'fc', 'pes', 'tekken'];
         const mobileIds = ['bgmi', 'freefire', 'mlbb', 'codm', 'coc', 'cr', 'wildrift'];
-        const hasPc = selectedGameIds.length === 0 || selectedGameIds.some((id) => pcIds.includes(id));
-        const hasMobile = selectedGameIds.length === 0 || selectedGameIds.some((id) => mobileIds.includes(id));
+        const hasPc = selectedGameIds.length > 0 && selectedGameIds.some((id) => pcIds.includes(id));
+        const hasMobile = selectedGameIds.length > 0 && selectedGameIds.some((id) => mobileIds.includes(id));
         const showQuickLinks = hasPc || hasMobile;
 
         return showQuickLinks ? (
-          <View style={[styles.sections, { marginBottom: h(16) }]}>
+          <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Browse games</Text>
             <View style={styles.cardsRow}>
               {hasPc && (
@@ -136,9 +137,11 @@ export default function NewsScreen() {
         ) : null;
       })()}
 
-      <View style={styles.sections}>
-        <NewsSection />
-      </View>
+      {isAuthenticated && selectedGameIds.length > 0 && (
+        <View style={styles.newsSection}>
+          <NewsSection />
+        </View>
+      )}
     </Screen>
   );
 }

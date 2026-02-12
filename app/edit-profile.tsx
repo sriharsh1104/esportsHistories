@@ -9,7 +9,7 @@ import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import { ALL_GAMES } from '@/data/games';
 import type { GameProfile } from '@/types/auth';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 
 export default function EditProfileScreen() {
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { user, updateProfile } = useAuth();
   const { selectedGameIds } = useSelectedGames();
   const [displayName, setDisplayName] = useState('');
@@ -152,8 +153,13 @@ export default function EditProfileScreen() {
         phone: phone.trim() || undefined,
         upiId: upiId.trim() || undefined,
         gameProfiles,
+        ...(from === 'signup' && { onboardingStep: 'games' as const }),
       });
-      router.back();
+      if (from === 'signup') {
+        router.replace('/select-games?from=onboarding');
+      } else {
+        router.back();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Update failed');
     } finally {

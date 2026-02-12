@@ -17,6 +17,8 @@ export type GameProfile = {
   gameUid: string;
 };
 
+export type OnboardingStep = 'profile' | 'games' | 'done';
+
 export type User = {
   id: string;
   email: string;
@@ -27,6 +29,7 @@ export type User = {
   avatarUrl?: string;
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
+  onboardingStep?: OnboardingStep;
 };
 
 export type UpdateProfileData = {
@@ -36,6 +39,7 @@ export type UpdateProfileData = {
   upiId?: string;
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
+  onboardingStep?: OnboardingStep;
 };
 
 export type AuthState = {

@@ -5,7 +5,7 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useMemo } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { MOCK_NEWS } from '@/data/news';
 import type { NewsItem } from '@/data/news';
 
@@ -94,16 +94,11 @@ export function NewsSection() {
       >
         Latest News
       </Text>
-      <ScrollView
-        horizontal={false}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-        style={{ maxHeight: 400 }}
-      >
+      <View>
         {filteredNews.map((item) => (
           <NewsCard key={item.id} item={item} />
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }

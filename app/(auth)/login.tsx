@@ -52,8 +52,15 @@ export default function LoginScreen() {
     }
     dispatch(showLoader());
     try {
-      await login({ email: email.trim(), password });
-      router.replace(hasSelectedGames ? '/(drawer)/(tabs)' : '/select-games');
+      const user = await login({ email: email.trim(), password });
+      const step = user.onboardingStep;
+      if (step === 'profile') {
+        router.replace('/edit-profile?from=signup');
+      } else if (step === 'games') {
+        router.replace('/select-games?from=onboarding');
+      } else {
+        router.replace(hasSelectedGames ? '/(drawer)/(tabs)' : '/select-games');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed');
     } finally {

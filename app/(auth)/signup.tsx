@@ -2,7 +2,6 @@ import { BackButton, Button, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
-import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
@@ -18,7 +17,6 @@ export default function SignupScreen() {
   const [error, setError] = useState('');
   const dispatch = useAppDispatch();
   const { signup } = useAuth();
-  const { hasSelectedGames } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -71,7 +69,7 @@ export default function SignupScreen() {
         displayName: displayName.trim(),
         confirmPassword,
       });
-      router.replace(hasSelectedGames ? '/(drawer)/(tabs)' : '/select-games');
+      router.replace('/edit-profile?from=signup');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Signup failed');
     } finally {
