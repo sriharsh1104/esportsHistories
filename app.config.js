@@ -6,7 +6,7 @@ config({ path: resolve(process.cwd(), envFile) });
 
 export default {
   expo: {
-    name: 'esportsHistories',
+    name: 'Esports Histories',
     slug: 'esportshistories',
     version: '1.0.0',
     orientation: 'portrait',
