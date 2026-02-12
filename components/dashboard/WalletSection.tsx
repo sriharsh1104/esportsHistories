@@ -1,6 +1,7 @@
 import { Button, Card } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useWallet } from '@/context/WalletContext';
 import { useAppDispatch } from '@/store/hooks';
@@ -11,6 +12,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -25,13 +27,16 @@ const TOP_UP_OPTIONS: { id: TopUpMethod; icon: string; label: string; desc: stri
 ];
 
 export function WalletSection() {
+  const { user } = useAuth();
   const { balance, topUp, withdraw, isLoading } = useWallet();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
+  const upiIds = user?.upiIds ?? [];
   const [modalType, setModalType] = useState<'topup' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [topUpMethod, setTopUpMethod] = useState<TopUpMethod>('upi');
+  const [selectedUpiId, setSelectedUpiId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const dispatch = useAppDispatch();
 
@@ -79,6 +84,14 @@ export function WalletSection() {
       setError('Enter valid amount');
       return;
     }
+    if (modalType === 'topup' && topUpMethod === 'upi' && (!selectedUpiId || !upiIds.includes(selectedUpiId))) {
+      setError('Select UPI ID to pay from');
+      return;
+    }
+    if (modalType === 'withdraw' && (!selectedUpiId || !upiIds.includes(selectedUpiId))) {
+      setError('Select UPI ID to receive money');
+      return;
+    }
     dispatch(showLoader());
     try {
       if (modalType === 'topup') {
@@ -99,6 +112,7 @@ export function WalletSection() {
     setModalType(null);
     setAmount('');
     setTopUpMethod('upi');
+    setSelectedUpiId(null);
     setError('');
   };
 
@@ -176,7 +190,10 @@ export function WalletSection() {
                 {TOP_UP_OPTIONS.map((opt) => (
                   <Pressable
                     key={opt.id}
-                    onPress={() => setTopUpMethod(opt.id)}
+                    onPress={() => {
+                      setTopUpMethod(opt.id);
+                      if (opt.id !== 'upi') setSelectedUpiId(null);
+                    }}
                     style={[
                       styles.payOpt,
                       {
@@ -202,8 +219,82 @@ export function WalletSection() {
                     )}
                   </Pressable>
                 ))}
+                {topUpMethod === 'upi' && (
+                  <View style={{ marginBottom: h(12) }}>
+                    <Text style={{ fontSize: w(13), fontWeight: '600', color: colors.text, marginBottom: h(8) }}>
+                      Pay from (saved UPI ID)
+                    </Text>
+                    {upiIds.length === 0 ? (
+                      <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
+                        Add UPI ID in Saved UPI IDs section below first
+                      </Text>
+                    ) : (
+                      <ScrollView style={{ maxHeight: h(120) }} showsVerticalScrollIndicator={false}>
+                        {upiIds.map((id) => (
+                          <Pressable
+                            key={id}
+                            onPress={() => setSelectedUpiId(id)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              padding: w(12),
+                              borderRadius: w(10),
+                              marginBottom: h(6),
+                              backgroundColor: selectedUpiId === id ? colors.tint + '20' : colors.inputBg,
+                              borderWidth: 2,
+                              borderColor: selectedUpiId === id ? colors.tint : colors.border,
+                            }}
+                          >
+                            <FontAwesome name="credit-card" size={w(16)} color={colors.tint} style={{ marginRight: w(10) }} />
+                            <Text style={{ fontSize: w(14), fontWeight: '500', color: colors.text, flex: 1 }}>{id}</Text>
+                            {selectedUpiId === id && (
+                              <FontAwesome name="check-circle" size={w(18)} color={colors.tint} />
+                            )}
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    )}
+                  </View>
+                )}
                 <View style={{ height: h(8) }} />
               </>
+            )}
+            {modalType === 'withdraw' && (
+              <View style={{ marginBottom: h(12) }}>
+                <Text style={{ fontSize: w(13), fontWeight: '600', color: colors.text, marginBottom: h(8) }}>
+                  Withdraw to (saved UPI ID)
+                </Text>
+                {upiIds.length === 0 ? (
+                  <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
+                    Add UPI ID in Saved UPI IDs section below first
+                  </Text>
+                ) : (
+                  <ScrollView style={{ maxHeight: h(120) }} showsVerticalScrollIndicator={false}>
+                    {upiIds.map((id) => (
+                      <Pressable
+                        key={id}
+                        onPress={() => setSelectedUpiId(id)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: w(12),
+                          borderRadius: w(10),
+                          marginBottom: h(6),
+                          backgroundColor: selectedUpiId === id ? colors.tint + '20' : colors.inputBg,
+                          borderWidth: 2,
+                          borderColor: selectedUpiId === id ? colors.tint : colors.border,
+                        }}
+                      >
+                        <FontAwesome name="credit-card" size={w(16)} color={colors.tint} style={{ marginRight: w(10) }} />
+                        <Text style={{ fontSize: w(14), fontWeight: '500', color: colors.text, flex: 1 }}>{id}</Text>
+                        {selectedUpiId === id && (
+                          <FontAwesome name="check-circle" size={w(18)} color={colors.tint} />
+                        )}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
             )}
             <TextInput
               placeholder="Enter amount (₹)"
@@ -230,6 +321,12 @@ export function WalletSection() {
                 title={modalType === 'topup' ? 'Add' : 'Withdraw'}
                 onPress={handleSubmit}
                 style={styles.btn}
+                disabled={
+                  (modalType === 'topup' && topUpMethod === 'upi' && upiIds.length === 0) ||
+                  (modalType === 'withdraw' && upiIds.length === 0) ||
+                  (modalType === 'topup' && topUpMethod === 'upi' && !selectedUpiId) ||
+                  (modalType === 'withdraw' && !selectedUpiId)
+                }
               />
             </View>
           </Pressable>

@@ -16,7 +16,6 @@ export default function EditProfileScreen() {
   const [displayName, setDisplayName] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [upiId, setUpiId] = useState('');
   const [error, setError] = useState('');
   const dispatch = useAppDispatch();
   const scheme = useColorScheme() ?? 'light';
@@ -28,7 +27,6 @@ export default function EditProfileScreen() {
       setDisplayName(user.displayName || '');
       setFullName(user.fullName || '');
       setPhone(user.phone || '');
-      setUpiId(user.upiId || '');
     }
   }, [user]);
 
@@ -55,7 +53,6 @@ export default function EditProfileScreen() {
         displayName: displayName.trim(),
         fullName: fullName.trim() || undefined,
         phone: phone.trim() || undefined,
-        upiId: upiId.trim() || undefined,
         ...(from === 'signup' && { onboardingStep: 'games' as const }),
       });
       if (from === 'signup') {
@@ -102,14 +99,6 @@ export default function EditProfileScreen() {
             placeholder="+91 9876543210"
             value={phone}
             onChangeText={setPhone}
-          />
-          <Input
-            label="UPI ID"
-            placeholder="user@upi"
-            value={upiId}
-            onChangeText={setUpiId}
-            autoCapitalize="none"
-            leftIcon="credit-card"
           />
 
           <Button

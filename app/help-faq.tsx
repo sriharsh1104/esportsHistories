@@ -32,11 +32,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I manage my account?',
-    a: 'Settings → Profile for name, phone, game profiles. Change password under Settings. Log out from the same menu. Profile is only accessible from Settings.',
+    a: 'Settings → Profile for name, phone. Game profiles in Profile → Game Profiles. UPI IDs in Wallet. Change password under Settings. Log out from the same menu. Profile is only accessible from Settings.',
   },
   {
     q: 'What are game profiles?',
-    a: 'Game profiles let you add your in-game name and UID for each game you follow. Friends can find you in-game from your profile. Optional—add from Edit Profile.',
+    a: 'Game profiles let you add your in-game name and UID for each game you follow. Friends can find you in-game from your profile. Add from Profile → Game Profiles.',
   },
   {
     q: 'How do I follow tournaments?',

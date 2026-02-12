@@ -120,15 +120,9 @@ export default function ProfileScreen() {
               {user.phone || '—'}
             </Text>
           </View>
-          <View style={styles.infoRow}>
+          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
             <Text style={[styles.infoLabel, { color: colors.tabIconDefault }]}>Email</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>{user.email}</Text>
-          </View>
-          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-            <Text style={[styles.infoLabel, { color: colors.tabIconDefault }]}>UPI ID</Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              {user.upiId || '—'}
-            </Text>
           </View>
         </Card>
 

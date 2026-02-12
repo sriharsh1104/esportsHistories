@@ -27,6 +27,13 @@ async function saveMockUser(email: string, user: User): Promise<void> {
   await commonService.setItem(MOCK_USERS_KEY, users);
 }
 
+function migrateUser(user: User): User {
+  if (!user.upiIds && user.upiId) {
+    return { ...user, upiIds: [user.upiId] };
+  }
+  return user;
+}
+
 export async function login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
   // TODO: Replace with actual API call via api.service
   const res = await mockApiCall('/auth/login', credentials);
@@ -63,7 +70,7 @@ export async function getStoredAuth(): Promise<{ user: User; token: string } | n
   const u = stored[USER_KEY];
   if (t && u) {
     try {
-      const user = JSON.parse(u) as User;
+      const user = migrateUser(JSON.parse(u) as User);
       setToken(t);
       return { token: t, user };
     } catch {
@@ -86,7 +93,7 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
     displayName: data.displayName ?? stored.user.displayName,
     fullName: data.fullName !== undefined ? data.fullName : stored.user.fullName,
     phone: data.phone !== undefined ? data.phone : stored.user.phone,
-    upiId: data.upiId !== undefined ? data.upiId : stored.user.upiId,
+    upiIds: data.upiIds !== undefined ? data.upiIds : stored.user.upiIds,
     addresses: data.addresses !== undefined ? data.addresses : stored.user.addresses,
     gameProfiles: data.gameProfiles !== undefined ? data.gameProfiles : stored.user.gameProfiles,
     onboardingStep:
@@ -129,7 +136,7 @@ async function mockApiCall(endpoint: string, body: object): Promise<{
       return {
         success: true,
         data: {
-          user: existing,
+          user: migrateUser(existing),
           token: 'mock-jwt-token',
         },
       };

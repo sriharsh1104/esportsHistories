@@ -1,4 +1,4 @@
-import { BackButton, Button, Screen } from '@/components/ui';
+import { BackButton, Button, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -15,15 +15,19 @@ import {
   Image,
   Pressable,
   Text,
-  View
+  View,
 } from 'react-native';
+
+function validateUpiId(v: string): boolean {
+  return /^[\w.-]+@[\w.-]+$/.test(v.trim());
+}
 
 type PaymentMethod = 'wallet' | 'upi' | 'card' | 'qr';
 
 export default function CheckoutScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, updateProfile } = useAuth();
   const { balance, withdraw } = useWallet();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
@@ -43,9 +47,19 @@ export default function CheckoutScreen() {
     });
   }, [addresses]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('wallet');
+  const [selectedUpiId, setSelectedUpiId] = useState<string | null>(null);
+  const [newUpiId, setNewUpiId] = useState('');
+  const [upiError, setUpiError] = useState('');
   const dispatch = useAppDispatch();
 
+  React.useEffect(() => {
+    if (paymentMethod !== 'upi') setUpiError('');
+  }, [paymentMethod]);
+
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
+  const upiIds = user?.upiIds ?? [];
+  const usedUpiId = selectedUpiId || (newUpiId.trim() && validateUpiId(newUpiId) ? newUpiId.trim() : null);
+  const canPayUpi = paymentMethod !== 'upi' || !!usedUpiId;
 
   const styles = useMemo(
     () => ({
@@ -86,12 +100,26 @@ export default function CheckoutScreen() {
   const handlePlaceOrder = async () => {
     if (!product || !selectedAddress) return;
     if (paymentMethod === 'wallet' && balance < product.price) return;
+    if (paymentMethod === 'upi') {
+      if (!usedUpiId) {
+        setUpiError(upiIds.length === 0 ? 'Enter your UPI ID' : 'Select or enter UPI ID');
+        return;
+      }
+      if (!selectedUpiId && newUpiId.trim() && !validateUpiId(newUpiId)) {
+        setUpiError('Enter valid UPI ID (e.g. user@upi)');
+        return;
+      }
+    }
+    setUpiError('');
     dispatch(showLoader());
     try {
       if (paymentMethod === 'wallet') {
         await withdraw(product.price);
       } else {
         await new Promise((r) => setTimeout(r, 1500));
+        if (paymentMethod === 'upi' && usedUpiId && !upiIds.includes(usedUpiId)) {
+          await updateProfile({ upiIds: [...upiIds, usedUpiId] });
+        }
       }
       router.back();
       router.back();
@@ -259,6 +287,56 @@ export default function CheckoutScreen() {
             <FontAwesome name="check-circle" size={w(22)} color={colors.tint} />
           )}
         </Pressable>
+        {paymentMethod === 'upi' && (
+          <View style={{ marginBottom: h(16), paddingHorizontal: w(4) }}>
+            <Text style={{ fontSize: w(13), fontWeight: '600', color: colors.text, marginBottom: h(8) }}>
+              Select or add UPI ID
+            </Text>
+            {upiIds.length > 0 ? (
+              <>
+                {upiIds.map((id) => (
+                  <Pressable
+                    key={id}
+                    onPress={() => {
+                      setSelectedUpiId(id);
+                      setNewUpiId('');
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: w(12),
+                      borderRadius: w(10),
+                      marginBottom: h(8),
+                      backgroundColor: selectedUpiId === id ? colors.tint + '20' : colors.inputBg,
+                      borderWidth: 2,
+                      borderColor: selectedUpiId === id ? colors.tint : colors.border,
+                    }}
+                  >
+                    <FontAwesome name="credit-card" size={w(16)} color={colors.tint} style={{ marginRight: w(10) }} />
+                    <Text style={{ fontSize: w(14), fontWeight: '500', color: colors.text, flex: 1 }}>{id}</Text>
+                    {selectedUpiId === id && (
+                      <FontAwesome name="check-circle" size={w(18)} color={colors.tint} />
+                    )}
+                  </Pressable>
+                ))}
+                <Text style={{ fontSize: w(12), color: colors.tabIconDefault, marginBottom: h(6) }}>
+                  Or add new UPI ID
+                </Text>
+              </>
+            ) : null}
+            <Input
+              placeholder="user@upi / 9876543210@paytm"
+              value={selectedUpiId ? '' : newUpiId}
+              onChangeText={(v) => {
+                setSelectedUpiId(null);
+                setNewUpiId(v);
+              }}
+              autoCapitalize="none"
+              error={upiError}
+              leftIcon="credit-card"
+            />
+          </View>
+        )}
         <Pressable
           onPress={() => setPaymentMethod('card')}
           style={[
@@ -312,10 +390,16 @@ export default function CheckoutScreen() {
               ? 'Add address to continue'
               : paymentMethod === 'wallet' && balance < product.price
                 ? 'Insufficient balance - Add money'
-                : `Pay ₹${product.price.toLocaleString('en-IN')}`
+                : paymentMethod === 'upi' && !canPayUpi
+                  ? 'Select or enter UPI ID'
+                  : `Pay ₹${product.price.toLocaleString('en-IN')}`
           }
           fullWidth
-          disabled={!selectedAddress || (paymentMethod === 'wallet' && balance < product.price)}
+          disabled={
+            !selectedAddress ||
+            (paymentMethod === 'wallet' && balance < product.price) ||
+            (paymentMethod === 'upi' && !canPayUpi)
+          }
           onPress={handlePlaceOrder}
           style={styles.payBtn}
         />

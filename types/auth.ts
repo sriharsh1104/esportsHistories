@@ -25,7 +25,9 @@ export type User = {
   displayName: string;
   fullName?: string;
   phone?: string;
+  /** @deprecated Use upiIds. Kept for migration. */
   upiId?: string;
+  upiIds?: string[];
   avatarUrl?: string;
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
@@ -36,7 +38,7 @@ export type UpdateProfileData = {
   displayName?: string;
   fullName?: string;
   phone?: string;
-  upiId?: string;
+  upiIds?: string[];
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
   onboardingStep?: OnboardingStep;
