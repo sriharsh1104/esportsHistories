@@ -34,6 +34,7 @@ export const ROUTES = {
 
   EDIT_PROFILE: '/edit-profile',
   EDIT_PROFILE_SIGNUP: '/edit-profile?from=signup',
+  GAME_PROFILES: '/game-profiles',
 
   ADDRESSES: '/addresses',
   PRIVACY_POLICY: '/privacy-policy',

@@ -4,7 +4,6 @@ import Colors from '@/constants/Colors';
 import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
-import { ALL_GAMES } from '@/data/games';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
@@ -133,57 +132,6 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
-        <Card style={[styles.infoCard, { padding: w(16) }]}>
-          <Text
-            style={{
-              fontSize: w(14),
-              fontWeight: '600',
-              color: colors.tabIconDefault,
-              marginBottom: h(12),
-            }}
-          >
-            GAME PROFILES
-          </Text>
-          {user.gameProfiles && user.gameProfiles.length > 0 ? (
-            user.gameProfiles.map((gp, idx) => (
-              <View
-                key={gp.id}
-                style={[
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: h(10),
-                  },
-                  idx < user.gameProfiles!.length - 1
-                    ? { borderBottomWidth: 1, borderBottomColor: colors.border }
-                    : {},
-                ]}
-              >
-                <FontAwesome
-                  name="gamepad"
-                  size={w(16)}
-                  color={colors.tint}
-                  style={{ marginRight: w(12) }}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text }}>
-                    {ALL_GAMES.find((g) => g.id === gp.gameId)?.name ?? gp.gameId}
-                  </Text>
-                  <Text style={{ fontSize: w(12), color: colors.tabIconDefault, marginTop: h(2) }}>
-                    {gp.gameName} • UID: {gp.gameUid}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Pressable onPress={() => router.push(ROUTES.EDIT_PROFILE)}>
-              <Text style={{ fontSize: w(13), color: colors.tabIconDefault }}>
-                No game profiles yet. Tap to add from Edit Profile.
-              </Text>
-            </Pressable>
-          )}
-        </Card>
-
         <Card
           onPress={() => router.push(ROUTES.EDIT_PROFILE)}
           style={styles.card}
@@ -192,7 +140,19 @@ export default function ProfileScreen() {
             Edit Profile
           </Text>
           <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-            Update name, phone, UPI & game profiles
+            Update name, phone, UPI
+          </Text>
+        </Card>
+
+        <Card
+          onPress={() => router.push(ROUTES.GAME_PROFILES)}
+          style={[styles.card, { marginTop: 0 }]}
+        >
+          <Text style={[styles.cardTitle, { color: colors.text }]}>
+            Game Profiles
+          </Text>
+          <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
+            Add in-game names and UIDs for your followed games
           </Text>
         </Card>
 

@@ -101,6 +101,7 @@ function RootLayoutNav() {
                       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                       <Stack.Screen name="select-games" options={{ headerShown: false }} />
                       <Stack.Screen name="edit-profile" />
+                      <Stack.Screen name="game-profiles" />
                       <Stack.Screen name="addresses" />
                       <Stack.Screen name="privacy-policy" />
                       <Stack.Screen name="terms" />
