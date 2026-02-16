@@ -1,8 +1,8 @@
 import { NewsSection, WalletBalanceCard } from '@/components/dashboard';
-import { ROUTES } from '@/constants/routes';
 import { Button, Card, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
@@ -22,11 +22,7 @@ export default function NewsScreen() {
       header: { paddingTop: h(16), paddingBottom: h(24) },
       greeting: { fontSize: w(24), fontWeight: '700' as const, marginBottom: h(4) },
       subtitle: { fontSize: w(16) },
-      authPrompt: { marginBottom: h(32) },
-      authCard: { padding: w(20) },
-      authTitle: { fontSize: w(18), fontWeight: '600' as const, marginBottom: h(8) },
-      authDesc: { fontSize: w(14), marginBottom: h(16) },
-      authBtn: { marginBottom: h(12) },
+
       section: { marginBottom: h(24) },
       sectionTitle: { fontSize: w(18), fontWeight: '600' as const, marginBottom: h(16) },
       quickCard: { marginBottom: h(12) },
@@ -51,34 +47,11 @@ export default function NewsScreen() {
         <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
           {isAuthenticated
             ? 'Latest news for your followed games'
-            : 'Sign in to get personalized news'}
+            : 'Discover the latest esports news'}
         </Text>
       </View>
 
-      {!isAuthenticated && (
-        <View style={styles.authPrompt}>
-          <Card style={styles.authCard}>
-            <Text style={[styles.authTitle, { color: colors.text }]}>
-              Create an account
-            </Text>
-            <Text style={[styles.authDesc, { color: colors.tabIconDefault }]}>
-              Sign up to save favorites and get personalized esports news
-            </Text>
-            <Button
-              title="Sign in"
-              fullWidth
-              style={styles.authBtn}
-              onPress={() => router.push(ROUTES.LOGIN)}
-            />
-            <Button
-              title="Sign up"
-              variant="outline"
-              fullWidth
-              onPress={() => router.push(ROUTES.SIGNUP)}
-            />
-          </Card>
-        </View>
-      )}
+
 
       {isAuthenticated && selectedGameIds.length === 0 && (
         <Card style={{ padding: w(16), marginBottom: h(16) }}>

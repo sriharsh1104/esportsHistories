@@ -10,11 +10,11 @@ import { router } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import React, { useEffect } from "react";
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    Text,
+    View,
 } from "react-native";
 
 const MENU_ITEMS = [
@@ -41,7 +41,14 @@ function CustomDrawerContent(props: { navigation?: any }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Pressable
-        onPress={() => isAuthenticated && nav(ROUTES.PROFILE)}
+        onPress={() => {
+          if (isAuthenticated) {
+            nav(ROUTES.PROFILE);
+          } else {
+            // If guest, go to login (which acts as the auth entry point)
+            nav(ROUTES.LOGIN);
+          }
+        }}
         style={{
           padding: w(20),
           paddingTop: h(48),
@@ -98,6 +105,13 @@ function CustomDrawerContent(props: { navigation?: any }) {
               )}
             </View>
           </View>
+          {!isAuthenticated && (
+            <FontAwesome
+              name="chevron-right"
+              size={w(14)}
+              color={colors.tabIconDefault}
+            />
+          )}
           {isAuthenticated && (
             <FontAwesome
               name="chevron-right"
@@ -113,7 +127,10 @@ function CustomDrawerContent(props: { navigation?: any }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: h(8), paddingBottom: h(24) }}
       >
-        {MENU_ITEMS.map((item) => (
+        {MENU_ITEMS.filter((item) => {
+          if (!isAuthenticated) return false;
+          return true;
+        }).map((item) => (
           <Pressable
             key={item.label}
             onPress={() => nav(item.route)}
