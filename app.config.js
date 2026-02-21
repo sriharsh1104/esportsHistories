@@ -4,6 +4,9 @@ import { resolve } from 'path';
 const envFile = `.env.${process.env.APP_ENV || 'development'}`;
 config({ path: resolve(process.cwd(), envFile) });
 
+console.log(`[Config] Loading ${envFile}`);
+console.log(`[Config] API_BASE_URL: ${process.env.API_BASE_URL}`);
+
 export default {
   expo: {
     name: 'Esports Histories',
@@ -44,7 +47,7 @@ export default {
     ],
     experiments: { typedRoutes: true },
     extra: {
-      apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3000/api',
+      apiBaseUrl: process.env.API_BASE_URL,
       apiTimeout: Number(process.env.API_TIMEOUT) || 30000,
       appEnv: process.env.APP_ENV || 'development',
       enableAnalytics: process.env.ENABLE_ANALYTICS === 'true',

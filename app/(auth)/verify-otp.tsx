@@ -1,23 +1,21 @@
-import { Button, Input, Screen } from '@/components/ui';
+import { BackButton, Button, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
-import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function VerifyOtpScreen() {
+  const { email } = useLocalSearchParams<{ email: string }>();
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const dispatch = useAppDispatch();
-  const { login } = useAuth();
-  const { hasSelectedGames } = useSelectedGames();
+  const { verifyOtp, resendOtp } = useAuth();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -28,8 +26,7 @@ export default function LoginScreen() {
       title: { fontSize: w(28), fontWeight: '700' as const, marginBottom: h(8) },
       subtitle: { fontSize: w(16), marginBottom: h(32) },
       form: { flex: 1 },
-      forgotLink: { fontSize: w(14), alignSelf: 'flex-end' as const, marginBottom: h(24) },
-      btn: { marginBottom: h(24) },
+      btn: { marginTop: h(8), marginBottom: h(24) },
       footer: {
         flexDirection: 'row' as const,
         justifyContent: 'center' as const,
@@ -43,28 +40,34 @@ export default function LoginScreen() {
 
   const handleSubmit = async () => {
     setError('');
-    if (!email.trim()) {
-      setError('Email is required');
-      return;
-    }
-    if (!password) {
-      setError('Password is required');
+    if (!otp || otp.length < 6) {
+      setError('Please enter the 6-digit OTP');
       return;
     }
     dispatch(showLoader());
     try {
-      const user = await login({ email: email.trim(), password });
-      const step = user.onboardingStep;
-      
-      if (step === 'profile') {
+      const u = await verifyOtp(email!, otp);
+      if (u.onboardingStep === 'profile') {
         router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
-      } else if (step === 'games') {
+      } else if (u.onboardingStep === 'games') {
         router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
       } else {
         router.replace(ROUTES.HOME);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed');
+      setError(e instanceof Error ? e.message : 'Verification failed');
+    } finally {
+      dispatch(hideLoader());
+    }
+  };
+
+  const handleResend = async () => {
+    dispatch(showLoader());
+    try {
+      await resendOtp(email!);
+      alert('OTP resent to your email');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Resend failed');
     } finally {
       dispatch(hideLoader());
     }
@@ -73,42 +76,26 @@ export default function LoginScreen() {
   return (
     <Screen keyboardAvoid padded maxForm>
       <View style={styles.content}>
-        <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
+        <BackButton />
+        <Text style={[styles.title, { color: colors.text }]}>Verify Email</Text>
         <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
-          Sign in to continue to Esports Histories
+          Enter the 6-digit code sent to {email}
         </Text>
 
         <View style={styles.form}>
           <Input
-            label="Email"
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            leftIcon="envelope"
-            error={error && !password ? error : undefined}
-          />
-          <Input
-            label="Password"
-            placeholder="••••••••"
-            value={password}
-            onChangeText={setPassword}
-            secure
-            autoComplete="password"
+            label="OTP Code"
+            placeholder="000000"
+            value={otp}
+            onChangeText={setOtp}
+            keyboardType="number-pad"
+            maxLength={6}
             leftIcon="lock"
-            error={error && password ? error : undefined}
+            error={error}
           />
-
-          <Pressable onPress={() => router.push(ROUTES.FORGOT_PASSWORD)}>
-            <Text style={[styles.forgotLink, { color: colors.accent }]}>
-              Forgot password?
-            </Text>
-          </Pressable>
 
           <Button
-            title="Sign in"
+            title="Verify"
             onPress={handleSubmit}
             fullWidth
             style={styles.btn}
@@ -116,10 +103,10 @@ export default function LoginScreen() {
 
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: colors.tabIconDefault }]}>
-              Don't have an account?{' '}
+              Didn't receive code?{' '}
             </Text>
-            <Pressable onPress={() => router.push(ROUTES.SIGNUP)}>
-              <Text style={[styles.footerLink, { color: colors.accent }]}>Sign up</Text>
+            <Pressable onPress={handleResend}>
+              <Text style={[styles.footerLink, { color: colors.accent }]}>Resend</Text>
             </Pressable>
           </View>
         </View>

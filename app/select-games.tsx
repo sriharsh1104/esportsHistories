@@ -1,16 +1,14 @@
 import { BackButton, Button, Screen } from '@/components/ui';
-import { ROUTES } from '@/constants/routes';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
-import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
-import { GAME_CATEGORIES } from '@/data/games';
-import type { Game } from '@/data/games';
+import { useSelectedGames } from '@/context/SelectedGamesContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 const MAX_GAMES = 10;
 
@@ -20,7 +18,7 @@ function GameChip({
   onToggle,
   disabled,
 }: {
-  game: Game;
+  game: any;
   selected: boolean;
   onToggle: () => void;
   disabled: boolean;
@@ -46,7 +44,7 @@ function GameChip({
       })}
     >
       <FontAwesome
-        name={selected ? 'check-circle' : 'gamepad'}
+        name={selected ? 'check-circle' : (game.icon as any) || 'gamepad'}
         size={w(14)}
         color={selected ? '#fff' : colors.text}
         style={{ marginRight: w(8) }}
@@ -70,15 +68,23 @@ export default function SelectGamesScreen() {
   const isFromSettings = from === 'settings';
   const isOnboarding = from === 'onboarding';
   const { updateProfile } = useAuth();
-  const { selectedGameIds, toggleGame, isGameSelected, setSelectedGameIds } = useSelectedGames();
+  const { 
+    availableGames, 
+    selectedGameIds, 
+    toggleGame, 
+    isGameSelected, 
+    setSelectedGameIds,
+    isLoading: isGamesLoading 
+  } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const [activeTab, setActiveTab] = useState<'mobile' | 'pc'>('mobile');
 
-  const mobileGames = GAME_CATEGORIES.find((c) => c.id === 'mobile')?.games ?? [];
-  const pcGames = GAME_CATEGORIES.find((c) => c.id === 'pc')?.games ?? [];
-  const games = activeTab === 'mobile' ? mobileGames : pcGames;
+  const games = useMemo(() => 
+    availableGames.filter(g => g.category === activeTab),
+    [availableGames, activeTab]
+  );
 
   const canSelectMore = selectedGameIds.length < MAX_GAMES;
 
@@ -116,17 +122,22 @@ export default function SelectGamesScreen() {
     else router.replace(ROUTES.HOME);
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
     if (isOnboarding) return;
     if (selectedGameIds.length === 0) {
-      setSelectedGameIds(mobileGames.slice(0, 3).map((g) => g.id));
+      // Pick first 3 mobile games as default
+      const defaults = availableGames
+        .filter(g => g.category === 'mobile')
+        .slice(0, 3)
+        .map(g => g._id);
+      await setSelectedGameIds(defaults);
     }
     if (isFromSettings) router.back();
     else router.replace(ROUTES.HOME);
   };
 
   return (
-    <Screen padded scroll maxForm>
+    <Screen padded scroll maxForm isLoading={isGamesLoading}>
       {isFromSettings && <BackButton />}
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>Choose your games</Text>
@@ -189,11 +200,11 @@ export default function SelectGamesScreen() {
       <View style={styles.chipRow}>
         {games.map((game) => (
           <GameChip
-            key={game.id}
-            game={game}
-            selected={isGameSelected(game.id)}
-            onToggle={() => toggleGame(game.id)}
-            disabled={!isGameSelected(game.id) && !canSelectMore}
+            key={game._id}
+            game={game as any}
+            selected={isGameSelected(game._id)}
+            onToggle={() => toggleGame(game._id)}
+            disabled={!isGameSelected(game._id) && !canSelectMore}
           />
         ))}
       </View>

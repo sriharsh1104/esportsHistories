@@ -1,0 +1,22 @@
+# Exclude non-backend directories from Render builds
+.expo/
+ios/
+android/
+web-build/
+docs/
+*.md
+.vscode/
+
+# Ignore heavy frontend folders in backend deployment context
+node_modules/
+app/
+components/
+context/
+hooks/
+services/
+store/
+types/
+utils/
+assets/
+data/
+constants/

@@ -1,10 +1,10 @@
 import * as authService from '@/services/auth.service';
 import type {
-  LoginCredentials,
-  SignupCredentials,
-  UpdateProfileData,
-  User,
-  UserAddress,
+    LoginCredentials,
+    SignupCredentials,
+    UpdateProfileData,
+    User,
+    UserAddress,
 } from '@/types/auth';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
@@ -13,7 +13,9 @@ type AuthContextType = {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (c: LoginCredentials) => Promise<User>;
-  signup: (c: SignupCredentials) => Promise<void>;
+  signup: (c: SignupCredentials) => Promise<{ email: string }>;
+  verifyOtp: (email: string, otp: string) => Promise<User>;
+  resendOtp: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   updateAddresses: (addresses: UserAddress[]) => Promise<void>;
@@ -48,8 +50,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signup = useCallback(async (credentials: SignupCredentials) => {
-    const { user: u } = await authService.signup(credentials);
+    const res = await authService.signup(credentials);
+    return res;
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, otp: string) => {
+    const { user: u } = await authService.verifyOtp(email, otp);
     setUser(u);
+    return u;
+  }, []);
+
+  const resendOtp = useCallback(async (email: string) => {
+    await authService.resendOtp(email);
   }, []);
 
   const logout = useCallback(async () => {
@@ -75,6 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: !!user,
     login,
     signup,
+    verifyOtp,
+    resendOtp,
     logout,
     updateProfile,
     updateAddresses,

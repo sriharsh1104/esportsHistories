@@ -1,62 +1,83 @@
-/**
- * Auth service - replace with real API calls.
- * Uses commonService for storage and token management.
- */
 import type {
-  GameProfile,
-  LoginCredentials,
-  SignupCredentials,
-  UpdateProfileData,
-  User,
-  UserAddress,
+    LoginCredentials,
+    SignupCredentials,
+    UpdateProfileData,
+    User,
+    UserAddress
 } from '@/types/auth';
-import { commonService, setToken, clearToken } from './common.service';
+import { api } from './api.service';
+import { clearToken, commonService, setToken } from './common.service';
 
 const TOKEN_KEY = '@esports_auth_token';
 const USER_KEY = '@esports_user';
-const MOCK_USERS_KEY = '@esports_mock_users';
 
-async function getMockUsers(): Promise<Record<string, User>> {
-  const users = await commonService.getItem<Record<string, User>>(MOCK_USERS_KEY);
-  return users ?? {};
-}
-
-async function saveMockUser(email: string, user: User): Promise<void> {
-  const users = await getMockUsers();
-  users[email.toLowerCase()] = user;
-  await commonService.setItem(MOCK_USERS_KEY, users);
-}
-
-function migrateUser(user: User): User {
-  if (!user.upiIds && user.upiId) {
-    return { ...user, upiIds: [user.upiId] };
-  }
-  return user;
+function migrateUser(user: any): User {
+  return {
+    id: user._id || user.id,
+    email: user.email,
+    displayName: user.username || user.displayName,
+    profilePic: user.profilePic,
+    bio: user.bio,
+    role: user.role,
+    isVerified: user.isVerified,
+    onboardingStep: user.onboardingStep || 'profile',
+    upiIds: user.upiIds || (user.upiId ? [user.upiId] : []),
+  } as User;
 }
 
 export async function login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
-  // TODO: Replace with actual API call via api.service
-  const res = await mockApiCall('/auth/login', credentials);
-  if (res.success && res.data) {
-    await commonService.setItem(TOKEN_KEY, res.data.token);
-    await commonService.setItem(USER_KEY, res.data.user);
-    setToken(res.data.token);
-    return res.data;
+  try {
+    const res = await api.post<{ _id: string; username: string; email: string; token: string }>('/auth/login', credentials);
+    const user = migrateUser(res);
+    const token = res.token;
+    
+    await commonService.setItem(TOKEN_KEY, token);
+    await commonService.setItem(USER_KEY, user);
+    setToken(token);
+    
+    return { user, token };
+  } catch (error: any) {
+    throw new Error(error.message || 'Login failed');
   }
-  throw new Error(res.message || 'Login failed');
 }
 
 export async function signup(
   credentials: SignupCredentials
-): Promise<{ user: User; token: string }> {
-  const res = await mockApiCall('/auth/signup', credentials);
-  if (res.success && res.data) {
-    await commonService.setItem(TOKEN_KEY, res.data.token);
-    await commonService.setItem(USER_KEY, res.data.user);
-    setToken(res.data.token);
-    return res.data;
+): Promise<{ email: string; message: string }> {
+  try {
+    const res = await api.post<{ message: string; email: string }>('/auth/signup', {
+      username: credentials.displayName || credentials.email.split('@')[0],
+      email: credentials.email,
+      password: credentials.password
+    });
+    return res;
+  } catch (error: any) {
+    throw new Error(error.message || 'Signup failed');
   }
-  throw new Error(res.message || 'Signup failed');
+}
+
+export async function verifyOtp(email: string, otp: string): Promise<{ user: User; token: string }> {
+  try {
+    const res = await api.post<{ _id: string; username: string; email: string; token: string }>('/auth/verify-otp', { email, otp });
+    const user = migrateUser(res);
+    const token = res.token;
+
+    await commonService.setItem(TOKEN_KEY, token);
+    await commonService.setItem(USER_KEY, user);
+    setToken(token);
+
+    return { user, token };
+  } catch (error: any) {
+    throw new Error(error.message || 'Verification failed');
+  }
+}
+
+export async function resendOtp(email: string): Promise<void> {
+  try {
+    await api.post('/auth/resend-otp', { email });
+  } catch (error: any) {
+    throw new Error(error.message || 'Resend failed');
+  }
 }
 
 export async function logout(): Promise<void> {
@@ -65,14 +86,13 @@ export async function logout(): Promise<void> {
 }
 
 export async function getStoredAuth(): Promise<{ user: User; token: string } | null> {
-  const stored = await commonService.multiGet([TOKEN_KEY, USER_KEY]);
-  const t = stored[TOKEN_KEY];
-  const u = stored[USER_KEY];
+  const t = await commonService.getItem<string>(TOKEN_KEY);
+  const u = await commonService.getItem<User>(USER_KEY);
+  
   if (t && u) {
     try {
-      const user = migrateUser(JSON.parse(u) as User);
       setToken(t);
-      return { token: t, user };
+      return { token: t, user: u };
     } catch {
       await logout();
     }
@@ -81,27 +101,30 @@ export async function getStoredAuth(): Promise<{ user: User; token: string } | n
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
-  const res = await mockApiCall('/auth/forgot-password', { email });
-  if (!res.success) throw new Error(res.message || 'Request failed');
+  try {
+    await api.post('/auth/forget-password', { email });
+  } catch (error: any) {
+    throw new Error(error.message || 'Request failed');
+  }
+}
+
+export async function resetPassword(email: string, otp: string, newPassword: string): Promise<void> {
+  try {
+    await api.post('/auth/reset-password', { email, otp, newPassword });
+  } catch (error: any) {
+    throw new Error(error.message || 'Reset failed');
+  }
 }
 
 export async function updateProfile(data: UpdateProfileData): Promise<User> {
-  const stored = await getStoredAuth();
-  if (!stored) throw new Error('Not authenticated');
-  const updated: User = {
-    ...stored.user,
-    displayName: data.displayName ?? stored.user.displayName,
-    fullName: data.fullName !== undefined ? data.fullName : stored.user.fullName,
-    phone: data.phone !== undefined ? data.phone : stored.user.phone,
-    upiIds: data.upiIds !== undefined ? data.upiIds : stored.user.upiIds,
-    addresses: data.addresses !== undefined ? data.addresses : stored.user.addresses,
-    gameProfiles: data.gameProfiles !== undefined ? data.gameProfiles : stored.user.gameProfiles,
-    onboardingStep:
-      data.onboardingStep !== undefined ? data.onboardingStep : stored.user.onboardingStep,
-  };
-  await commonService.setItem(USER_KEY, updated);
-  await saveMockUser(updated.email, updated);
-  return updated;
+  try {
+    const res = await api.put<any>('/user/profile', data);
+    const user = migrateUser(res);
+    await commonService.setItem(USER_KEY, user);
+    return user;
+  } catch (error: any) {
+    throw new Error(error.message || 'Profile update failed');
+  }
 }
 
 export async function updateAddresses(addresses: UserAddress[]): Promise<User> {
@@ -109,68 +132,12 @@ export async function updateAddresses(addresses: UserAddress[]): Promise<User> {
 }
 
 export async function changePassword(
-  currentPassword: string,
+  oldPassword: string,
   newPassword: string
 ): Promise<void> {
-  const res = await mockApiCall('/auth/change-password', {
-    currentPassword,
-    newPassword,
-  });
-  if (!res.success) throw new Error(res.message || 'Change password failed');
-}
-
-async function mockApiCall(endpoint: string, body: object): Promise<{
-  success: boolean;
-  data?: { user: User; token: string };
-  message?: string;
-}> {
-  await new Promise((r) => setTimeout(r, 800));
-  if (endpoint.includes('login')) {
-    const { email, password } = body as LoginCredentials;
-    if (!email || password.length < 6) {
-      return { success: false, message: 'Invalid email or password' };
-    }
-    const users = await getMockUsers();
-    const existing = users[email.trim().toLowerCase()];
-    if (existing) {
-      return {
-        success: true,
-        data: {
-          user: migrateUser(existing),
-          token: 'mock-jwt-token',
-        },
-      };
-    }
-    return { success: false, message: 'Invalid email or password' };
+  try {
+    await api.put('/auth/change-password', { oldPassword, newPassword });
+  } catch (error: any) {
+    throw new Error(error.message || 'Change password failed');
   }
-  if (endpoint.includes('signup')) {
-    const creds = body as SignupCredentials;
-    if (creds.password !== creds.confirmPassword) {
-      return { success: false, message: 'Passwords do not match' };
-    }
-    if (creds.password.length < 6) {
-      return { success: false, message: 'Password must be at least 6 characters' };
-    }
-    const user: User = {
-      id: '1',
-      email: creds.email.trim(),
-      displayName: creds.displayName?.trim() || creds.email.split('@')[0],
-      onboardingStep: 'profile',
-    };
-    await saveMockUser(user.email, user);
-    return {
-      success: true,
-      data: {
-        user,
-        token: 'mock-jwt-token',
-      },
-    };
-  }
-  if (endpoint.includes('forgot-password')) {
-    return { success: true };
-  }
-  if (endpoint.includes('change-password')) {
-    return { success: true };
-  }
-  return { success: false, message: 'Unknown endpoint' };
 }

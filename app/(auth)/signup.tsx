@@ -64,13 +64,13 @@ export default function SignupScreen() {
     }
     dispatch(showLoader());
     try {
-      await signup({
+      const res = await signup({
         email: email.trim(),
         password,
         displayName: displayName.trim(),
         confirmPassword,
       });
-      router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
+      router.push({ pathname: ROUTES.VERIFY_OTP, params: { email: res.email } });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Signup failed');
     } finally {

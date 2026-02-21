@@ -6,6 +6,7 @@ export const ROUTES = {
   // Auth
   LOGIN: '/(auth)/login',
   SIGNUP: '/(auth)/signup',
+  VERIFY_OTP: '/(auth)/verify-otp' as any,
   FORGOT_PASSWORD: '/(auth)/forgot-password',
   CHANGE_PASSWORD: '/(auth)/change-password',
 

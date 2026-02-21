@@ -1,6 +1,9 @@
+import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import React from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -17,6 +20,7 @@ type ScreenProps = {
   padded?: boolean;
   maxContent?: boolean;
   maxForm?: boolean;
+  isLoading?: boolean;
   style?: ViewStyle;
 };
 
@@ -27,6 +31,7 @@ export function Screen({
   padded = true,
   maxContent = false,
   maxForm = false,
+  isLoading = false,
   style,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
@@ -34,6 +39,9 @@ export function Screen({
 
   const maxWidth = maxForm ? formMaxWidth : maxContent ? contentMaxWidth : undefined;
   const horizontalPadding = padded ? w(24) : 0;
+
+  const scheme = useColorScheme() ?? 'light';
+  const colors = Colors[scheme];
 
   const content = (
     <View
@@ -47,7 +55,11 @@ export function Screen({
         style,
       ]}
     >
-      {maxWidth ? (
+      {isLoading ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={colors.tint} />
+        </View>
+      ) : maxWidth ? (
         <View style={[styles.maxWrapper, { maxWidth }]}>{children}</View>
       ) : (
         children
@@ -86,6 +98,11 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flex: 1 },
   scrollContent: { flexGrow: 1 },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   maxWrapper: {
     width: '100%',
     alignSelf: 'center',

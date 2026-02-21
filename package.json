@@ -8,7 +8,9 @@
     "start:prod": "APP_ENV=production expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "web:development": "APP_ENV=development expo start --web",
+    "web:production": "APP_ENV=production expo start --web"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

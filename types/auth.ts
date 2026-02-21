@@ -32,6 +32,7 @@ export type User = {
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
   onboardingStep?: OnboardingStep;
+  selectedGames?: string[];
 };
 
 export type UpdateProfileData = {
@@ -42,6 +43,7 @@ export type UpdateProfileData = {
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
   onboardingStep?: OnboardingStep;
+  selectedGames?: string[];
 };
 
 export type AuthState = {

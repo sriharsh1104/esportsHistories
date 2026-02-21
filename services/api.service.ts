@@ -5,8 +5,12 @@
 import Constants from 'expo-constants';
 import { getToken } from './common.service';
 
-const API_BASE = Constants.expoConfig?.extra?.apiBaseUrl || 'http://localhost:3000/api';
-const API_TIMEOUT = Constants.expoConfig?.extra?.apiTimeout || 30000;
+const API_BASE = Constants.expoConfig?.extra?.apiBaseUrl;
+const API_TIMEOUT = Constants.expoConfig?.extra?.apiTimeout;
+
+if (!API_BASE) {
+  console.error('[API Service] CRITICAL ERROR: API_BASE_URL is not defined in environment variables!');
+}
 
 export type RequestConfig = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -28,14 +32,23 @@ export class ApiError extends Error {
 }
 
 function buildUrl(path: string, params?: Record<string, string | number | boolean | undefined>): string {
-  const base = path.startsWith('http') ? path : `${API_BASE.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
-  if (!params || Object.keys(params).length === 0) return base;
+  const base = path.startsWith('http') ? path : `${(API_BASE || '').replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+  if (!API_BASE) {
+     console.warn('[API Service] WARNING: API_BASE is undefined. URL might be incorrect:', base);
+  }
+  
+  if (!params || Object.keys(params).length === 0) {
+    console.log(`[API Request] URL: ${base}`);
+    return base;
+  }
   const search = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') search.append(k, String(v));
   });
   const qs = search.toString();
-  return qs ? `${base}?${qs}` : base;
+  const finalUrl = qs ? `${base}?${qs}` : base;
+  console.log(`[API Request] URL: ${finalUrl}`);
+  return finalUrl;
 }
 
 function getHeaders(
@@ -81,13 +94,25 @@ async function fetchWithTimeout(
 
 async function parseResponse<T>(res: Response): Promise<T> {
   const text = await res.text();
-  let data: T;
+  let json: any;
   try {
-    data = text ? (JSON.parse(text) as T) : ({} as T);
+    json = text ? JSON.parse(text) : {};
   } catch {
-    data = text as unknown as T;
+    return text as unknown as T;
   }
-  return data;
+
+  // Handle standard response format: { success, status, message, data }
+  if (json && typeof json === 'object' && 'success' in json) {
+    if (json.success) {
+      // If it's a success response, return the data part
+      return (json.data !== undefined ? json.data : json) as T;
+    } else {
+      // If it's an error response, throw an ApiError with the message
+      throw new ApiError(json.message || 'API Error', res.status, json);
+    }
+  }
+
+  return json as T;
 }
 
 export async function request<T>(
