@@ -28,6 +28,7 @@ export type User = {
   /** @deprecated Use upiIds. Kept for migration. */
   upiId?: string;
   upiIds?: string[];
+  walletBalance?: number;
   avatarUrl?: string;
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
@@ -71,4 +72,23 @@ export type ChangePasswordData = {
 
 export type ForgotPasswordData = {
   email: string;
+};
+
+export type Transaction = {
+  _id: string;
+  type: 'topup' | 'withdrawal';
+  amount: number;
+  status: 'pending' | 'success' | 'failed';
+  upiId?: string;
+  transactionId?: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TransactionFilters = {
+  type?: 'topup' | 'withdrawal';
+  status?: 'pending' | 'success' | 'failed';
+  startDate?: string;
+  endDate?: string;
 };

@@ -6,6 +6,8 @@ import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
+import { ALL_GAMES } from '@/data/games';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
@@ -76,39 +78,46 @@ export default function NewsScreen() {
       )}
 
       {(() => {
-        const pcIds = ['valorant', 'r6', 'cs2', 'dota2', 'lol', 'fc', 'pes', 'tekken'];
-        const mobileIds = ['bgmi', 'freefire', 'mlbb', 'codm', 'coc', 'cr', 'wildrift'];
-        const hasPc = selectedGameIds.length > 0 && selectedGameIds.some((id) => pcIds.includes(id));
-        const hasMobile = selectedGameIds.length > 0 && selectedGameIds.some((id) => mobileIds.includes(id));
-        const showQuickLinks = hasPc || hasMobile;
+        if (!isAuthenticated || selectedGameIds.length === 0) return null;
+        
+        // Find game details for each selected ID
+        const selectedGames = selectedGameIds
+          .map(id => ALL_GAMES.find(g => g.id === id))
+          .filter(Boolean) as any[];
 
-        return showQuickLinks ? (
+        return (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Browse games</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Games</Text>
             <View style={styles.cardsRow}>
-              {hasPc && (
-                <View style={styles.cardFlex}>
-                  <Card onPress={() => router.push(ROUTES.GAME)} style={styles.quickCard}>
-                    <Text style={[styles.cardTitle, { color: colors.text }]}>PC Games</Text>
-                    <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-                      LoL, Dota 2, CS2, Valorant
-                    </Text>
+              {selectedGames.map((game) => (
+                <View key={game.id} style={styles.cardFlex}>
+                  <Card 
+                    onPress={() => router.push(ROUTES.GAME_SLUG(game.slug))} 
+                    style={styles.quickCard}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <FontAwesome 
+                        name="gamepad" 
+                        size={w(20)} 
+                        color={colors.tint} 
+                        style={{ marginRight: w(12) }} 
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+                          {game.name}
+                        </Text>
+                        <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
+                          View news & updates
+                        </Text>
+                      </View>
+                      <FontAwesome name="chevron-right" size={w(14)} color={colors.tabIconDefault} />
+                    </View>
                   </Card>
                 </View>
-              )}
-              {hasMobile && (
-                <View style={styles.cardFlex}>
-                  <Card onPress={() => router.push(ROUTES.GAME)} style={styles.quickCard}>
-                    <Text style={[styles.cardTitle, { color: colors.text }]}>Mobile Games</Text>
-                    <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-                      BGMI, Free Fire, MLBB
-                    </Text>
-                  </Card>
-                </View>
-              )}
+              ))}
             </View>
           </View>
-        ) : null;
+        );
       })()}
 
       {isAuthenticated && selectedGameIds.length > 0 && (

@@ -1,10 +1,10 @@
-import { Card, Screen } from '@/components/ui';
+import { NewsSection } from '@/components/dashboard';
+import { Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import type { Game } from '@/data/games';
 import { GAME_CATEGORIES } from '@/data/games';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
@@ -67,20 +67,7 @@ export default function GameSectionScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Latest News</Text>
-        <Card style={{ padding: w(20) }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: h(12) }}>
-            <FontAwesome
-              name="newspaper-o"
-              size={w(24)}
-              color={colors.tint}
-              style={{ marginRight: w(12) }}
-            />
-            <Text style={{ fontSize: w(16), color: colors.tabIconDefault, flex: 1 }}>
-              No news yet. Check back soon for {game.name} updates.
-            </Text>
-          </View>
-        </Card>
+        <NewsSection gameId={game.id} />
       </View>
     </Screen>
   );

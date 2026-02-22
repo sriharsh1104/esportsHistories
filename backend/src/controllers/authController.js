@@ -1,11 +1,18 @@
+import jwt from 'jsonwebtoken';
 import OTP from '../models/otpModel.js';
 import User from '../models/userModel.js';
 import { generateOTP, getOTPRecord, saveOTP, sendOTPEmail, verifyOTPFromDB } from '../services/otpService.js';
 import ApiResponse from '../utils/apiResponse.js';
 
-const generateToken = (id) => {
+const generateAccessToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: '30d'
+        expiresIn: '1h'
+    });
+};
+
+const generateRefreshToken = (id) => {
+    return jwt.sign({ id }, process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET, {
+        expiresIn: '7d'
     });
 };
 
@@ -70,8 +77,14 @@ export const verifyOtp = async (req, res) => {
                 _id: user._id,
                 username: user.username,
                 email: user.email,
+                fullName: user.fullName,
+                phone: user.phone,
                 onboardingStep: user.onboardingStep,
-                token: generateToken(user._id)
+                addresses: user.addresses || [],
+                gameProfiles: user.gameProfiles || [],
+                selectedGames: user.selectedGames || [],
+                token: generateAccessToken(user._id),
+                refreshToken: generateRefreshToken(user._id)
             });
         }
 
@@ -91,8 +104,14 @@ export const verifyOtp = async (req, res) => {
             _id: user._id,
             username: user.username,
             email: user.email,
+            fullName: user.fullName,
+            phone: user.phone,
             onboardingStep: user.onboardingStep,
-            token: generateToken(user._id)
+            addresses: user.addresses || [],
+            gameProfiles: user.gameProfiles || [],
+            selectedGames: user.selectedGames || [],
+            token: generateAccessToken(user._id),
+            refreshToken: generateRefreshToken(user._id)
         });
     } catch (error) {
         return ApiResponse.error(res, error.message, 500);
@@ -117,14 +136,48 @@ export const authUser = async (req, res) => {
                 _id: user._id,
                 username: user.username,
                 email: user.email,
+                fullName: user.fullName,
+                phone: user.phone,
                 onboardingStep: user.onboardingStep,
-                token: generateToken(user._id)
+                addresses: user.addresses || [],
+                gameProfiles: user.gameProfiles || [],
+                selectedGames: user.selectedGames || [],
+                token: generateAccessToken(user._id),
+                refreshToken: generateRefreshToken(user._id)
             });
         } else {
             return ApiResponse.error(res, 'Invalid email or password', 401);
         }
     } catch (error) {
         return ApiResponse.error(res, error.message, 500);
+    }
+};
+
+// @desc    Refresh Access Token
+// @route   POST /api/v1/auth/refresh
+// @access  Public
+export const refreshAccessToken = async (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return ApiResponse.error(res, 'Refresh token required', 400);
+    }
+
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id);
+
+        if (!user) {
+            return ApiResponse.error(res, 'User not found', 404);
+        }
+
+        const newAccessToken = generateAccessToken(user._id);
+
+        return ApiResponse.success(res, 'Token refreshed', {
+            token: newAccessToken
+        });
+    } catch (error) {
+        return ApiResponse.error(res, 'Invalid or expired refresh token', 401);
     }
 };
 

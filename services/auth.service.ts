@@ -6,34 +6,48 @@ import type {
     UserAddress
 } from '@/types/auth';
 import { api } from './api.service';
-import { clearToken, commonService, setToken } from './common.service';
+import { clearToken, commonService, setRefreshToken, setToken } from './common.service';
 
 const TOKEN_KEY = '@esports_auth_token';
+const REFRESH_TOKEN_KEY = '@esports_refresh_token';
 const USER_KEY = '@esports_user';
+
+export async function saveUserData(user: User): Promise<void> {
+  await commonService.setItem(USER_KEY, user);
+}
 
 function migrateUser(user: any): User {
   return {
     id: user._id || user.id,
     email: user.email,
     displayName: user.username || user.displayName,
+    fullName: user.fullName || '',
+    phone: user.phone || '',
     profilePic: user.profilePic,
     bio: user.bio,
     role: user.role,
     isVerified: user.isVerified,
     onboardingStep: user.onboardingStep || 'profile',
-    upiIds: user.upiIds || (user.upiId ? [user.upiId] : []),
+    upiIds: user.upiIds || [],
+    walletBalance: user.walletBalance || 0,
+    addresses: user.addresses || [],
+    gameProfiles: user.gameProfiles || [],
+    selectedGames: user.selectedGames || [],
   } as User;
 }
 
 export async function login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
   try {
-    const res = await api.post<{ _id: string; username: string; email: string; token: string }>('/auth/login', credentials);
+    const res = await api.post<{ _id: string; username: string; email: string; token: string; refreshToken: string }>('/auth/login', credentials);
     const user = migrateUser(res);
     const token = res.token;
+    const refreshToken = res.refreshToken;
     
     await commonService.setItem(TOKEN_KEY, token);
+    await commonService.setItem(REFRESH_TOKEN_KEY, refreshToken);
     await commonService.setItem(USER_KEY, user);
     setToken(token);
+    setRefreshToken(refreshToken);
     
     return { user, token };
   } catch (error: any) {
@@ -58,13 +72,16 @@ export async function signup(
 
 export async function verifyOtp(email: string, otp: string): Promise<{ user: User; token: string }> {
   try {
-    const res = await api.post<{ _id: string; username: string; email: string; token: string }>('/auth/verify-otp', { email, otp });
+    const res = await api.post<{ _id: string; username: string; email: string; token: string; refreshToken: string }>('/auth/verify-otp', { email, otp });
     const user = migrateUser(res);
     const token = res.token;
+    const refreshToken = res.refreshToken;
 
     await commonService.setItem(TOKEN_KEY, token);
+    await commonService.setItem(REFRESH_TOKEN_KEY, refreshToken);
     await commonService.setItem(USER_KEY, user);
     setToken(token);
+    setRefreshToken(refreshToken);
 
     return { user, token };
   } catch (error: any) {
@@ -81,17 +98,19 @@ export async function resendOtp(email: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  await commonService.multiRemove([TOKEN_KEY, USER_KEY]);
+  await commonService.multiRemove([TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
   clearToken();
 }
 
 export async function getStoredAuth(): Promise<{ user: User; token: string } | null> {
   const t = await commonService.getItem<string>(TOKEN_KEY);
+  const rt = await commonService.getItem<string>(REFRESH_TOKEN_KEY);
   const u = await commonService.getItem<User>(USER_KEY);
   
   if (t && u) {
     try {
       setToken(t);
+      if (rt) setRefreshToken(rt);
       return { token: t, user: u };
     } catch {
       await logout();
@@ -140,4 +159,51 @@ export async function changePassword(
   } catch (error: any) {
     throw new Error(error.message || 'Change password failed');
   }
+}
+
+export async function getWalletData(): Promise<{ walletBalance: number; upiIds: string[] }> {
+  try {
+    const res = await api.get<{ walletBalance: number; upiIds: string[] }>('/user/wallet');
+    return res;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to fetch wallet data');
+  }
+}
+
+export async function updateWalletUpi(upiIds: string[]): Promise<string[]> {
+  try {
+    const res = await api.post<{ upiIds: string[] }>('/user/wallet/upi', { upiIds });
+    return res.upiIds;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to update UPI IDs');
+  }
+}
+
+export async function topUp(amount: number): Promise<{ walletBalance: number }> {
+    try {
+        const res = await api.post<{ walletBalance: number }>('/user/wallet/topup', { amount });
+        return res;
+    } catch (error: any) {
+        throw new Error(error.message || 'Top up failed');
+    }
+}
+
+export async function withdraw(amount: number, upiId: string): Promise<{ walletBalance: number }> {
+    try {
+        const res = await api.post<{ walletBalance: number }>('/user/wallet/withdraw', { amount, upiId });
+        return res;
+    } catch (error: any) {
+        throw new Error(error.message || 'Withdrawal failed');
+    }
+}
+
+import type { Transaction, TransactionFilters } from '@/types/auth';
+
+export async function getTransactions(filters: TransactionFilters = {}): Promise<Transaction[]> {
+    try {
+        const res = await api.get<Transaction[]>('/transactions', filters as any);
+        return res;
+    } catch (error: any) {
+        throw new Error(error.message || 'Failed to fetch transactions');
+    }
 }

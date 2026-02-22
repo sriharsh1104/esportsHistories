@@ -115,9 +115,15 @@ export default function SelectGamesScreen() {
 
   const handleContinue = async () => {
     if (selectedGameIds.length === 0) return;
+    
+    // Save selection and optionally update onboarding step
+    const updateData: any = { selectedGames: selectedGameIds };
     if (isOnboarding) {
-      await updateProfile({ onboardingStep: 'done' });
+      updateData.onboardingStep = 'done';
     }
+    
+    await updateProfile(updateData);
+    
     if (isFromSettings) router.back();
     else router.replace(ROUTES.HOME);
   };
@@ -130,8 +136,14 @@ export default function SelectGamesScreen() {
         .filter(g => g.category === 'mobile')
         .slice(0, 3)
         .map(g => g._id);
-      await setSelectedGameIds(defaults);
+      
+      await updateProfile({ selectedGames: defaults });
+    } else {
+      // If skip but games were selected, save them anyway?
+      // Usually skip means "use defaults" if empty, or just go home.
+      // Given the user request, we save when clicking Continue/Save.
     }
+    
     if (isFromSettings) router.back();
     else router.replace(ROUTES.HOME);
   };

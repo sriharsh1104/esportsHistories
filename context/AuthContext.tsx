@@ -19,6 +19,7 @@ type AuthContextType = {
   logout: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   updateAddresses: (addresses: UserAddress[]) => Promise<void>;
+  updateUpiIds: (upiIds: string[]) => Promise<void>;
   refreshUser: () => Promise<void>;
 };
 
@@ -79,6 +80,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
   }, []);
 
+  const updateUpiIds = useCallback(async (upiIds: string[]) => {
+    const updatedUpiIds = await authService.updateWalletUpi(upiIds);
+    if (user) {
+      const newUser = { ...user, upiIds: updatedUpiIds };
+      setUser(newUser);
+      await authService.saveUserData(newUser);
+    }
+  }, [user]);
+
   const refreshUser = useCallback(loadStoredAuth, [loadStoredAuth]);
 
   const value: AuthContextType = {
@@ -92,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     updateProfile,
     updateAddresses,
+    updateUpiIds,
     refreshUser,
   };
 

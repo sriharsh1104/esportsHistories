@@ -115,6 +115,18 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return json as T;
 }
 
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+function onTokenRefreshed(token: string) {
+  refreshSubscribers.map((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
+function addRefreshSubscriber(cb: (token: string) => void) {
+  refreshSubscribers.push(cb);
+}
+
 export async function request<T>(
   path: string,
   config: RequestConfig = {}
@@ -131,15 +143,72 @@ export async function request<T>(
     init.body = body instanceof FormData ? body : JSON.stringify(body);
   }
 
-  const res = await fetchWithTimeout(url, init, API_TIMEOUT);
+  try {
+    const res = await fetchWithTimeout(url, init, API_TIMEOUT);
 
-  if (!res.ok) {
-    const errData = await parseResponse<{ message?: string }>(res);
-    const msg = errData?.message || res.statusText || `Request failed (${res.status})`;
-    throw new ApiError(msg, res.status, errData);
+    if (res.status === 401 && !skipAuth && path !== '/auth/refresh' && path !== '/auth/login') {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        const { getRefreshToken, setToken, commonService } = await import('./common.service');
+        const refreshToken = await getRefreshToken();
+
+        if (refreshToken) {
+          try {
+            const apiRes = await fetch(buildUrl('/auth/refresh'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refreshToken }),
+            });
+            const data = await apiRes.json();
+            if (data.success && data.data?.token) {
+              const newToken = data.data.token;
+              setToken(newToken);
+              await commonService.setItem('@esports_auth_token', newToken);
+              isRefreshing = false;
+              onTokenRefreshed(newToken);
+            } else {
+              throw new Error('Refresh failed');
+            }
+          } catch (e) {
+            isRefreshing = false;
+            const { logout } = await import('./auth.service');
+            await logout();
+            throw new ApiError('Session expired', 401);
+          }
+        } else {
+          isRefreshing = false;
+          throw new ApiError('No refresh token', 401);
+        }
+      }
+
+      return new Promise((resolve, reject) => {
+        addRefreshSubscriber((token: string) => {
+          const newInit = {
+            ...init,
+            headers: {
+              ...init.headers as Record<string, string>,
+              'Authorization': `Bearer ${token}`
+            }
+          };
+          fetchWithTimeout(url, newInit, API_TIMEOUT)
+            .then(res => parseResponse<T>(res))
+            .then(resolve)
+            .catch(reject);
+        });
+      });
+    }
+
+    if (!res.ok) {
+        const errData = await parseResponse<{ message?: string }>(res);
+        const msg = errData?.message || res.statusText || `Request failed (${res.status})`;
+        throw new ApiError(msg, res.status, errData);
+    }
+
+    return parseResponse<T>(res);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(error instanceof Error ? error.message : 'Network error');
   }
-
-  return parseResponse<T>(res);
 }
 
 export const api = {

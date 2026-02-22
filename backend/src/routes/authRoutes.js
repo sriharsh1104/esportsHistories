@@ -3,6 +3,7 @@ import {
     authUser,
     changePassword,
     forgetPassword,
+    refreshAccessToken,
     registerUser,
     resendOtp,
     resetPassword,
@@ -15,6 +16,7 @@ const router = express.Router();
 router.post('/signup', registerUser);
 router.post('/verify-otp', verifyOtp);
 router.post('/login', authUser);
+router.post('/refresh', refreshAccessToken);
 router.post('/forget-password', forgetPassword);
 router.post('/reset-password', resetPassword);
 router.post('/resend-otp', resendOtp);

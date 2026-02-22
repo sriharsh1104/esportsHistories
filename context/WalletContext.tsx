@@ -1,61 +1,100 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as authService from '@/services/auth.service';
+import { Transaction, TransactionFilters } from '@/types/auth';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-
-const WALLET_KEY = '@esports_wallet_balance';
+import { useAuth } from './AuthContext';
 
 type WalletContextType = {
   balance: number;
   topUp: (amount: number) => Promise<void>;
-  withdraw: (amount: number) => Promise<void>;
+  withdraw: (amount: number, upiId: string) => Promise<void>;
+  refreshWallet: () => Promise<void>;
+  transactions: Transaction[];
+  fetchTransactions: (filters?: TransactionFilters) => Promise<void>;
   isLoading: boolean;
 };
 
 const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated } = useAuth();
   const [balance, setBalance] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchWallet = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setIsLoading(true);
+    try {
+      const data = await authService.getWalletData();
+      setBalance(data.walletBalance);
+    } catch (error) {
+      console.error('Wallet fetch failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  const fetchTransactions = useCallback(async (filters?: TransactionFilters) => {
+    if (!isAuthenticated) return;
+    setIsLoading(true);
+    try {
+      const data = await authService.getTransactions(filters);
+      setTransactions(data);
+    } catch (error) {
+      console.error('Transactions fetch failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const stored = await AsyncStorage.getItem(WALLET_KEY);
-        if (stored) setBalance(parseFloat(stored) || 0);
-      } catch {
-        setBalance(0);
-      } finally {
-        setIsLoading(false);
-      }
-    })();
-  }, []);
-
-  const persistBalance = useCallback(async (val: number) => {
-    await AsyncStorage.setItem(WALLET_KEY, String(val));
-  }, []);
+    if (isAuthenticated) {
+      fetchWallet();
+      fetchTransactions();
+    }
+  }, [isAuthenticated, fetchWallet, fetchTransactions]);
 
   const topUp = useCallback(
     async (amount: number) => {
       if (amount <= 0) return;
-      const newBalance = balance + amount;
-      setBalance(newBalance);
-      await persistBalance(newBalance);
+      try {
+        const res = await authService.topUp(amount);
+        setBalance(res.walletBalance);
+        await fetchTransactions(); // Refresh history
+      } catch (error) {
+        throw error;
+      }
     },
-    [balance, persistBalance]
+    [fetchTransactions]
   );
 
   const withdraw = useCallback(
-    async (amount: number) => {
+    async (amount: number, upiId: string) => {
       if (amount <= 0) return;
       if (amount > balance) throw new Error('Insufficient balance');
-      const newBalance = balance - amount;
-      setBalance(newBalance);
-      await persistBalance(newBalance);
+      try {
+        const res = await authService.withdraw(amount, upiId);
+        setBalance(res.walletBalance);
+        await fetchTransactions(); // Refresh history
+      } catch (error) {
+        throw error;
+      }
     },
-    [balance, persistBalance]
+    [balance, fetchTransactions]
   );
 
   return (
-    <WalletContext.Provider value={{ balance, topUp, withdraw, isLoading }}>
+    <WalletContext.Provider 
+      value={{ 
+        balance, 
+        topUp, 
+        withdraw, 
+        refreshWallet: fetchWallet, 
+        transactions,
+        fetchTransactions,
+        isLoading 
+      }}
+    >
       {children}
     </WalletContext.Provider>
   );

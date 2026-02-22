@@ -41,6 +41,7 @@ export const ROUTES = {
   PRIVACY_POLICY: '/privacy-policy',
   TERMS: '/terms',
   HELP_FAQ: '/help-faq',
+  BAN_CHECK: '/ban-check',
 } as const;
 
 /** Typed route path for type-safe navigation */

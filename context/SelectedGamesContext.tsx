@@ -52,10 +52,7 @@ export function SelectedGamesProvider({ children }: { children: React.ReactNode 
   const setSelectedGameIds = useCallback(async (ids: string[]) => {
     const trimmed = ids.slice(0, MAX_GAMES);
     setSelectedGameIdsState(trimmed);
-    if (user) {
-      await updateProfile({ selectedGames: trimmed } as any);
-    }
-  }, [user, updateProfile]);
+  }, []);
 
   const toggleGame = useCallback(
     async (gameId: string) => {
@@ -66,11 +63,8 @@ export function SelectedGamesProvider({ children }: { children: React.ReactNode 
           : [...selectedGameIds, gameId];
       
       setSelectedGameIdsState(next);
-      if (user) {
-        await updateProfile({ selectedGames: next } as any);
-      }
     },
-    [selectedGameIds, user, updateProfile]
+    [selectedGameIds]
   );
 
   const isGameSelected = useCallback(

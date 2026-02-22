@@ -2,31 +2,36 @@ import { WalletSection } from '@/components/dashboard';
 import { Button, Card, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
-import { ROUTES } from '@/constants/routes';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
+    Alert,
+    Modal,
+    Pressable,
+    Text,
+    View
 } from 'react-native';
+
 
 function validateUpiId(v: string): boolean {
   return /^[\w.-]+@[\w.-]+$/.test(v.trim());
 }
 
+import { useWallet } from '@/context/WalletContext';
+
 export default function WalletScreen() {
-  const { user, isAuthenticated, updateProfile } = useAuth();
+  const { user, isAuthenticated, updateUpiIds } = useAuth();
+  const { transactions, fetchTransactions, isLoading: isWalletLoading } = useWallet();
   const dispatch = useAppDispatch();
   const [showAddUpi, setShowAddUpi] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'topup' | 'withdrawal'>('all');
+  const [datePreset, setDatePreset] = useState<'all' | '7' | '30'>('all');
   const [newUpiId, setNewUpiId] = useState('');
   const [upiError, setUpiError] = useState('');
   const scheme = useColorScheme() ?? 'light';
@@ -75,7 +80,7 @@ export default function WalletScreen() {
     }
     dispatch(showLoader());
     try {
-      await updateProfile({ upiIds: [...upiIds, trimmed] });
+      await updateUpiIds([...upiIds, trimmed]);
       setNewUpiId('');
       setShowAddUpi(false);
     } catch (e) {
@@ -94,7 +99,9 @@ export default function WalletScreen() {
         onPress: async () => {
           dispatch(showLoader());
           try {
-            await updateProfile({ upiIds: upiIds.filter((u) => u !== id) });
+            await updateUpiIds(upiIds.filter((u) => u !== id));
+          } catch (e) {
+            Alert.alert('Error', 'Failed to remove UPI ID');
           } finally {
             dispatch(hideLoader());
           }
@@ -173,6 +180,145 @@ export default function WalletScreen() {
           <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.tint }}>Add UPI ID</Text>
         </Pressable>
       </Card>
+
+      <Card style={{ marginTop: h(24), padding: 0 }} padded={false}>
+        <View style={{ paddingHorizontal: w(16), paddingTop: h(16), paddingBottom: h(12) }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Transaction History</Text>
+          <View style={{ flexDirection: 'row', gap: w(8), marginBottom: h(8) }}>
+            {(['all', 'topup', 'withdrawal'] as const).map((type) => (
+              <Pressable
+                key={type}
+                onPress={() => {
+                  setFilterType(type);
+                  fetchTransactions(type === 'all' ? {} : { type });
+                }}
+                style={{
+                  paddingVertical: h(6),
+                  paddingHorizontal: w(12),
+                  borderRadius: w(16),
+                  backgroundColor: filterType === type ? colors.tint : colors.border + '40',
+                }}
+              >
+                <Text style={{ 
+                  fontSize: w(12), 
+                  fontWeight: '600', 
+                  color: filterType === type ? '#fff' : colors.text,
+                  textTransform: 'capitalize'
+                }}>
+                  {type}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: w(8) }}>
+            {(['all', '7', '30'] as const).map((preset) => (
+              <Pressable
+                key={preset}
+                onPress={() => {
+                  setDatePreset(preset);
+                  const filters: any = filterType === 'all' ? {} : { type: filterType };
+                  if (preset !== 'all') {
+                    const d = new Date();
+                    d.setDate(d.getDate() - parseInt(preset));
+                    filters.startDate = d.toISOString();
+                  }
+                  fetchTransactions(filters);
+                }}
+                style={{
+                  paddingVertical: h(4),
+                  paddingHorizontal: w(10),
+                  borderRadius: w(12),
+                  borderWidth: 1,
+                  borderColor: datePreset === preset ? colors.tint : colors.border,
+                  backgroundColor: datePreset === preset ? colors.tint + '10' : 'transparent',
+                }}
+              >
+                <Text style={{ 
+                  fontSize: w(11), 
+                  fontWeight: '500', 
+                  color: datePreset === preset ? colors.tint : colors.tabIconDefault 
+                }}>
+                  {preset === 'all' ? 'All Time' : `Last ${preset} Days`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        
+        {transactions.length === 0 ? (
+          <View style={{ padding: w(24), alignItems: 'center' }}>
+            <FontAwesome name="history" size={w(32)} color={colors.tabIconDefault} style={{ marginBottom: h(12), opacity: 0.3 }} />
+            <Text style={{ fontSize: w(14), color: colors.tabIconDefault }}>No transactions yet</Text>
+          </View>
+        ) : (
+          <View style={{ paddingBottom: h(8) }}>
+            {transactions.slice(0, 10).map((t) => (
+              <View 
+                key={t._id} 
+                style={{ 
+                  flexDirection: 'row', 
+                  alignItems: 'center', 
+                  paddingVertical: h(12), 
+                  paddingHorizontal: w(16),
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(128,128,128,0.1)'
+                }}
+              >
+                <View style={{ 
+                  width: w(40), 
+                  height: w(40), 
+                  borderRadius: w(20), 
+                  backgroundColor: t.type === 'topup' ? '#28a74520' : '#dc354520',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: w(12)
+                }}>
+                  <FontAwesome 
+                    name={t.type === 'topup' ? 'arrow-down' : 'arrow-up'} 
+                    size={w(14)} 
+                    color={t.type === 'topup' ? '#28a745' : '#dc3545'} 
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text }}>
+                    {t.type === 'topup' ? 'Top Up' : 'Withdrawal'}
+                  </Text>
+                  <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
+                    {new Date(t.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ 
+                    fontSize: w(15), 
+                    fontWeight: '700', 
+                    color: t.type === 'topup' ? '#28a745' : '#dc3545' 
+                  }}>
+                    {t.type === 'topup' ? '+' : '-'}₹{t.amount.toFixed(2)}
+                  </Text>
+                  <Text style={{ 
+                    fontSize: w(10), 
+                    fontWeight: '600', 
+                    color: t.status === 'success' ? '#28a745' : t.status === 'pending' ? '#ffc107' : '#dc3545',
+                    textTransform: 'uppercase'
+                  }}>
+                    {t.status}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            {transactions.length > 10 && (
+              <Button 
+                title="View All History" 
+                variant="ghost" 
+                onPress={() => {}} // Could navigate to a dedicated history page
+                style={{ marginTop: h(8) }}
+              />
+            )}
+          </View>
+        )}
+      </Card>
+      <View style={{ height: h(40) }} />
 
       <Modal visible={showAddUpi} transparent animationType="slide">
         <Pressable

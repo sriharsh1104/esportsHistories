@@ -3,10 +3,12 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import antihackRoutes from './routes/antihackRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import gameRoutes from './routes/gameRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import ApiResponse from './utils/apiResponse.js';
+import transactionRoutes from './routes/transactionRoutes.js';
 
 const app = express();
 
@@ -38,6 +40,8 @@ app.get('/', (req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/games', gameRoutes);
+app.use('/api/v1/transactions', transactionRoutes);
+app.use('/api/v1/antihack', antihackRoutes);
 
 // Error Handling Middleware
 app.use((err, req, res, next) => {

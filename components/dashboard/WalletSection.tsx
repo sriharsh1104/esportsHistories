@@ -9,13 +9,13 @@ import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Modal,
+    Pressable,
+    ScrollView,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 
 type TopUpMethod = 'upi' | 'card' | 'qr';
@@ -97,7 +97,7 @@ export function WalletSection() {
       if (modalType === 'topup') {
         await topUp(val);
       } else {
-        await withdraw(val);
+        await withdraw(val, selectedUpiId!);
       }
       setAmount('');
       setModalType(null);

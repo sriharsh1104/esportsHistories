@@ -40,6 +40,22 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'admin'],
         default: 'user'
     },
+    fullName: {
+        type: String,
+        trim: true
+    },
+    phone: {
+        type: String,
+        trim: true
+    },
+    upiIds: {
+        type: [String],
+        default: []
+    },
+    walletBalance: {
+        type: Number,
+        default: 0
+    },
     onboardingStep: {
         type: String,
         enum: ['profile', 'games', 'done'],
@@ -48,7 +64,25 @@ const userSchema = new mongoose.Schema({
     selectedGames: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Game'
-    }]
+    }],
+    addresses: [{
+        line1: { type: String, required: true },
+        line2: { type: String },
+        city: { type: String, required: true },
+        state: { type: String },
+        pincode: { type: String, required: true },
+        phone: { type: String, required: true },
+        isDefault: { type: Boolean, default: false }
+    }],
+    gameProfiles: [{
+        gameId: { type: String, required: true },
+        gameName: { type: String, required: true },
+        gameUid: { type: String, required: true }
+    }],
+    refreshToken: {
+        type: String,
+        select: false
+    }
 }, {
     timestamps: true
 });

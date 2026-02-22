@@ -21,6 +21,7 @@ const MENU_ITEMS = [
   { icon: "user" as const, label: "Profile", route: ROUTES.PROFILE },
   { icon: "credit-card" as const, label: "Wallet", route: ROUTES.WALLET },
   { icon: "cog" as const, label: "Settings", route: ROUTES.SETTINGS },
+  { icon: "shield" as const, label: "Ban Check", route: ROUTES.BAN_CHECK },
 ];
 
 function CustomDrawerContent(props: { navigation?: any }) {

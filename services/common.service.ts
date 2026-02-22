@@ -42,8 +42,9 @@ export const commonService = {
 
 };
 
-// In-memory token cache (set by auth.service on login/load, cleared on logout)
+// In-memory token cache
 let _token: string | null = null;
+let _refreshToken: string | null = null;
 
 export function setToken(token: string | null): void {
   _token = token;
@@ -53,6 +54,15 @@ export function getToken(): string | null {
   return _token;
 }
 
+export function setRefreshToken(token: string | null): void {
+  _refreshToken = token;
+}
+
+export function getRefreshToken(): string | null {
+  return _refreshToken;
+}
+
 export function clearToken(): void {
   _token = null;
+  _refreshToken = null;
 }

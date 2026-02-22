@@ -3,11 +3,11 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
+import type { NewsItem } from '@/data/news';
+import { MOCK_NEWS } from '@/data/news';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
-import { MOCK_NEWS } from '@/data/news';
-import type { NewsItem } from '@/data/news';
 
 function NewsCard({ item }: { item: NewsItem }) {
   const scheme = useColorScheme() ?? 'light';
@@ -68,19 +68,25 @@ function NewsCard({ item }: { item: NewsItem }) {
   );
 }
 
-export function NewsSection() {
+export function NewsSection({ gameId }: { gameId?: string }) {
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const { selectedGameIds } = useSelectedGames();
 
   const filteredNews = useMemo(() => {
+    if (gameId) {
+      return MOCK_NEWS
+        .filter((item) => item.gameId === gameId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    
     const list =
       selectedGameIds.length === 0
         ? MOCK_NEWS
         : MOCK_NEWS.filter((item) => selectedGameIds.includes(item.gameId));
     return [...list].sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [selectedGameIds]);
+  }, [selectedGameIds, gameId]);
 
   return (
     <View>
