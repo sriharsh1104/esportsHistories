@@ -1,12 +1,14 @@
+/** Delivery rows in app state; GET profile returns `addresses[]` (up to 5). PUT uses single `address`. */
 export type UserAddress = {
   id: string;
   label?: string;
-  line1: string;
-  line2?: string;
+  addressLine1: string;
+  addressLine2?: string;
   city: string;
   state: string;
   pincode: string;
-  phone?: string;
+  contactNumber?: string;
+  countryCode?: string;
   isDefault?: boolean;
 };
 

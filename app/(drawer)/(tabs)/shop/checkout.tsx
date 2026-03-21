@@ -25,7 +25,10 @@ function validateUpiId(v: string): boolean {
 type PaymentMethod = 'wallet' | 'upi' | 'card' | 'qr';
 
 export default function CheckoutScreen() {
-  const { productId } = useLocalSearchParams<{ productId: string }>();
+  const { productId, selectedAddressId: selectedAddressIdParam } = useLocalSearchParams<{
+    productId: string;
+    selectedAddressId?: string;
+  }>();
   const router = useRouter();
   const { user, isAuthenticated, updateProfile } = useAuth();
   const { balance, withdraw } = useWallet();
@@ -42,10 +45,16 @@ export default function CheckoutScreen() {
   React.useEffect(() => {
     const def = addresses.find((a) => a.isDefault) ?? addresses[0];
     setSelectedAddressId((prev) => {
+      if (
+        selectedAddressIdParam &&
+        addresses.some((a) => a.id === String(selectedAddressIdParam))
+      ) {
+        return String(selectedAddressIdParam);
+      }
       if (!prev || !addresses.find((a) => a.id === prev)) return def?.id ?? null;
       return prev;
     });
-  }, [addresses]);
+  }, [addresses, selectedAddressIdParam]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('wallet');
   const [selectedUpiId, setSelectedUpiId] = useState<string | null>(null);
   const [newUpiId, setNewUpiId] = useState('');
@@ -114,7 +123,7 @@ export default function CheckoutScreen() {
     dispatch(showLoader());
     try {
       if (paymentMethod === 'wallet') {
-        await withdraw(product.price);
+        await withdraw(product.price, upiIds[0] ?? '');
       } else {
         await new Promise((r) => setTimeout(r, 1500));
         if (paymentMethod === 'upi' && usedUpiId && !upiIds.includes(usedUpiId)) {
@@ -179,6 +188,33 @@ export default function CheckoutScreen() {
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery address</Text>
+        {addresses.length > 0 && productId ? (
+          <Pressable
+            onPress={() => router.push(ROUTES.ADDRESS_BOOK_CHECKOUT(String(productId)))}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: h(12),
+              paddingHorizontal: w(14),
+              marginBottom: h(12),
+              borderRadius: w(12),
+              borderWidth: 1,
+              borderColor: colors.tint,
+              backgroundColor: colors.tint + '12',
+            }}
+          >
+            <FontAwesome name="book" size={w(18)} color={colors.tint} style={{ marginRight: w(10) }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: w(15), fontWeight: '600', color: colors.tint }}>
+                Address book
+              </Text>
+              <Text style={{ fontSize: w(12), color: colors.tabIconDefault, marginTop: h(2) }}>
+                See all saved addresses and pick delivery location
+              </Text>
+            </View>
+            <FontAwesome name="chevron-right" size={w(14)} color={colors.tint} />
+          </Pressable>
+        ) : null}
         {addresses.length === 0 ? (
           <Pressable
             onPress={() => router.push(ROUTES.ADDRESSES)}
@@ -214,14 +250,14 @@ export default function CheckoutScreen() {
                 ]}
               >
                 <Text style={[styles.addrText, { color: colors.text }]}>
-                  {`${addr.line1 || ''}${addr.line2 ? `, ${addr.line2}` : ''}`}
+                  {`${addr.addressLine1 || ''}${addr.addressLine2 ? `, ${addr.addressLine2}` : ''}`}
                 </Text>
                 <Text style={[styles.addrText, { color: colors.tabIconDefault }]}>
                   {`${addr.city || ''}, ${addr.state || ''} - ${addr.pincode || ''}`}
                 </Text>
-                {addr.phone ? (
+                {addr.contactNumber ? (
                   <Text style={[styles.addrText, { color: colors.tint, marginTop: h(4) }]}>
-                    📞 {addr.phone}
+                    📞 {addr.contactNumber}
                   </Text>
                 ) : null}
               </Pressable>

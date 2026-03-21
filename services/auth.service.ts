@@ -181,7 +181,92 @@ export type MergeUserFromApiOptions = {
   followedOrganizationsBaseline?: User['followedOrganizations'];
   /** After PUT with `gameProfiles`, use this when GET body omits or clears them. */
   gameProfilesBaseline?: User['gameProfiles'];
+  /** When PUT echoes empty `addresses`, keep the list we just sent. */
+  addressesBaseline?: UserAddress[];
 };
+
+function hasUsableAddresses(list: UserAddress[] | undefined): boolean {
+  return !!list?.some((a) => String(a.addressLine1 ?? '').trim().length > 0);
+}
+
+/** One row from API or legacy client cache (`line1`, `phone`). */
+function normalizeUserAddressRow(raw: unknown): UserAddress | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const addressLine1 = String(o.addressLine1 ?? o.line1 ?? '').trim();
+  const city = String(o.city ?? '').trim();
+  if (!addressLine1 && !city) return null;
+  const id = String(o._id ?? o.id ?? '').trim() || `addr-${Date.now()}`;
+  return {
+    id,
+    label: o.label != null ? String(o.label) : undefined,
+    addressLine1: addressLine1 || city,
+    addressLine2: o.addressLine2 != null ? String(o.addressLine2) : o.line2 != null ? String(o.line2) : undefined,
+    city,
+    state: String(o.state ?? '').trim(),
+    pincode: String(o.pincode ?? o.postalCode ?? '').trim(),
+    contactNumber:
+      o.contactNumber != null
+        ? String(o.contactNumber)
+        : o.phone != null
+          ? String(o.phone)
+          : undefined,
+    countryCode: o.countryCode != null ? String(o.countryCode) : undefined,
+    isDefault: o.isDefault === true,
+  };
+}
+
+function normalizeAddressesFromApi(direct: any, data: any): UserAddress[] | undefined {
+  const listRaw = direct?.addresses ?? data?.addresses;
+  if (!Array.isArray(listRaw) || listRaw.length === 0) return undefined;
+  const fromList = listRaw
+    .map(normalizeUserAddressRow)
+    .filter((x): x is UserAddress => x != null);
+  return fromList.length ? fromList : undefined;
+}
+
+/**
+ * Single row for PUT `/profile` body key `address`.
+ * GET still returns full list under `addresses` (up to 5).
+ */
+function mapUserAddressForProfileApi(a: UserAddress): Record<string, unknown> {
+  const row: Record<string, unknown> = {
+    id: a.id,
+    addressLine1: a.addressLine1,
+    addressLine2: a.addressLine2 ?? '',
+    city: a.city,
+    state: a.state,
+    pincode: a.pincode,
+    isDefault: a.isDefault === true,
+  };
+  if (a.label != null) row.label = a.label;
+  if (a.contactNumber != null) row.contactNumber = a.contactNumber;
+  if (a.countryCode != null) row.countryCode = a.countryCode;
+  return row;
+}
+
+/** Which row to send as `address` on PUT — new row, else default, else first. */
+function pickAddressRowForProfilePut(
+  next: UserAddress[],
+  previous: UserAddress[] | undefined | null
+): UserAddress | null {
+  if (next.length === 0) return null;
+  const prevIds = new Set((previous ?? []).map((p) => p.id));
+  const added = next.find((a) => !prevIds.has(a.id));
+  if (added) return added;
+  const defaultRow = next.find((a) => a.isDefault);
+  if (defaultRow) return defaultRow;
+  return next[0] ?? null;
+}
+
+function migrateLegacyStoredUser(user: User): User {
+  const list = user.addresses;
+  if (!Array.isArray(list) || list.length === 0) return user;
+  const addresses = list
+    .map((row) => normalizeUserAddressRow(row as unknown))
+    .filter((x): x is UserAddress => x != null);
+  return addresses.length ? { ...user, addresses } : { ...user, addresses: undefined };
+}
 
 /** Profile GET/PUT: merge API user with stored user, preserving UPI and merging game / follow picks. */
 function mergeUserFromApiResponse(
@@ -206,10 +291,21 @@ function mergeUserFromApiResponse(
       ? options.gameProfilesBaseline
       : previousUser?.gameProfiles;
 
+  const addressesFromApi = migratedUser.addresses;
+  const baseline = options?.addressesBaseline;
+  const addresses = hasUsableAddresses(addressesFromApi)
+    ? addressesFromApi
+    : baseline !== undefined
+      ? baseline
+      : hasUsableAddresses(previousUser?.addresses)
+        ? previousUser?.addresses
+        : addressesFromApi;
+
   return {
     ...(previousUser ?? migratedUser),
     ...migratedUser,
     upiIds: migratedUser.upiIds ?? previousUser?.upiIds,
+    addresses,
     selectedGames: mergeSelectedGamesForPersistence(migratedUser.selectedGames, gamesBaseline),
     followedPersonalities: mergeFollowEntryLists(
       migratedUser.followedPersonalities,
@@ -246,20 +342,20 @@ const USER_GAME_LIST_KEYS = [
 ] as const;
 
 /**
- * Same object may have `selectedGames: []` while real picks live under another key (e.g. followGames).
- * Prefer any non-empty list; only then fall back to the first empty array (explicit clear).
+ * Same object may have `selectedGames: []` while real picks live under `followedGames` / etc.
+ * Prefer first non-empty array in key order; only if all are empty/missing, return the first `[]` seen
+ * (old two-pass logic returned `[]` from `selectedGames` before ever reading `followedGames`).
  */
 function coalesceSelectedGamesField(obj: any): any[] | undefined {
   if (!obj || typeof obj !== 'object') return undefined;
+  let firstEmpty: any[] | undefined;
   for (const key of USER_GAME_LIST_KEYS) {
     const arr = obj[key];
-    if (Array.isArray(arr) && arr.length > 0) return arr;
+    if (!Array.isArray(arr)) continue;
+    if (arr.length > 0) return arr;
+    if (firstEmpty === undefined) firstEmpty = arr;
   }
-  for (const key of USER_GAME_LIST_KEYS) {
-    const arr = obj[key];
-    if (Array.isArray(arr)) return arr;
-  }
-  return undefined;
+  return firstEmpty;
 }
 
 /** Only return a list if it has items — avoids treating `[]` from one path as final while another path has games. */
@@ -334,7 +430,7 @@ function migrateUserFromAuthData(data: any): User {
         })()
       : undefined;
 
-  const addresses = direct?.addresses ?? data?.addresses;
+  const addresses = normalizeAddressesFromApi(direct, data);
   const rawGameProfiles = direct?.gameProfiles ?? data?.gameProfiles;
   const fromGameProfiles = normalizeGameProfilesFromApi(rawGameProfiles);
   const fromFollowedGames = normalizeGameProfilesFromFollowedGames(
@@ -541,7 +637,7 @@ export async function getStoredAuth(): Promise<{ user: User; token: string } | n
     try {
       setToken(t);
       if (rt) setRefreshToken(rt);
-      return { token: t, user: u };
+      return { token: t, user: migrateLegacyStoredUser(u) };
     } catch {
       await logout();
     }
@@ -578,33 +674,45 @@ export async function resetPassword(email: string, otp: string, newPassword: str
   }
 }
 
+/**
+ * PUT `/profile` whitelist. Address updates: only `address` (one object), never `addresses`.
+ * Full list comes back on GET as `addresses`.
+ */
+function buildProfilePutPayload(
+  data: UpdateProfileData,
+  previousUser: User | null | undefined
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  if (data.displayName !== undefined) payload.username = data.displayName;
+  if (data.fullName !== undefined) payload.fullName = data.fullName;
+  if (data.phone !== undefined) payload.phone = data.phone;
+  if (data.bio !== undefined) payload.bio = data.bio;
+  if (data.onboardingStep !== undefined) payload.onboardingStep = data.onboardingStep;
+  if (data.selectedGames !== undefined) payload.selectedGames = data.selectedGames;
+  if (data.addresses !== undefined) {
+    const row = pickAddressRowForProfilePut(data.addresses, previousUser?.addresses);
+    payload.address = row === null ? null : mapUserAddressForProfileApi(row);
+  }
+  if (data.gameProfiles !== undefined) {
+    payload.gameProfiles = mapGameProfilesForProfilePut(data.gameProfiles);
+    const followedPayload = buildFollowedGamesWithUidsPayload(previousUser?.selectedGames, data.gameProfiles);
+    if (followedPayload) payload.followedGames = followedPayload;
+  }
+  if (data.followedPersonalities !== undefined) {
+    const entries = sanitizeFollowProfilePayload(data.followedPersonalities) ?? [];
+    payload.followedPersonalities = followEntriesToApiStringArray(entries);
+  }
+  if (data.followedOrganizations !== undefined) {
+    const entries = sanitizeFollowProfilePayload(data.followedOrganizations) ?? [];
+    payload.followedOrganizations = followEntriesToApiStringArray(entries);
+  }
+  return payload;
+}
+
 export async function updateProfile(data: UpdateProfileData): Promise<User> {
   try {
     const previousUser = await commonService.getItem<User>(USER_KEY);
-    const payload: Record<string, unknown> = {
-      username: data.displayName,
-      fullName: data.fullName,
-      phone: data.phone,
-      bio: data.bio,
-      onboardingStep: data.onboardingStep,
-      selectedGames: data.selectedGames,
-      addresses: data.addresses,
-    };
-    if (data.gameProfiles !== undefined) {
-      payload.gameProfiles = mapGameProfilesForProfilePut(data.gameProfiles);
-      const followedPayload = buildFollowedGamesWithUidsPayload(previousUser?.selectedGames, data.gameProfiles);
-      if (followedPayload) {
-        payload.followedGames = followedPayload;
-      }
-    }
-    if (data.followedPersonalities !== undefined) {
-      const entries = sanitizeFollowProfilePayload(data.followedPersonalities) ?? [];
-      payload.followedPersonalities = followEntriesToApiStringArray(entries);
-    }
-    if (data.followedOrganizations !== undefined) {
-      const entries = sanitizeFollowProfilePayload(data.followedOrganizations) ?? [];
-      payload.followedOrganizations = followEntriesToApiStringArray(entries);
-    }
+    const payload = buildProfilePutPayload(data, previousUser);
 
     const res = await api.put<any>(API_ENDPOINTS.USER.PROFILE, payload);
     const migratedUser = migrateUserFromAuthData(res);
@@ -623,6 +731,7 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
       followedPersonalitiesBaseline: personalitiesBaseline,
       followedOrganizationsBaseline: organizationsBaseline,
       ...(data.gameProfiles !== undefined && { gameProfilesBaseline: data.gameProfiles }),
+      ...(data.addresses !== undefined && { addressesBaseline: data.addresses }),
     });
 
     await commonService.setItem(USER_KEY, updatedUser);
@@ -634,6 +743,30 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
 
 export async function updateAddresses(addresses: UserAddress[]): Promise<User> {
   return updateProfile({ addresses });
+}
+
+/**
+ * POST append — does not replace the list; server adds to `addresses` (e.g. up to 5).
+ * Body is the address row at the JSON root (validators expect `addressLine1`, etc. top-level).
+ */
+export async function addProfileAddress(addr: UserAddress): Promise<User> {
+  try {
+    const previousUser = await commonService.getItem<User>(USER_KEY);
+    const res = await api.post<any>(
+      API_ENDPOINTS.USER.PROFILE_ADDRESS,
+      mapUserAddressForProfileApi(addr) as Record<string, unknown>,
+      { toast: false }
+    );
+    const migratedUser = migrateUserFromAuthData(res);
+    if (hasUsableAddresses(migratedUser.addresses)) {
+      const updatedUser = mergeUserFromApiResponse(migratedUser, previousUser);
+      await commonService.setItem(USER_KEY, updatedUser);
+      return updatedUser;
+    }
+    return getProfile();
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to add address');
+  }
 }
 
 /** DELETE `/profile/game-profile` — payload `{ gameId, action: 'removeGame', uid }`. */

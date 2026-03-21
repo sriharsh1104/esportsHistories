@@ -372,8 +372,11 @@ export async function request<T>(
 }
 
 export const api = {
-  get: <T>(path: string, params?: RequestConfig['params']) =>
-    request<T>(path, { method: 'GET', params, toast: false }),
+  get: <T>(
+    path: string,
+    params?: RequestConfig['params'],
+    extra?: Pick<RequestConfig, 'headers'>
+  ) => request<T>(path, { method: 'GET', params, toast: false, ...extra }),
 
   post: <T>(path: string, body?: object, config?: Omit<RequestConfig, 'method' | 'body'>) =>
     request<T>(path, { ...config, method: 'POST', body }),

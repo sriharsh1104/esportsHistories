@@ -24,7 +24,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I add or change my delivery address?',
-    a: 'Go to Profile → Addresses (or from checkout). Add addresses manually or use "Use my current location" to auto-fill. Set a default address for faster checkout.',
+    a: 'Go to Profile → Addresses (or from checkout). Add manually, or use GPS / Pick on map to place a pin on an OpenStreetMap view and auto-fill fields. Set a default address for faster checkout.',
   },
   {
     q: 'Can I cancel or refund my order?',

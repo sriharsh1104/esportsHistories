@@ -23,6 +23,7 @@ type AuthContextType = {
   logout: (options?: { allDevices?: boolean }) => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   updateAddresses: (addresses: UserAddress[]) => Promise<void>;
+  addAddress: (addr: UserAddress) => Promise<void>;
   updateUpiIds: (upiIds: string[]) => Promise<void>;
   deleteGameProfile: (input: DeleteGameProfileInput) => Promise<void>;
   refreshUser: () => Promise<User>;
@@ -71,7 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (credentials: LoginCredentials) => {
     const { user: u } = await authService.login(credentials);
     setUser(u);
-    return u;
+    try {
+      const fresh = await authService.getProfile();
+      setUser(fresh);
+      return fresh;
+    } catch {
+      return u;
+    }
   }, []);
 
   const signup = useCallback(async (credentials: SignupCredentials) => {
@@ -82,7 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyOtp = useCallback(async (email: string, otp: string) => {
     const { user: u } = await authService.verifyOtp(email, otp);
     setUser(u);
-    return u;
+    try {
+      const fresh = await authService.getProfile();
+      setUser(fresh);
+      return fresh;
+    } catch {
+      return u;
+    }
   }, []);
 
   const resendOtp = useCallback(async (email: string) => {
@@ -101,6 +114,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateAddresses = useCallback(async (addresses: UserAddress[]) => {
     const updated = await authService.updateAddresses(addresses);
+    setUser(updated);
+  }, []);
+
+  const addAddress = useCallback(async (addr: UserAddress) => {
+    const updated = await authService.addProfileAddress(addr);
     setUser(updated);
   }, []);
 
@@ -135,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     updateProfile,
     updateAddresses,
+    addAddress,
     updateUpiIds,
     deleteGameProfile,
     refreshUser,

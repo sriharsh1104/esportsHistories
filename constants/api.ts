@@ -19,6 +19,8 @@ export const API_ENDPOINTS = {
   USER: {
     PROFILE: '/profile',
     UPADATE_PROFILE: '/profile',
+    /** POST — append one row; body = flat address fields (`addressLine1`, `city`, …) at root. */
+    PROFILE_ADDRESS: '/profile/addresses',
     /** DELETE — body `{ gameId, action: 'removeGame', uid }`. */
     GAME_PROFILE: '/profile/game-profile',
     WALLET: '/user/wallet',
@@ -41,5 +43,12 @@ export const API_ENDPOINTS = {
   },
   ANTIHACK: {
     CHECK: '/antihack/check',
+  },
+  /**
+   * Reverse geocode — GET with Bearer. Full URL = `apiBaseUrl` + this path.
+   * Use `/geocode/reverse` when `API_BASE_URL` already includes `/api` (e.g. `https://host/api`).
+   */
+  GEOCODE: {
+    REVERSE: '/geocode/reverse',
   },
 } as const;

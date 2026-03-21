@@ -122,6 +122,11 @@ export default function SettingsScreen() {
               onPress={() => router.push(ROUTES.ADDRESSES)}
             />
             <SettingsRow
+              icon="book"
+              label="Address book"
+              onPress={() => router.push(ROUTES.ADDRESS_BOOK)}
+            />
+            <SettingsRow
               icon="lock"
               label="Change password"
               onPress={() => router.push(ROUTES.CHANGE_PASSWORD)}

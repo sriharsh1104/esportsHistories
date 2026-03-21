@@ -21,6 +21,7 @@ export const PRIVATE_ROUTES = [
   '/edit-profile',
   '/game-profiles',
   '/addresses',
+  '/address-book',
   '/select-games',
   '/(auth)/change-password',
 ] as const;
@@ -34,6 +35,7 @@ export function isPrivateRoute(path: string): boolean {
   if (path.startsWith('/edit-profile')) return true;
   if (path.startsWith('/game-profiles')) return true;
   if (path.startsWith('/addresses')) return true;
+  if (path.startsWith('/address-book')) return true;
   if (path.startsWith('/select-games')) return true;
   if (path.startsWith('/follow-explore')) return true;
   if (path.includes('change-password')) return true;
@@ -81,6 +83,10 @@ export const ROUTES = {
   GAME_PROFILES: '/game-profiles',
 
   ADDRESSES: '/addresses',
+  /** Saved addresses — pick one for checkout or set default delivery. */
+  ADDRESS_BOOK: '/address-book',
+  ADDRESS_BOOK_CHECKOUT: (productId: string) =>
+    `/address-book?from=checkout&productId=${encodeURIComponent(productId)}` as const,
   PRIVACY_POLICY: '/privacy-policy',
   TERMS: '/terms',
   HELP_FAQ: '/help-faq',

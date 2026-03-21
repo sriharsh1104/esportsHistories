@@ -113,6 +113,7 @@ function RootLayoutNav() {
                           <Stack.Screen name="edit-profile" />
                           <Stack.Screen name="game-profiles" />
                           <Stack.Screen name="addresses" />
+                          <Stack.Screen name="address-book" />
                       <Stack.Screen name="privacy-policy" />
                       <Stack.Screen name="terms" />
                       <Stack.Screen name="help-faq" />
