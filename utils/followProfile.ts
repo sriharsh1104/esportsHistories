@@ -26,11 +26,44 @@ export function normalizeFollowProfileEntry(raw: unknown): FollowProfileEntry | 
   if (typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const id = String(
-    o._id ?? o.id ?? o.knownAs ?? o.slug ?? o.playerId ?? o.orgId ?? o.name ?? ''
+    o._id ??
+      o.id ??
+      o.personalityId ??
+      o.knownAs ??
+      o.slug ??
+      o.playerId ??
+      o.orgId ??
+      o.name ??
+      ''
   ).trim();
-  const name = String(o.name ?? o.displayName ?? o.knownAs ?? o.title ?? o.orgName ?? id).trim();
+  const name = String(
+    o.name ?? o.displayName ?? o.knownAs ?? o.title ?? o.orgName ?? o.org_name ?? id
+  ).trim();
   if (!id && !name) return null;
   return { id: id || name, name: name || id };
+}
+
+/**
+ * Merge several API list fields (e.g. `followedOrganizations` + `organizationProfiles`),
+ * normalize entries, dedupe by case-insensitive id.
+ */
+export function mergeFollowProfileSources(...sources: unknown[]): FollowProfileEntry[] | undefined {
+  const flat: unknown[] = [];
+  for (const s of sources) {
+    if (Array.isArray(s)) flat.push(...s);
+  }
+  if (flat.length === 0) return undefined;
+  const normalized = normalizeFollowProfileEntryArray(flat);
+  if (!normalized?.length) return undefined;
+  const seen = new Set<string>();
+  const deduped: FollowProfileEntry[] = [];
+  for (const e of normalized) {
+    const key = e.id.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(e);
+  }
+  return deduped.length ? deduped : undefined;
 }
 
 export function normalizeFollowProfileEntryArray(src: unknown): FollowProfileEntry[] | undefined {

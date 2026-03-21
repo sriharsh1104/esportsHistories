@@ -18,7 +18,7 @@ import { mergeSelectedGamesForPersistence } from '@/utils/gameSelection';
 import {
   followEntriesToApiStringArray,
   mergeFollowEntryLists,
-  normalizeFollowProfileEntryArray,
+  mergeFollowProfileSources,
   sanitizeFollowProfilePayload,
 } from '@/utils/followProfile';
 import { api, ApiError } from './api.service';
@@ -92,15 +92,21 @@ function buildFollowedGamesWithUidsPayload(
   for (const g of selectedGames) {
     const gameName =
       typeof g === 'object' && g != null
-        ? String((g as { game?: string; name?: string }).game ?? (g as { name?: string }).name ?? '').trim()
+        ? String(
+            (g as { game?: string; name?: string; gameName?: string; title?: string }).game ??
+              (g as { name?: string }).name ??
+              (g as { gameName?: string }).gameName ??
+              (g as { title?: string }).title ??
+              ''
+          ).trim()
         : String(g).trim();
     if (!gameName) continue;
-    const platform =
-      typeof g === 'object' &&
-      g != null &&
-      ((g as { platform?: string }).platform === 'pc' || (g as { platform?: string }).platform === 'mobile')
-        ? (g as { platform: 'pc' | 'mobile' }).platform
-        : 'mobile';
+    let platform: 'mobile' | 'pc' = 'mobile';
+    if (typeof g === 'object' && g != null) {
+      const p = String((g as { platform?: string }).platform ?? '').toLowerCase();
+      if (p === 'pc') platform = 'pc';
+      else if (p === 'mobile') platform = 'mobile';
+    }
     const slug = gameName.toLowerCase().replace(/\s+/g, '-');
     const match =
       gameProfiles.find((p) => norm(p.gameName) === norm(gameName)) ||
@@ -326,6 +332,35 @@ function normalizeSelectedGamesForUpdate(data: UpdateProfileData): User['selecte
   });
 }
 
+/**
+ * PUT `/profile` — server validates each followed game has `game` + `platform` (not raw catalog ids).
+ */
+function coerceSelectedGamesForProfilePut(
+  selectedGames: NonNullable<UpdateProfileData['selectedGames']>
+): Array<{ platform: 'mobile' | 'pc'; game: string }> {
+  const raw = Array.isArray(selectedGames) ? selectedGames : [];
+  if (raw.some((g) => typeof g === 'string' || typeof g === 'number')) {
+    throw new ApiError(
+      'Each followed game must include valid game/platform. Pick games from the list and save again.',
+      400
+    );
+  }
+  const out: Array<{ platform: 'mobile' | 'pc'; game: string }> = [];
+  for (const g of raw) {
+    if (!g || typeof g !== 'object') continue;
+    const o = g as Record<string, unknown>;
+    const game = String(o.game ?? o.name ?? o.gameName ?? o.title ?? '').trim();
+    const rawP = String(o.platform ?? 'mobile').toLowerCase();
+    const platform: 'mobile' | 'pc' = rawP === 'pc' ? 'pc' : 'mobile';
+    if (!game) continue;
+    out.push({ platform, game });
+  }
+  if (out.length === 0 && raw.length > 0) {
+    throw new ApiError('Each followed game must include valid game/platform.', 400);
+  }
+  return out;
+}
+
 export async function saveUserData(user: User): Promise<void> {
   await commonService.setItem(USER_KEY, user);
 }
@@ -459,17 +494,25 @@ function migrateUserFromAuthData(data: any): User {
       : undefined);
   const avatarUrl = direct?.profilePic ?? data?.profilePic ?? direct?.avatarUrl ?? data?.avatarUrl;
 
-  const followedPersonalities = normalizeFollowProfileEntryArray(
-    direct?.followedPersonalities ??
-      data?.followedPersonalities ??
-      direct?.followed_personalities ??
-      data?.followed_personalities
+  const followedPersonalities = mergeFollowProfileSources(
+    direct?.followedPersonalities,
+    data?.followedPersonalities,
+    direct?.followed_personalities,
+    data?.followed_personalities,
+    direct?.personalityProfiles,
+    data?.personalityProfiles,
+    direct?.personality_profiles,
+    data?.personality_profiles
   );
-  const followedOrganizations = normalizeFollowProfileEntryArray(
-    direct?.followedOrganizations ??
-      data?.followedOrganizations ??
-      direct?.followed_organizations ??
-      data?.followed_organizations
+  const followedOrganizations = mergeFollowProfileSources(
+    direct?.followedOrganizations,
+    data?.followedOrganizations,
+    direct?.followed_organizations,
+    data?.followed_organizations,
+    direct?.organizationProfiles,
+    data?.organizationProfiles,
+    direct?.organization_profiles,
+    data?.organization_profiles
   );
 
   return {
@@ -688,7 +731,9 @@ function buildProfilePutPayload(
   if (data.phone !== undefined) payload.phone = data.phone;
   if (data.bio !== undefined) payload.bio = data.bio;
   if (data.onboardingStep !== undefined) payload.onboardingStep = data.onboardingStep;
-  if (data.selectedGames !== undefined) payload.selectedGames = data.selectedGames;
+  if (data.selectedGames !== undefined) {
+    payload.selectedGames = coerceSelectedGamesForProfilePut(data.selectedGames);
+  }
   if (data.addresses !== undefined) {
     const row = pickAddressRowForProfilePut(data.addresses, previousUser?.addresses);
     payload.address = row === null ? null : mapUserAddressForProfileApi(row);

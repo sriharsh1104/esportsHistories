@@ -5,12 +5,28 @@ import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
+import type { Game } from '@/services/games.service';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 
 const MAX_GAMES = 10;
+
+/** Backend PUT `/profile` expects `{ platform, game }[]`, not raw catalog ids. */
+function selectedGameIdsToProfilePayload(
+  ids: string[],
+  catalog: Game[]
+): { platform: Game['category']; game: string }[] {
+  return ids
+    .slice(0, MAX_GAMES)
+    .map((id) => {
+      const game = catalog.find((g) => g._id === id);
+      if (!game) return null;
+      return { platform: game.category, game: game.name };
+    })
+    .filter((row): row is { platform: Game['category']; game: string } => row != null);
+}
 
 function GameChip({
   game,
@@ -120,14 +136,20 @@ export default function SelectGamesScreen() {
 
   const handleContinue = async () => {
     if (selectedGameIds.length === 0) return;
-    
-    // Save selection and optionally update onboarding step
-    const updateData: any = { selectedGames: selectedGameIds };
-    if (isOnboarding) {
-      updateData.onboardingStep = 'done';
+
+    const selectedGames = selectedGameIdsToProfilePayload(selectedGameIds, availableGames);
+    if (selectedGames.length === 0) {
+      Alert.alert(
+        'Could not save',
+        'Game list is still loading or your selection is out of date. Pull to refresh and try again.'
+      );
+      return;
     }
-    
-    await updateProfile(updateData);
+
+    await updateProfile({
+      selectedGames,
+      ...(isOnboarding ? { onboardingStep: 'done' as const } : {}),
+    });
     
     if (isFromSettings) router.back();
     else router.replace(ROUTES.HOME);
@@ -136,13 +158,14 @@ export default function SelectGamesScreen() {
   const handleSkip = async () => {
     if (isOnboarding) return;
     if (selectedGameIds.length === 0) {
-      // Pick first 3 mobile games as default
-      const defaults = availableGames
-        .filter(g => g.category === 'mobile')
+      const defaultIds = availableGames
+        .filter((g) => g.category === 'mobile')
         .slice(0, 3)
-        .map(g => g._id);
-      
-      await updateProfile({ selectedGames: defaults });
+        .map((g) => g._id);
+      const selectedGames = selectedGameIdsToProfilePayload(defaultIds, availableGames);
+      if (selectedGames.length > 0) {
+        await updateProfile({ selectedGames });
+      }
     } else {
       // If skip but games were selected, save them anyway?
       // Usually skip means "use defaults" if empty, or just go home.

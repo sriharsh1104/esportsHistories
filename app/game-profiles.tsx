@@ -6,6 +6,10 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import type { GameProfile } from '@/types/auth';
+import {
+  normGameKey,
+  selectedGamesToEntries,
+} from '@/utils/gameSelection';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -21,11 +25,6 @@ import {
 
 function isUnsavedLocalGameProfileId(id: string): boolean {
   return /^\d{10,16}$/.test(id.trim());
-}
-
-/** Match catalog / profile game ids (freefire vs free-fire vs "Free Fire"). */
-function normGameKey(s: string): string {
-  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 function profileMatchesFollowedGame(
@@ -68,32 +67,10 @@ export default function GameProfilesScreen() {
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
 
-  const selectedGamesList = useMemo(() => {
-    const raw = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
-    const mapped = raw
-      .map((g: any) => {
-        if (typeof g !== 'object') {
-          const value = String(g).trim();
-          if (!value) return null;
-          return { id: value.toLowerCase().replace(/\s+/g, '-'), name: value };
-        }
-        const name = String(g.name ?? g.game ?? '').trim();
-        const idRaw = String(g._id ?? g.id ?? g.gameId ?? name).trim();
-        if (!idRaw && !name) return null;
-        return {
-          id: (idRaw || name).toLowerCase().replace(/\s+/g, '-'),
-          name: name || idRaw,
-        };
-      })
-      .filter(Boolean) as Array<{ id: string; name: string }>;
-
-    const seen = new Set<string>();
-    return mapped.filter((item) => {
-      if (seen.has(item.id)) return false;
-      seen.add(item.id);
-      return true;
-    });
-  }, [user?.selectedGames]);
+  const selectedGamesList = useMemo(
+    () => selectedGamesToEntries(user?.selectedGames),
+    [user?.selectedGames]
+  );
 
   React.useEffect(() => {
     if (!user) return;
