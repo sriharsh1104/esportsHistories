@@ -3,21 +3,47 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/services/api.service';
 import { useResponsive } from '@/context/ResponsiveContext';
-import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
+import type { UserBio } from '@/types/auth';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import Toast from 'react-native-toast-message';
+
+function parseBioGenderAge(bio?: UserBio | string): UserBio {
+  if (!bio) return {};
+  if (typeof bio === 'object') return bio;
+  try {
+    const parsed = JSON.parse(bio) as UserBio;
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function isProfileComplete(user: any | null | undefined): boolean {
+  if (!user) return false;
+
+  const genderAge = parseBioGenderAge(user.bio);
+  const hasDob = !!(genderAge.dateOfBirth || genderAge.dob);
+
+  return (
+    !!user.fullName?.trim() &&
+    !!user.displayName?.trim() &&
+    !!user.phone?.trim() &&
+    !!genderAge.gender?.trim() &&
+    hasDob
+  );
+}
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const dispatch = useAppDispatch();
-  const { login } = useAuth();
-  const { hasSelectedGames } = useSelectedGames();
+  const { login, refreshUser } = useAuth();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -42,29 +68,34 @@ export default function LoginScreen() {
   );
 
   const handleSubmit = async () => {
-    setError('');
     if (!email.trim()) {
-      setError('Email is required');
+      Toast.show({ type: 'error', text1: 'Email is required' });
       return;
     }
     if (!password) {
-      setError('Password is required');
+      Toast.show({ type: 'error', text1: 'Password is required' });
       return;
     }
     dispatch(showLoader());
     try {
-      const user = await login({ email: email.trim(), password });
-      const step = user.onboardingStep;
-      
-      if (step === 'profile') {
+      const loggedInUser = await login({ email: email.trim(), password });
+      const user = await refreshUser().catch(() => loggedInUser);
+      const complete = isProfileComplete(user);
+
+      if (!complete) {
         router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
-      } else if (step === 'games') {
-        router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
-      } else {
-        router.replace(ROUTES.HOME);
+        return;
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed');
+
+      router.replace(ROUTES.HOME);
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error && error.message
+          ? error.message
+          : 'Login failed. Please try again.';
+      Toast.show({ type: 'error', text1: message });
     } finally {
       dispatch(hideLoader());
     }
@@ -88,7 +119,6 @@ export default function LoginScreen() {
             autoCapitalize="none"
             autoComplete="email"
             leftIcon="envelope"
-            error={error && !password ? error : undefined}
           />
           <Input
             label="Password"
@@ -98,7 +128,6 @@ export default function LoginScreen() {
             secure
             autoComplete="password"
             leftIcon="lock"
-            error={error && password ? error : undefined}
           />
 
           <Pressable onPress={() => router.push(ROUTES.FORGOT_PASSWORD)}>

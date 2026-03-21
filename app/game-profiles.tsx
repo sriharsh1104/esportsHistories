@@ -3,14 +3,13 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
-import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
-import { ALL_GAMES } from '@/data/games';
 import type { GameProfile } from '@/types/auth';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Alert,
   Modal,
@@ -20,25 +19,108 @@ import {
   View,
 } from 'react-native';
 
+function isUnsavedLocalGameProfileId(id: string): boolean {
+  return /^\d{10,16}$/.test(id.trim());
+}
+
+/** Match catalog / profile game ids (freefire vs free-fire vs "Free Fire"). */
+function normGameKey(s: string): string {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function profileMatchesFollowedGame(
+  gp: GameProfile,
+  selected: Array<{ id: string; name: string }>
+): boolean {
+  if (selected.length === 0) return false;
+  const pid = normGameKey(gp.gameId);
+  const pname = normGameKey(gp.gameName || '');
+  return selected.some((s) => {
+    const sid = normGameKey(s.id);
+    const sname = normGameKey(s.name);
+    return (
+      (pid.length > 0 && (pid === sid || pid === sname)) ||
+      (pname.length > 0 && (pname === sname || pname === sid))
+    );
+  });
+}
+
+function hasSavedUid(gp: GameProfile): boolean {
+  return String(gp.gameUid ?? '').trim().length > 0;
+}
+
 export default function GameProfilesScreen() {
-  const { user, updateProfile } = useAuth();
-  const { selectedGameIds } = useSelectedGames();
+  const { user, updateProfile, refreshUser, deleteGameProfile } = useAuth();
+  const [isAddingProfile, setIsAddingProfile] = useState(false);
   const [gameProfiles, setGameProfiles] = useState<GameProfile[]>([]);
   const [error, setError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<GameProfile | null>(null);
+  const [isDeletingProfile, setIsDeletingProfile] = useState(false);
+  const [editTarget, setEditTarget] = useState<GameProfile | null>(null);
+  const [editUidDraft, setEditUidDraft] = useState('');
+  const [editError, setEditError] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [newGameId, setNewGameId] = useState('');
-  const [newGameName, setNewGameName] = useState('');
   const [newGameUid, setNewGameUid] = useState('');
   const dispatch = useAppDispatch();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
 
+  const selectedGamesList = useMemo(() => {
+    const raw = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
+    const mapped = raw
+      .map((g: any) => {
+        if (typeof g !== 'object') {
+          const value = String(g).trim();
+          if (!value) return null;
+          return { id: value.toLowerCase().replace(/\s+/g, '-'), name: value };
+        }
+        const name = String(g.name ?? g.game ?? '').trim();
+        const idRaw = String(g._id ?? g.id ?? g.gameId ?? name).trim();
+        if (!idRaw && !name) return null;
+        return {
+          id: (idRaw || name).toLowerCase().replace(/\s+/g, '-'),
+          name: name || idRaw,
+        };
+      })
+      .filter(Boolean) as Array<{ id: string; name: string }>;
+
+    const seen = new Set<string>();
+    return mapped.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [user?.selectedGames]);
+
   React.useEffect(() => {
-    if (user) {
-      setGameProfiles(user.gameProfiles || []);
-    }
-  }, [user]);
+    if (!user) return;
+    const fromServer = (user.gameProfiles ?? []).filter(
+      (gp) => profileMatchesFollowedGame(gp, selectedGamesList) && hasSavedUid(gp)
+    );
+
+    setGameProfiles((prev) => {
+      const unsavedLocals = prev.filter((p) => isUnsavedLocalGameProfileId(p.id));
+      if (unsavedLocals.length === 0) {
+        return fromServer;
+      }
+      const seen = new Set(fromServer.map((p) => `${normGameKey(p.gameId)}-${p.gameUid.trim()}`));
+      const extra = unsavedLocals.filter(
+        (p) => !seen.has(`${normGameKey(p.gameId)}-${p.gameUid.trim()}`)
+      );
+      return [...fromServer, ...extra];
+    });
+  }, [user?.id, user?.gameProfiles, selectedGamesList]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshUser().catch(() => {
+        // Keep cached data if refresh fails.
+      });
+    }, [refreshUser])
+  );
 
   const styles = useMemo(
     () => ({
@@ -80,59 +162,120 @@ export default function GameProfilesScreen() {
     [w, h, colors]
   );
 
-  const handleAddGameProfile = () => {
-    if (!newGameId.trim() || !newGameName.trim() || !newGameUid.trim()) {
-      setError('Select game, enter in-game name and UID');
+  const handleAddGameProfile = async () => {
+    if (!newGameId.trim() || !newGameUid.trim()) {
+      setError('Select game and enter UID');
       return;
     }
-    if (gameProfiles.some((gp) => gp.gameId === newGameId)) {
+    if (gameProfiles.some((gp) => normGameKey(gp.gameId) === normGameKey(newGameId))) {
       setError('This game is already added');
       return;
     }
-    setGameProfiles([
-      ...gameProfiles,
+    const selectedGame = selectedGamesList.find((g) => g.id === newGameId);
+    if (!selectedGame) {
+      setError('Selected game is invalid');
+      return;
+    }
+    const uid = newGameUid.trim();
+    const next: GameProfile[] = [
+      ...gameProfiles.filter(
+        (gp) => profileMatchesFollowedGame(gp, selectedGamesList) && hasSavedUid(gp)
+      ),
       {
         id: Date.now().toString(),
         gameId: newGameId,
-        gameName: newGameName.trim(),
-        gameUid: newGameUid.trim(),
+        gameName: selectedGame.name,
+        gameUid: uid,
       },
-    ]);
-    setNewGameId('');
-    setNewGameName('');
-    setNewGameUid('');
+    ];
+
     setError('');
-    setShowAddModal(false);
+    setIsAddingProfile(true);
+    dispatch(showLoader());
+    try {
+      await updateProfile({ gameProfiles: next });
+      await refreshUser();
+      setNewGameId('');
+      setNewGameUid('');
+      setShowAddModal(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save to profile');
+    } finally {
+      setIsAddingProfile(false);
+      dispatch(hideLoader());
+    }
   };
 
-  const handleRemoveGameProfile = (id: string) => {
-    Alert.alert('Remove game profile', 'Remove this game profile?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => setGameProfiles((prev) => prev.filter((gp) => gp.id !== id)),
-      },
-    ]);
+  const openEditUidModal = (gp: GameProfile) => {
+    setEditError('');
+    setEditTarget(gp);
+    setEditUidDraft(String(gp.gameUid ?? '').trim());
   };
 
-  const getGameName = (gameId: string) =>
-    ALL_GAMES.find((g) => g.id === gameId)?.name ?? gameId;
+  const handleSaveEditUid = async () => {
+    const uid = editUidDraft.trim();
+    if (!uid) {
+      setEditError('Enter a UID');
+      return;
+    }
+    if (!editTarget) return;
+    setEditError('');
+    setIsSavingEdit(true);
+    dispatch(showLoader());
+    try {
+      const next = gameProfiles.map((p) =>
+        p.id === editTarget.id ? { ...p, gameUid: uid } : p
+      );
+      const payload = next.filter(
+        (gp) => profileMatchesFollowedGame(gp, selectedGamesList) && hasSavedUid(gp)
+      );
+      await updateProfile({ gameProfiles: payload });
+      await refreshUser();
+      setEditTarget(null);
+      setEditUidDraft('');
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : 'Could not update UID');
+    } finally {
+      setIsSavingEdit(false);
+      dispatch(hideLoader());
+    }
+  };
 
-  const followedGames = useMemo(
-    () => ALL_GAMES.filter((g) => selectedGameIds.includes(g.id)),
-    [selectedGameIds]
-  );
+  const runDeleteGameProfile = async (gp: GameProfile) => {
+    if (!hasSavedUid(gp)) {
+      setGameProfiles((prev) => prev.filter((x) => x.id !== gp.id));
+      setDeleteTarget(null);
+      return;
+    }
+    setIsDeletingProfile(true);
+    dispatch(showLoader());
+    try {
+      await deleteGameProfile({
+        gameUid: gp.gameUid,
+        gameId: gp.gameId,
+      });
+      await refreshUser();
+    } catch (e) {
+      Alert.alert('Delete failed', e instanceof Error ? e.message : 'Try again');
+    } finally {
+      setIsDeletingProfile(false);
+      dispatch(hideLoader());
+      setDeleteTarget(null);
+    }
+  };
 
-  const gamesAvailableToAdd = followedGames.filter(
-    (g) => !gameProfiles.some((gp) => gp.gameId === g.id)
+  const gamesAvailableToAdd = selectedGamesList.filter(
+    (g) => !gameProfiles.some((gp) => normGameKey(gp.gameId) === normGameKey(g.id))
   );
 
   const handleSave = async () => {
     setError('');
     dispatch(showLoader());
     try {
-      await updateProfile({ gameProfiles });
+      const payload = gameProfiles.filter(
+        (gp) => profileMatchesFollowedGame(gp, selectedGamesList) && hasSavedUid(gp)
+      );
+      await updateProfile({ gameProfiles: payload });
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Update failed');
@@ -149,7 +292,8 @@ export default function GameProfilesScreen() {
         <BackButton />
         <Text style={[styles.title, { color: colors.text }]}>Game Profiles</Text>
         <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
-          Add your in-game names and UIDs so friends can easily find you
+          Only games you follow can have a profile here. Entries need a saved UID — empty API stubs for
+          games you do not follow are hidden until you add and save.
         </Text>
 
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -168,22 +312,42 @@ export default function GameProfilesScreen() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text }}>
-                  {getGameName(gp.gameId)}
+                  {gp.gameName || gp.gameId}
                 </Text>
                 <Text style={{ fontSize: w(12), color: colors.tabIconDefault, marginTop: h(4) }}>
-                  {gp.gameName} • UID: {gp.gameUid}
+                  UID: {gp.gameUid}
                 </Text>
               </View>
-              <Pressable
-                onPress={() => handleRemoveGameProfile(gp.id)}
-                style={{ padding: w(8) }}
-              >
-                <FontAwesome name="trash" size={w(18)} color="#dc3545" />
-              </Pressable>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: w(8) }}>
+                <Pressable
+                  onPress={() => openEditUidModal(gp)}
+                  accessibilityLabel="Edit game UID"
+                  style={{
+                    padding: w(8),
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: w(8),
+                  }}
+                >
+                  <FontAwesome name="pencil" size={w(18)} color={colors.tint} />
+                </Pressable>
+                <Pressable
+                  onPress={() => setDeleteTarget(gp)}
+                  accessibilityLabel="Delete game profile"
+                  style={{
+                    padding: w(8),
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: w(8),
+                  }}
+                >
+                  <FontAwesome name="trash" size={w(18)} color="#dc3545" />
+                </Pressable>
+              </View>
             </View>
           ))}
 
-          {followedGames.length === 0 ? (
+          {selectedGamesList.length === 0 ? (
             <View
               style={[
                 styles.addBtn,
@@ -206,7 +370,7 @@ export default function GameProfilesScreen() {
               ]}
             >
               <Text style={{ fontSize: w(13), color: colors.tabIconDefault }}>
-                You've added profiles for all followed games
+                You've added profiles for all selected games
               </Text>
             </View>
           ) : (
@@ -240,6 +404,133 @@ export default function GameProfilesScreen() {
           />
         </ScrollView>
       </View>
+
+      <Modal visible={!!deleteTarget} transparent animationType="fade">
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'center',
+            padding: w(24),
+          }}
+          onPress={() => !isDeletingProfile && setDeleteTarget(null)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: colors.cardBg,
+              borderRadius: w(16),
+              padding: w(20),
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: w(17),
+                fontWeight: '700',
+                color: colors.text,
+                marginBottom: h(10),
+              }}
+            >
+              Remove game profile?
+            </Text>
+            {deleteTarget ? (
+              <Text style={{ fontSize: w(14), color: colors.tabIconDefault, marginBottom: h(20) }}>
+                {deleteTarget.gameName || deleteTarget.gameId}
+                {hasSavedUid(deleteTarget) ? `\nUID: ${deleteTarget.gameUid.trim()}` : ''}
+                {'\n\nThis will remove the profile from your account.'}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: w(12) }}>
+              <Button
+                title="No"
+                variant="ghost"
+                onPress={() => setDeleteTarget(null)}
+                disabled={isDeletingProfile}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={isDeletingProfile ? '…' : 'Yes'}
+                onPress={() => {
+                  if (deleteTarget) void runDeleteGameProfile(deleteTarget);
+                }}
+                disabled={isDeletingProfile || !deleteTarget}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!editTarget} transparent animationType="slide">
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+          }}
+          onPress={() => !isSavingEdit && setEditTarget(null)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: colors.cardBg,
+              borderTopLeftRadius: w(20),
+              borderTopRightRadius: w(20),
+              padding: w(24),
+            }}
+          >
+            <Text
+              style={{
+                fontSize: w(18),
+                fontWeight: '700',
+                color: colors.text,
+                marginBottom: h(8),
+              }}
+            >
+              Edit game UID
+            </Text>
+            {editTarget ? (
+              <Text
+                style={{
+                  fontSize: w(14),
+                  color: colors.tabIconDefault,
+                  marginBottom: h(16),
+                }}
+              >
+                {editTarget.gameName || editTarget.gameId}
+              </Text>
+            ) : null}
+            <Input
+              label="Game UID"
+              placeholder="Your unique ID in the game"
+              value={editUidDraft}
+              onChangeText={setEditUidDraft}
+              leftIcon="hashtag"
+              keyboardType="default"
+            />
+            {editError ? (
+              <Text style={{ color: '#dc3545', fontSize: w(12), marginTop: h(8) }}>{editError}</Text>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: w(12), marginTop: h(20) }}>
+              <Button
+                title="Cancel"
+                variant="ghost"
+                onPress={() => setEditTarget(null)}
+                disabled={isSavingEdit}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={isSavingEdit ? 'Saving…' : 'Save'}
+                onPress={() => void handleSaveEditUid()}
+                disabled={isSavingEdit}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={showAddModal} transparent animationType="slide">
         <Pressable
@@ -309,13 +600,6 @@ export default function GameProfilesScreen() {
               ))}
             </ScrollView>
             <Input
-              label="In-game name"
-              placeholder="Your username in the game"
-              value={newGameName}
-              onChangeText={setNewGameName}
-              leftIcon="gamepad"
-            />
-            <Input
               label="Game UID"
               placeholder="Your unique ID in the game"
               value={newGameUid}
@@ -333,11 +617,13 @@ export default function GameProfilesScreen() {
                 title="Cancel"
                 variant="ghost"
                 onPress={() => setShowAddModal(false)}
+                disabled={isAddingProfile}
                 style={{ flex: 1 }}
               />
               <Button
-                title="Add"
-                onPress={handleAddGameProfile}
+                title={isAddingProfile ? 'Saving…' : 'Add'}
+                onPress={() => void handleAddGameProfile()}
+                disabled={isAddingProfile}
                 style={{ flex: 1 }}
               />
             </View>

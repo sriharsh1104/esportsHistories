@@ -41,6 +41,11 @@ function getCountryName(c: ICountry): string {
   return c.translations?.eng?.common ?? c.name?.common ?? c.cca2 ?? '';
 }
 
+function normalizeNationalDigits(value: string): string {
+  // Remove leading zero trunk prefix so final number stays E.164 compatible.
+  return value.replace(/^0+/, '');
+}
+
 type CustomPhoneInputProps = {
   label?: string;
   value?: string;
@@ -75,11 +80,11 @@ export function CustomPhoneInput({
       const country = getCountryByPhoneNumber(value);
       if (country) {
         setSelectedCountry(country);
-        setInputValue(getNationalNumber(value, country));
+        setInputValue(normalizeNationalDigits(getNationalNumber(value, country)));
       } else {
         const defCountry = getCountryByCca2(DEFAULT_COUNTRY)!;
         setSelectedCountry(defCountry);
-        const national = getNationalNumber(value, defCountry);
+        const national = normalizeNationalDigits(getNationalNumber(value, defCountry));
         setInputValue(national);
         if (value.replace(/\D/g, '') && !value.startsWith('+')) {
           const root = defCountry.idd?.root?.replace(/\s/g, '') ?? '';
@@ -94,7 +99,7 @@ export function CustomPhoneInput({
 
   const handleInputChange = useCallback(
     (v: string) => {
-      const digits = v.replace(/\D/g, '');
+      const digits = normalizeNationalDigits(v.replace(/\D/g, ''));
       const prefix = selectedCountry?.idd?.root?.replace(/\D/g, '') ?? '';
       let national = digits;
       if (prefix && digits.startsWith(prefix)) {

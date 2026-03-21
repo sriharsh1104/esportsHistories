@@ -1,8 +1,0 @@
-# Exclude from Render deployment context
-node_modules/
-scripts/
-tests/
-*.log
-logs/
-.env*
-!.env.production

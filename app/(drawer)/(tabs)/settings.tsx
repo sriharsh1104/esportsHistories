@@ -1,4 +1,10 @@
-import { Button, Card, Screen, SettingsRow } from '@/components/ui';
+import {
+  AccountSecurityModal,
+  Card,
+  Screen,
+  SettingsRow,
+  type DeviceHistoryItem,
+} from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -7,17 +13,57 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import Constants from 'expo-constants';
 import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { Text, View } from 'react-native';
 
+function normalizeDeviceHistory(user: any): DeviceHistoryItem[] {
+  const source =
+    user?.loginHistory ??
+    user?.deviceHistory ??
+    user?.activeSessions ??
+    user?.sessions ??
+    user?.devices ??
+    [];
+
+  if (!Array.isArray(source)) return [];
+
+  return source
+    .map((item: any, index: number) => {
+      if (!item || typeof item !== 'object') return null;
+      const id = String(item.id ?? item._id ?? item.sessionId ?? index);
+      const deviceLabel = String(
+        item.deviceName ??
+          item.device ??
+          item.userAgent ??
+          item.platform ??
+          item.os ??
+          'Unknown device'
+      );
+      const location = item.location ?? item.city ?? item.ip;
+      const lastSeen = item.lastSeen ?? item.lastActive ?? item.loggedAt ?? item.createdAt;
+      const isCurrent = Boolean(item.isCurrent ?? item.currentSession ?? false);
+      return {
+        id,
+        deviceLabel,
+        location: location ? String(location) : undefined,
+        lastSeen: lastSeen ? String(lastSeen) : undefined,
+        isCurrent,
+      };
+    })
+    .filter(Boolean) as DeviceHistoryItem[];
+}
+
 export default function SettingsScreen() {
-  const { isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, refreshUser } = useAuth();
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
   const { selectedGameIds } = useSelectedGames();
   const scheme = useColorScheme();
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const extra = Constants.expoConfig?.extra;
   const appEnv = extra?.appEnv || 'development';
+  const deviceHistory = useMemo(() => normalizeDeviceHistory(user), [user]);
 
   const styles = useMemo(
     () => ({
@@ -32,9 +78,17 @@ export default function SettingsScreen() {
         color: colors.tabIconDefault,
       },
       card: { padding: 0, overflow: 'hidden' as const },
-      logoutBtn: { marginTop: h(32) },
     }),
     [w, h, colors.tabIconDefault]
+  );
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!isAuthenticated) return;
+      refreshUser().catch(() => {
+        // Keep cached settings data if refresh fails.
+      });
+    }, [isAuthenticated, refreshUser])
   );
 
   return (
@@ -63,9 +117,19 @@ export default function SettingsScreen() {
               onPress={() => router.push(ROUTES.WALLET)}
             />
             <SettingsRow
+              icon="map-marker"
+              label="Addresses"
+              onPress={() => router.push(ROUTES.ADDRESSES)}
+            />
+            <SettingsRow
               icon="lock"
               label="Change password"
               onPress={() => router.push(ROUTES.CHANGE_PASSWORD)}
+            />
+            <SettingsRow
+              icon="shield"
+              label="Security & sessions"
+              onPress={() => setSecurityModalOpen(true)}
             />
           </Card>
         </View>
@@ -134,15 +198,10 @@ export default function SettingsScreen() {
       </View>
 
       {isAuthenticated && (
-        <Button
-          title="Log out"
-          variant="destructive"
-          fullWidth
-          onPress={async () => {
-            await logout();
-            router.replace(ROUTES.LOGIN);
-          }}
-          style={styles.logoutBtn}
+        <AccountSecurityModal
+          visible={securityModalOpen}
+          onClose={() => setSecurityModalOpen(false)}
+          deviceHistory={deviceHistory}
         />
       )}
     </Screen>

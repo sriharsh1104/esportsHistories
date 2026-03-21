@@ -6,16 +6,23 @@ import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
+import { ApiError } from '@/services/api.service';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+
+const NAME_REGEX = /^[A-Za-z ]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupScreen() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const [displayNameError, setDisplayNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const dispatch = useAppDispatch();
   const { signup } = useAuth();
   const scheme = useColorScheme() ?? 'light';
@@ -40,26 +47,86 @@ export default function SignupScreen() {
     [w, h]
   );
 
+  const normalizedDisplayName = displayName.trim().replace(/\s+/g, ' ');
+
+  const validateDisplayNameLive = useCallback((v: string) => {
+    const n = v.trim().replace(/\s+/g, ' ');
+    if (!n) return undefined;
+    if (n.length < 2 || n.length > 100) {
+      return 'Display name must be between 2 and 100 characters';
+    }
+    if (!NAME_REGEX.test(n)) {
+      return 'Display name can only contain letters and spaces';
+    }
+    return undefined;
+  }, []);
+
+  const validateEmailLive = useCallback((v: string) => {
+    const t = v.trim();
+    if (!t) return undefined;
+    if (!EMAIL_REGEX.test(t)) return 'Enter a valid email address';
+    return undefined;
+  }, []);
+
+  const validatePasswordLive = useCallback(
+    (v: string) => {
+      if (v.length > 0 && v.length < 8) {
+        return 'Password must be at least 8 characters';
+      }
+      if (confirmPassword.length > 0 && v.length > 0 && v !== confirmPassword) {
+        return 'Passwords do not match';
+      }
+      return undefined;
+    },
+    [confirmPassword]
+  );
+
+  const validateConfirmPasswordLive = useCallback(
+    (v: string) => {
+      if (v.length > 0 && password.length > 0 && v !== password) {
+        return 'Passwords do not match';
+      }
+      return undefined;
+    },
+    [password]
+  );
+
   const handleSubmit = async () => {
-    setError('');
-    if (!displayName.trim()) {
-      setError('Display name is required');
+    setDisplayNameError('');
+    setEmailError('');
+    setPasswordError('');
+    setConfirmPasswordError('');
+
+    if (!normalizedDisplayName) {
+      setDisplayNameError('Display name is required');
+      return;
+    }
+    if (normalizedDisplayName.length < 2 || normalizedDisplayName.length > 100) {
+      setDisplayNameError('Display name must be between 2 and 100 characters');
+      return;
+    }
+    if (!NAME_REGEX.test(normalizedDisplayName)) {
+      setDisplayNameError('Display name can only contain letters and spaces');
       return;
     }
     if (!email.trim()) {
-      setError('Email is required');
+      setEmailError('Email is required');
       return;
     }
     if (!password) {
-      setError('Password is required');
+      setPasswordError('Password is required');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return;
+    }
+    if (!confirmPassword) {
+      setConfirmPasswordError('Confirm password is required');
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setConfirmPasswordError('Passwords do not match');
       return;
     }
     dispatch(showLoader());
@@ -67,12 +134,29 @@ export default function SignupScreen() {
       const res = await signup({
         email: email.trim(),
         password,
-        displayName: displayName.trim(),
-        confirmPassword,
+        displayName: normalizedDisplayName,
       });
       router.push({ pathname: ROUTES.VERIFY_OTP, params: { email: res.email } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Signup failed');
+      const message = e instanceof Error ? e.message : 'Signup failed';
+      if (e instanceof ApiError && e.response && typeof e.response === 'object') {
+        const responseObj = e.response as { errors?: Array<{ field?: string; message?: string }> };
+        const firstNameError = responseObj.errors?.find((err) => err.field === 'name' && err.message);
+        const firstEmailError = responseObj.errors?.find((err) => err.field === 'email' && err.message);
+        if (firstNameError?.message) {
+          setDisplayNameError(firstNameError.message);
+          return;
+        }
+        if (firstEmailError?.message) {
+          setEmailError(firstEmailError.message);
+          return;
+        }
+      }
+      if (/name/i.test(message)) {
+        setDisplayNameError(message);
+      } else {
+        setEmailError(message);
+      }
     } finally {
       dispatch(hideLoader());
     }
@@ -92,39 +176,57 @@ export default function SignupScreen() {
             label="Display name"
             placeholder="Your name"
             value={displayName}
-            onChangeText={setDisplayName}
+            onChangeText={(t) => {
+              setDisplayNameError('');
+              setDisplayName(t);
+            }}
             autoComplete="name"
             leftIcon="user"
+            error={displayNameError || undefined}
+            validateOnChange={validateDisplayNameLive}
           />
           <Input
             label="Email"
             placeholder="you@example.com"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(t) => {
+              setEmailError('');
+              setEmail(t);
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
             leftIcon="envelope"
-            error={error && !password ? error : undefined}
+            error={emailError || undefined}
+            validateOnChange={validateEmailLive}
           />
           <Input
             label="Password"
             placeholder="••••••••"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(t) => {
+              setPasswordError('');
+              setPassword(t);
+            }}
             secure
-            autoComplete="new-password"
+            autoComplete="password"
             leftIcon="lock"
-            error={error && password ? error : undefined}
+            error={passwordError || undefined}
+            validateOnChange={validatePasswordLive}
           />
           <Input
             label="Confirm password"
             placeholder="••••••••"
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
+            onChangeText={(t) => {
+              setConfirmPasswordError('');
+              setConfirmPassword(t);
+            }}
             secure
-            autoComplete="new-password"
+            autoComplete="password"
             leftIcon="lock"
+            error={confirmPasswordError || undefined}
+            validateOnChange={validateConfirmPasswordLive}
           />
 
           <Button

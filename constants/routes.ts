@@ -2,6 +2,44 @@
  * Centralized route paths for the app.
  * Use these constants instead of string literals for type safety and maintainability.
  */
+
+/** Public routes – accessible without login */
+export const PUBLIC_ROUTES = [
+  '/(auth)/login',
+  '/(auth)/signup',
+  '/(auth)/forgot-password',
+  '/(auth)/verify-otp',
+  '/privacy-policy',
+  '/terms',
+  '/help-faq',
+  '/ban-check',
+] as const;
+
+/** Private routes – require login */
+export const PRIVATE_ROUTES = [
+  '/(drawer)',
+  '/edit-profile',
+  '/game-profiles',
+  '/addresses',
+  '/select-games',
+  '/(auth)/change-password',
+] as const;
+
+export function isPublicRoute(path: string): boolean {
+  return PUBLIC_ROUTES.some((r) => path.startsWith(r) || path === r);
+}
+
+export function isPrivateRoute(path: string): boolean {
+  if (path.startsWith('/(drawer)')) return true;
+  if (path.startsWith('/edit-profile')) return true;
+  if (path.startsWith('/game-profiles')) return true;
+  if (path.startsWith('/addresses')) return true;
+  if (path.startsWith('/select-games')) return true;
+  if (path.startsWith('/follow-explore')) return true;
+  if (path.includes('change-password')) return true;
+  return false;
+}
+
 export const ROUTES = {
   // Auth
   LOGIN: '/(auth)/login',
@@ -10,7 +48,7 @@ export const ROUTES = {
   FORGOT_PASSWORD: '/(auth)/forgot-password',
   CHANGE_PASSWORD: '/(auth)/change-password',
 
-  // Main app
+  // Main app — use folder path only; trailing `/index` breaks web linking in Expo Router 6
   HOME: '/(drawer)/(tabs)',
   NEWS: '/(drawer)/(tabs)',
   SHOP: '/(drawer)/(tabs)/shop',
@@ -32,6 +70,11 @@ export const ROUTES = {
   SELECT_GAMES_ONBOARDING: '/select-games?from=onboarding',
   SELECT_GAMES_FOLLOW: '/select-games?from=follow',
   SELECT_GAMES_TOURNAMENT: '/select-games?from=tournament',
+
+  /** Browse / follow — lists come from game-options API (`fetchFollowCatalog`). */
+  FOLLOW_EXPLORE_GAMES: '/follow-explore?type=games',
+  FOLLOW_EXPLORE_PERSON: '/follow-explore?type=personality',
+  FOLLOW_EXPLORE_ORG: '/follow-explore?type=organization',
 
   EDIT_PROFILE: '/edit-profile',
   EDIT_PROFILE_SIGNUP: '/edit-profile?from=signup',

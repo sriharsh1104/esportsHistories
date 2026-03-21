@@ -5,9 +5,10 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform, StyleSheet, View } from 'react-native';
 import { Provider } from 'react-redux';
 import 'react-native-gesture-handler';
+import { Toaster } from '@/components/Toaster';
 
 // Suppress design/library warnings that we cannot fix in our code
 LogBox.ignoreLogs([
@@ -23,6 +24,10 @@ import { store } from '@/store';
 import { AuthProvider } from '@/context/AuthContext';
 import { FollowedPlayersProvider } from '@/context/FollowedPlayersContext';
 import { ResponsiveProvider } from '@/context/ResponsiveContext';
+import { FeedFocusProvider } from '@/context/FeedFocusContext';
+import { FollowCatalogProvider } from '@/context/FollowCatalogContext';
+import { FollowedTargetsProvider } from '@/context/FollowedTargetsContext';
+import { FollowHubProvider } from '@/context/FollowHubContext';
 import { SelectedGamesProvider } from '@/context/SelectedGamesContext';
 import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
 import { WalletProvider } from '@/context/WalletContext';
@@ -33,8 +38,8 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(drawer)',
+  // Start app on auth flow; drawer is only after login.
+  initialRouteName: '(auth)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -93,23 +98,42 @@ function RootLayoutNav() {
           <ResponsiveProvider>
             <AuthProvider>
               <SelectedGamesProvider>
-                <FollowedPlayersProvider>
-                  <WalletProvider>
-                    <GlobalLoader />
-                    <Stack screenOptions={{ headerShown: false }}>
-                      <Stack.Screen name="(drawer)" />
-                      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                      <Stack.Screen name="select-games" options={{ headerShown: false }} />
-                      <Stack.Screen name="edit-profile" />
-                      <Stack.Screen name="game-profiles" />
-                      <Stack.Screen name="addresses" />
+                <FollowCatalogProvider>
+                  <FollowedTargetsProvider>
+                    <FeedFocusProvider>
+                      <FollowHubProvider>
+                        <FollowedPlayersProvider>
+                      <WalletProvider>
+                        <GlobalLoader />
+                        <Stack screenOptions={{ headerShown: false }}>
+                          <Stack.Screen name="(drawer)" />
+                          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                          <Stack.Screen name="select-games" options={{ headerShown: false }} />
+                          <Stack.Screen name="follow-explore" options={{ headerShown: false }} />
+                          <Stack.Screen name="edit-profile" />
+                          <Stack.Screen name="game-profiles" />
+                          <Stack.Screen name="addresses" />
                       <Stack.Screen name="privacy-policy" />
                       <Stack.Screen name="terms" />
                       <Stack.Screen name="help-faq" />
                       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-                    </Stack>
-                  </WalletProvider>
-                </FollowedPlayersProvider>
+                        </Stack>
+                        {/* RN Web paints later siblings on top of earlier ones — Toast must be after Stack or it stays hidden under screens */}
+                        <View
+                          style={[
+                            styles.toastLayer,
+                            Platform.OS === 'web' && styles.toastLayerWeb,
+                          ]}
+                          pointerEvents="box-none"
+                        >
+                          <Toaster />
+                        </View>
+                      </WalletProvider>
+                        </FollowedPlayersProvider>
+                      </FollowHubProvider>
+                    </FeedFocusProvider>
+                  </FollowedTargetsProvider>
+                </FollowCatalogProvider>
               </SelectedGamesProvider>
             </AuthProvider>
           </ResponsiveProvider>
@@ -118,3 +142,20 @@ function RootLayoutNav() {
     </Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  toastLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 99999,
+    elevation: 99999,
+  },
+  toastLayerWeb: {
+    // RN Web: ensure stacking above navigator / fixed headers
+    position: 'fixed' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'box-none' as const,
+  },
+});

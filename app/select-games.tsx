@@ -7,7 +7,7 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 const MAX_GAMES = 10;
@@ -74,8 +74,13 @@ export default function SelectGamesScreen() {
     toggleGame, 
     isGameSelected, 
     setSelectedGameIds,
-    isLoading: isGamesLoading 
+    isLoading: isGamesLoading,
+    refreshGames,
   } = useSelectedGames();
+  useEffect(() => {
+    void refreshGames();
+  }, [refreshGames]);
+
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];

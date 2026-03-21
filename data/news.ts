@@ -7,6 +7,10 @@ export type NewsItem = {
   gameId: string;
   timeAgo: string;
   sortOrder: number; // lower = more recent
+  /** Match profile `followedPersonalities` id strings (e.g. knownAs). */
+  personalityIds?: string[];
+  /** Match profile `followedOrganizations` id strings. */
+  organizationIds?: string[];
 };
 
 export const MOCK_NEWS: NewsItem[] = [
@@ -49,6 +53,8 @@ export const MOCK_NEWS: NewsItem[] = [
     gameId: 'bgmi',
     timeAgo: '1d ago',
     sortOrder: 5,
+    personalityIds: ['Jonathan'],
+    organizationIds: ['Team Soul'],
   },
   {
     id: '5',
@@ -69,6 +75,7 @@ export const MOCK_NEWS: NewsItem[] = [
     gameId: 'bgmi',
     timeAgo: '3h ago',
     sortOrder: 2,
+    personalityIds: ['Mortal', 'ScoutOP'],
   },
   {
     id: '7',
@@ -79,6 +86,7 @@ export const MOCK_NEWS: NewsItem[] = [
     gameId: 'freefire',
     timeAgo: '6h ago',
     sortOrder: 4,
+    organizationIds: ['S8UL Esports', 'GodLike Esports'],
   },
   {
     id: '8',

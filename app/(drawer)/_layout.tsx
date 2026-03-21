@@ -2,13 +2,15 @@ import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
 import { useAuth } from "@/context/AuthContext";
+import { userHasSelectedGames } from "@/utils/gameSelection";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { useWallet } from "@/context/WalletContext";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import type { UserBio } from "@/types/auth";
 import { DrawerActions } from "@react-navigation/native";
-import { router } from "expo-router";
+import { Redirect, router, useSegments } from "expo-router";
 import { Drawer } from "expo-router/drawer";
-import React, { useEffect } from "react";
+import React, { useMemo } from "react";
 import {
     ActivityIndicator,
     Pressable,
@@ -24,7 +26,7 @@ const MENU_ITEMS = [
   { icon: "shield" as const, label: "Ban Check", route: ROUTES.BAN_CHECK },
 ];
 
-function CustomDrawerContent(props: { navigation?: any }) {
+function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection: boolean }) {
   const scheme = useColorScheme() ?? "light";
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -45,9 +47,6 @@ function CustomDrawerContent(props: { navigation?: any }) {
         onPress={() => {
           if (isAuthenticated) {
             nav(ROUTES.PROFILE);
-          } else {
-            // If guest, go to login (which acts as the auth entry point)
-            nav(ROUTES.LOGIN);
           }
         }}
         style={{
@@ -81,9 +80,7 @@ function CustomDrawerContent(props: { navigation?: any }) {
               style={{ fontSize: w(18), fontWeight: "700", color: colors.text }}
               numberOfLines={1}
             >
-              {isAuthenticated && user
-                ? user.fullName || user.displayName
-                : "Guest"}
+              {isAuthenticated && user ? user.fullName || user.displayName : ""}
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center", marginTop: h(6) }}>
               <FontAwesome name="star" size={w(14)} color={colors.accent} />
@@ -130,6 +127,7 @@ function CustomDrawerContent(props: { navigation?: any }) {
       >
         {MENU_ITEMS.filter((item) => {
           if (!isAuthenticated) return false;
+          if (props.isLockedForGameSelection) return false;
           return true;
         }).map((item) => (
           <Pressable
@@ -173,26 +171,72 @@ function CustomDrawerContent(props: { navigation?: any }) {
 
 export default function DrawerLayout() {
   const colorScheme = useColorScheme();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
+  const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
+  const isLockedForGameSelection = !userHasSelectedGames(confirmedSelectedGames);
+  const isOnHomeTab = useMemo(() => {
+    const [root, tabs, leaf] = segments;
+    return root === "(drawer)" && tabs === "(tabs)" && (!leaf || leaf === "index");
+  }, [segments]);
 
-  useEffect(() => {
-    if (!isAuthenticated || !user) return;
-    const step = user.onboardingStep;
-    if (step === 'profile') {
-      router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
-    } else if (step === 'games') {
-      router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
+  function parseBioGenderAge(bio?: UserBio | string): UserBio {
+    if (!bio) return {};
+    if (typeof bio === "object") return bio;
+    try {
+      return JSON.parse(bio) as UserBio;
+    } catch {
+      return {};
     }
-  }, [isAuthenticated, user?.onboardingStep]);
+  }
+
+  function isProfileComplete(u: typeof user): boolean {
+    if (!u) return false;
+    const genderAge = parseBioGenderAge(u.bio);
+    const hasDob = !!(genderAge.dateOfBirth || genderAge.dob);
+
+    return (
+      !!u.fullName?.trim() &&
+      !!u.displayName?.trim() &&
+      !!u.phone?.trim() &&
+      !!genderAge.gender?.trim() &&
+      hasDob
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 12 }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href={ROUTES.LOGIN} />;
+  }
+
+  if (!user || !isProfileComplete(user)) {
+    return <Redirect href={ROUTES.EDIT_PROFILE_SIGNUP} />;
+  }
+
+  if (isLockedForGameSelection && !isOnHomeTab) {
+    return <Redirect href={ROUTES.HOME} />;
+  }
 
   return (
     <Drawer
       screenOptions={{
         headerShown: true,
         drawerActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        swipeEnabled: !isLockedForGameSelection,
       }}
       drawerContent={(props) => (
-        <CustomDrawerContent navigation={props.navigation} />
+        <CustomDrawerContent
+          navigation={props.navigation}
+          isLockedForGameSelection={isLockedForGameSelection}
+        />
       )}
     >
       <Drawer.Screen
@@ -210,6 +254,7 @@ export default function DrawerLayout() {
         options={{
           drawerLabel: "Games",
           title: "Select Games",
+          swipeEnabled: !isLockedForGameSelection,
           drawerIcon: ({ color }) => (
             <FontAwesome name="gamepad" size={22} color={color} />
           ),

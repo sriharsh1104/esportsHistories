@@ -4,43 +4,42 @@
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/auth/login',
-    SIGNUP: '/auth/signup',
+    SIGNUP: '/auth/register',
+    VERIFY_OTP: '/auth/verify-otp',
+    RESEND_OTP: '/auth/resend-otp',
+    /** POST — single session (Swagger: `/api/auth/logout` when base URL has no `/api` segment). */
     LOGOUT: '/auth/logout',
+    /** POST — invalidate all sessions (Swagger: `/api/auth/logout-all`). */
+    LOGOUT_ALL: '/auth/logout-all',
     FORGOT_PASSWORD: '/auth/forgot-password',
+    RESET_PASSWORD: '/auth/reset-password',
     CHANGE_PASSWORD: '/auth/change-password',
-    REFRESH_TOKEN: '/auth/refresh',
-    ME: '/auth/me',
+    REFRESH_TOKEN: '/auth/refresh-token',
   },
   USER: {
-    PROFILE: '/user/profile',
-    ADDRESSES: '/user/addresses',
-    GAME_PROFILES: '/user/game-profiles',
-  },
-  NEWS: {
-    LIST: '/news',
-    BY_GAME: (gameId: string) => `/news?gameId=${gameId}`,
+    PROFILE: '/profile',
+    UPADATE_PROFILE: '/profile',
+    /** DELETE — body `{ gameId, action: 'removeGame', uid }`. */
+    GAME_PROFILE: '/profile/game-profile',
+    WALLET: '/user/wallet',
+    WALLET_UPI: '/user/wallet/upi',
+    WALLET_TOPUP: '/user/wallet/topup',
+    WALLET_WITHDRAW: '/user/wallet/withdraw',
   },
   GAMES: {
+    /**
+     * Game selection / catalog — `options`, `gameSelectionConfig`, indiaEsportsPersonalities, etc.
+     * Not user profile; use USER.PROFILE only for the signed-in user's picks (selectedGames, follows, …).
+     */
+    GAME_OPTIONS: '/profile/game-options',
+    GAME_DASHBOARD: '/profile/dashboard',
     LIST: '/games',
-    FOLLOW: '/games/follow',
+    BY_CATEGORY: (category: string) => `/games/category/${category}`,
   },
-  TOURNAMENTS: {
-    LIST: '/tournaments',
-    FOLLOW: '/tournaments/follow',
+  TRANSACTIONS: {
+    LIST: '/transactions',
   },
-  PLAYERS: {
-    LIST: '/players',
-    FOLLOW: '/players/follow',
-  },
-  SHOP: {
-    ITEMS: '/shop/items',
-    ITEM: (id: string) => `/shop/items/${id}`,
-    CHECKOUT: '/shop/checkout',
-    ORDERS: '/shop/orders',
-  },
-  WALLET: {
-    BALANCE: '/wallet/balance',
-    TOP_UP: '/wallet/top-up',
-    WITHDRAW: '/wallet/withdraw',
+  ANTIHACK: {
+    CHECK: '/antihack/check',
   },
 } as const;

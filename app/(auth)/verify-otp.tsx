@@ -7,13 +7,14 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 export default function VerifyOtpScreen() {
   const { email } = useLocalSearchParams<{ email: string }>();
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(60);
   const dispatch = useAppDispatch();
   const { verifyOtp, resendOtp } = useAuth();
   const scheme = useColorScheme() ?? 'light';
@@ -38,6 +39,14 @@ export default function VerifyOtpScreen() {
     [w, h]
   );
 
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const id = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [secondsLeft]);
+
   const handleSubmit = async () => {
     setError('');
     if (!otp || otp.length < 6) {
@@ -52,7 +61,7 @@ export default function VerifyOtpScreen() {
       } else if (u.onboardingStep === 'games') {
         router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
       } else {
-        router.replace(ROUTES.HOME);
+        router.replace(ROUTES.PROFILE);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Verification failed');
@@ -62,10 +71,11 @@ export default function VerifyOtpScreen() {
   };
 
   const handleResend = async () => {
+    if (secondsLeft > 0) return;
     dispatch(showLoader());
     try {
       await resendOtp(email!);
-      alert('OTP resent to your email');
+      setSecondsLeft(60);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Resend failed');
     } finally {
@@ -105,8 +115,15 @@ export default function VerifyOtpScreen() {
             <Text style={[styles.footerText, { color: colors.tabIconDefault }]}>
               Didn't receive code?{' '}
             </Text>
-            <Pressable onPress={handleResend}>
-              <Text style={[styles.footerLink, { color: colors.accent }]}>Resend</Text>
+            <Pressable onPress={handleResend} disabled={secondsLeft > 0}>
+              <Text
+                style={[
+                  styles.footerLink,
+                  { color: secondsLeft > 0 ? colors.tabIconDefault : colors.accent },
+                ]}
+              >
+                {secondsLeft > 0 ? `Resend in ${secondsLeft}s` : 'Resend'}
+              </Text>
             </Pressable>
           </View>
         </View>

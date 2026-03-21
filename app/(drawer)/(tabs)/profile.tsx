@@ -1,19 +1,53 @@
-import { Button, Card, Screen } from '@/components/ui';
+import { BackButton, Button, Card, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
+import type { UserBio } from '@/types/auth';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 export default function ProfileScreen() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, refreshUser } = useAuth();
+
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
+
+  function parseBioGenderAge(bio?: UserBio | string): UserBio {
+    if (!bio) return {};
+    if (typeof bio === 'object') return bio;
+    try {
+      return JSON.parse(bio) as UserBio;
+    } catch {
+      return {};
+    }
+  }
+
+  function formatDob(value?: string): string {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  const genderAge = parseBioGenderAge(user?.bio);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticated) return;
+      refreshUser().catch(() => {
+        // Keep cached profile if API fails.
+      });
+    }, [isAuthenticated, refreshUser])
+  );
 
   const styles = useMemo(
     () => ({
@@ -64,7 +98,6 @@ export default function ProfileScreen() {
       card: { marginTop: h(16), marginBottom: h(16) },
       cardTitle: { fontSize: w(16), fontWeight: '600' as const, marginBottom: h(4) },
       cardDesc: { fontSize: w(14) },
-      logoutBtn: { marginTop: h(24) },
     }),
     [w, h]
   );
@@ -90,6 +123,7 @@ export default function ProfileScreen() {
 
   return (
     <Screen padded maxForm>
+      <BackButton />
       <View style={styles.header}>
         <Pressable
           onPress={() => router.push(ROUTES.EDIT_PROFILE)}
@@ -115,9 +149,27 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <Card style={styles.infoCard} padded={false}>
           <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.tabIconDefault }]}>Name</Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {user.fullName || '—'}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
             <Text style={[styles.infoLabel, { color: colors.tabIconDefault }]}>Phone</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
               {user.phone || '—'}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.tabIconDefault }]}>Gender</Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {genderAge.gender || '—'}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.tabIconDefault }]}>Date of birth</Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              {formatDob(genderAge.dateOfBirth ?? genderAge.dob)}
             </Text>
           </View>
           <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
@@ -134,13 +186,13 @@ export default function ProfileScreen() {
             Edit Profile
           </Text>
           <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-            Update name, phone, UPI
+            Update name and phone
           </Text>
         </Card>
 
         <Card
           onPress={() => router.push(ROUTES.GAME_PROFILES)}
-          style={[styles.card, { marginTop: 0 }]}
+          style={{ ...styles.card, marginTop: 0 }}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>
             Game Profiles
@@ -150,40 +202,6 @@ export default function ProfileScreen() {
           </Text>
         </Card>
 
-        <Card
-          onPress={() => router.push(ROUTES.ADDRESSES)}
-          style={[styles.card, { marginTop: 0 }]}
-        >
-          <Text style={[styles.cardTitle, { color: colors.text }]}>
-            Addresses
-          </Text>
-          <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-            Add delivery addresses, use current location
-          </Text>
-        </Card>
-
-        <Card
-          onPress={() => router.push(ROUTES.CHANGE_PASSWORD)}
-          style={[styles.card, { marginTop: 0 }]}
-        >
-          <Text style={[styles.cardTitle, { color: colors.text }]}>
-            Change password
-          </Text>
-          <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-            Update your account password
-          </Text>
-        </Card>
-
-        <Button
-          title="Sign out"
-          variant="destructive"
-          fullWidth
-          onPress={async () => {
-            await logout();
-            router.replace(ROUTES.LOGIN);
-          }}
-          style={styles.logoutBtn}
-        />
       </View>
     </Screen>
   );

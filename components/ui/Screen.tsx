@@ -60,7 +60,16 @@ export function Screen({
           <ActivityIndicator size="large" color={colors.tint} />
         </View>
       ) : maxWidth ? (
-        <View style={[styles.maxWrapper, { maxWidth }]}>{children}</View>
+        <View
+          style={[
+            styles.maxWrapper,
+            { maxWidth },
+            // Non-scroll screens need a bounded flex column so inner FlatList gets a real height (web + native).
+            !scroll && styles.maxWrapperFill,
+          ]}
+        >
+          {children}
+        </View>
       ) : (
         children
       )}
@@ -106,5 +115,11 @@ const styles = StyleSheet.create({
   maxWrapper: {
     width: '100%',
     alignSelf: 'center',
+  },
+  /** Flex column bounds for nested lists; do not use `alignSelf: 'stretch'` here — it overrides
+   * `maxWrapper`'s `alignSelf: 'center'` and pins max-width forms to the left on wide screens. */
+  maxWrapperFill: {
+    flex: 1,
+    minHeight: 0,
   },
 });

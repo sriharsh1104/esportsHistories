@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/Input';
 import { Screen } from '@/components/ui/Screen';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { API_ENDPOINTS } from '@/constants/api';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { api } from '@/services/api.service';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -34,7 +35,7 @@ export default function BanCheckScreen() {
     setResult(null);
 
     try {
-      const response: any = await api.post('/antihack/check', {
+      const response: any = await api.post(API_ENDPOINTS.ANTIHACK.CHECK, {
         game: selectedGame,
         uid: uid,
         lang: 'en',

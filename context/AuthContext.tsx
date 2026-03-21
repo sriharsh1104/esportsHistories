@@ -1,11 +1,15 @@
 import * as authService from '@/services/auth.service';
+import { ROUTES } from '@/constants/routes';
+import { setAuthFailureHandler } from '@/services/api.service';
 import type {
-    LoginCredentials,
-    SignupCredentials,
-    UpdateProfileData,
-    User,
-    UserAddress,
+  DeleteGameProfileInput,
+  LoginCredentials,
+  SignupCredentials,
+  UpdateProfileData,
+  User,
+  UserAddress,
 } from '@/types/auth';
+import { router } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 type AuthContextType = {
@@ -16,11 +20,12 @@ type AuthContextType = {
   signup: (c: SignupCredentials) => Promise<{ email: string }>;
   verifyOtp: (email: string, otp: string) => Promise<User>;
   resendOtp: (email: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (options?: { allDevices?: boolean }) => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   updateAddresses: (addresses: UserAddress[]) => Promise<void>;
   updateUpiIds: (upiIds: string[]) => Promise<void>;
-  refreshUser: () => Promise<void>;
+  deleteGameProfile: (input: DeleteGameProfileInput) => Promise<void>;
+  refreshUser: () => Promise<User>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -32,7 +37,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadStoredAuth = useCallback(async () => {
     try {
       const stored = await authService.getStoredAuth();
-      if (stored) setUser(stored.user);
+      if (stored) {
+        setUser(stored.user);
+        try {
+          const freshUser = await authService.getProfile();
+          setUser(freshUser);
+        } catch {
+          // keep cached user if profile fetch fails
+        }
+      }
     } catch {
       setUser(null);
     } finally {
@@ -43,6 +56,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadStoredAuth();
   }, [loadStoredAuth]);
+
+  useEffect(() => {
+    setAuthFailureHandler(() => {
+      setUser(null);
+      router.replace(ROUTES.LOGIN);
+    });
+
+    return () => {
+      setAuthFailureHandler(null);
+    };
+  }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
     const { user: u } = await authService.login(credentials);
@@ -65,8 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authService.resendOtp(email);
   }, []);
 
-  const logout = useCallback(async () => {
-    await authService.logout();
+  const logout = useCallback(async (options?: { allDevices?: boolean }) => {
+    await authService.logout(options);
     setUser(null);
   }, []);
 
@@ -89,7 +113,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  const refreshUser = useCallback(loadStoredAuth, [loadStoredAuth]);
+  const refreshUser = useCallback(async () => {
+    const freshUser = await authService.getProfile();
+    setUser(freshUser);
+    return freshUser;
+  }, []);
+
+  const deleteGameProfile = useCallback(async (input: DeleteGameProfileInput) => {
+    const updated = await authService.deleteGameProfile(input);
+    setUser(updated);
+  }, []);
 
   const value: AuthContextType = {
     user,
@@ -103,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateProfile,
     updateAddresses,
     updateUpiIds,
+    deleteGameProfile,
     refreshUser,
   };
 

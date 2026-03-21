@@ -1,6 +1,9 @@
 import { Card } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useFeedFocus } from '@/context/FeedFocusContext';
+import type { FollowedTarget } from '@/context/FollowedTargetsContext';
+import { useFollowedTargets } from '@/context/FollowedTargetsContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import type { NewsItem } from '@/data/news';
@@ -8,6 +11,23 @@ import { MOCK_NEWS } from '@/data/news';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useMemo } from 'react';
 import { Text, View } from 'react-native';
+
+function newsMatchesAnyFollow(
+  item: NewsItem,
+  selectedGameIds: string[],
+  targets: FollowedTarget[]
+): boolean {
+  if (selectedGameIds.includes(item.gameId)) return true;
+  const pids = new Set(targets.filter((t) => t.kind === 'personality').map((t) => t.id));
+  const oids = new Set(targets.filter((t) => t.kind === 'organization').map((t) => t.id));
+  for (const pid of item.personalityIds ?? []) {
+    if (pids.has(pid)) return true;
+  }
+  for (const oid of item.organizationIds ?? []) {
+    if (oids.has(oid)) return true;
+  }
+  return false;
+}
 
 function NewsCard({ item }: { item: NewsItem }) {
   const scheme = useColorScheme() ?? 'light';
@@ -73,6 +93,8 @@ export function NewsSection({ gameId }: { gameId?: string }) {
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const { selectedGameIds } = useSelectedGames();
+  const { targets } = useFollowedTargets();
+  const { focus } = useFeedFocus();
 
   const filteredNews = useMemo(() => {
     if (gameId) {
@@ -80,13 +102,28 @@ export function NewsSection({ gameId }: { gameId?: string }) {
         .filter((item) => item.gameId === gameId)
         .sort((a, b) => a.sortOrder - b.sortOrder);
     }
-    
-    const list =
-      selectedGameIds.length === 0
-        ? MOCK_NEWS
-        : MOCK_NEWS.filter((item) => selectedGameIds.includes(item.gameId));
+
+    if (focus !== null) {
+      if (focus.kind === 'game') {
+        return MOCK_NEWS.filter((item) => item.gameId === focus.id).sort(
+          (a, b) => a.sortOrder - b.sortOrder
+        );
+      }
+      if (focus.kind === 'personality') {
+        return MOCK_NEWS.filter((item) => item.personalityIds?.includes(focus.id)).sort(
+          (a, b) => a.sortOrder - b.sortOrder
+        );
+      }
+      return MOCK_NEWS.filter((item) => item.organizationIds?.includes(focus.id)).sort(
+        (a, b) => a.sortOrder - b.sortOrder
+      );
+    }
+
+    const list = MOCK_NEWS.filter((item) =>
+      newsMatchesAnyFollow(item, selectedGameIds, targets)
+    );
     return [...list].sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [selectedGameIds, gameId]);
+  }, [selectedGameIds, targets, gameId, focus]);
 
   return (
     <View>

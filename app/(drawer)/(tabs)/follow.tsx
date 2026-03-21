@@ -1,21 +1,58 @@
-import { NewsSection } from '@/components/dashboard';
+import { NewsFeedFilterChips, type FeedFilterChip, NewsSection } from '@/components/dashboard';
 import { Button, Card, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
-import { ROUTES } from '@/constants/routes';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Text, View } from 'react-native';
 
 export default function FollowScreen() {
-  const { isAuthenticated } = useAuth();
-  const { selectedGameIds } = useSelectedGames();
+  const { isAuthenticated, user } = useAuth();
+  const { selectedGameIds, availableGames, refreshGames } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
+
+  const chipGames = useMemo(
+    () =>
+      selectedGameIds.map((id) => ({
+        id,
+        label: availableGames.find((g) => g._id === id)?.name ?? id,
+      })),
+    [selectedGameIds, availableGames]
+  );
+
+  const feedChips = useMemo((): FeedFilterChip[] => {
+    const games: FeedFilterChip[] = chipGames.map((g) => ({
+      kind: 'game',
+      id: g.id,
+      label: g.label,
+    }));
+    const pers: FeedFilterChip[] = (user?.followedPersonalities ?? []).map((p) => ({
+      kind: 'personality',
+      id: p.id,
+      label: p.name,
+    }));
+    const orgs: FeedFilterChip[] = (user?.followedOrganizations ?? []).map((o) => ({
+      kind: 'organization',
+      id: o.id,
+      label: o.name,
+    }));
+    return [...games, ...pers, ...orgs];
+  }, [chipGames, user?.followedPersonalities, user?.followedOrganizations]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated && availableGames.length === 0) {
+        void refreshGames();
+      }
+    }, [isAuthenticated, availableGames.length, refreshGames])
+  );
 
   const styles = useMemo(
     () => ({
@@ -61,18 +98,22 @@ export default function FollowScreen() {
         </Text>
       </View>
 
+      {feedChips.length > 0 && (
+        <View style={styles.section}>
+          <NewsFeedFilterChips chips={feedChips} />
+        </View>
+      )}
+
       <View style={styles.section}>
         <Card
           onPress={() => router.push(ROUTES.SELECT_GAMES_FOLLOW)}
-          style={[
-            styles.card,
-            {
-              borderWidth: 1,
-              borderColor: colors.tint,
-              borderStyle: 'dashed',
-              backgroundColor: colors.tint + '12',
-            },
-          ]}
+          style={{
+            ...styles.card,
+            borderWidth: 1,
+            borderColor: colors.tint,
+            borderStyle: 'dashed',
+            backgroundColor: colors.tint + '12',
+          }}
         >
           <Text style={[styles.cardTitle, { color: colors.text }]}>
             Manage games to follow

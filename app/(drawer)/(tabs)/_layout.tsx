@@ -2,23 +2,18 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutButton } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { useAuth } from "@/context/AuthContext";
+import { useFollowHub } from "@/context/FollowHubContext";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { useSelectedGames } from "@/context/SelectedGamesContext";
+import { userHasSelectedGames } from "@/utils/gameSelection";
+import { tabIconForGameId } from "@/utils/gameTabIcon";
+import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
 import { Tabs } from "expo-router";
 import React from "react";
 import { Pressable, View } from "react-native";
-
-const MOBILE_GAME_IDS = [
-  "bgmi",
-  "freefire",
-  "mlbb",
-  "codm",
-  "coc",
-  "cr",
-  "wildrift",
-];
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
@@ -28,23 +23,50 @@ function TabBarIcon(props: {
   return <FontAwesome size={w(24)} style={{ marginBottom: -4 }} {...props} />;
 }
 
-function FollowTabIcon({ color }: { color: string }) {
+function FollowTabBarButton(props: BottomTabBarButtonProps) {
+  const { accessibilityState, style, onLongPress } = props;
+  const { openFollowHub } = useFollowHub();
   const { selectedGameIds } = useSelectedGames();
   const { w } = useResponsive();
-  const firstGameId = selectedGameIds[0];
-  const iconName =
-    firstGameId && MOBILE_GAME_IDS.includes(firstGameId)
-      ? "mobile"
-      : firstGameId
-        ? "desktop"
-        : "heart";
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? "light"];
+  const focused = accessibilityState?.selected;
+  const tint = focused ? colors.tabIconSelected : colors.tabIconDefault;
+  const firstId = selectedGameIds[0];
+
   return (
-    <FontAwesome
-      name={iconName as any}
-      size={w(24)}
-      color={color}
-      style={{ marginBottom: -4 }}
-    />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Add or manage follows"
+      accessibilityState={accessibilityState}
+      onPress={() => openFollowHub()}
+      onLongPress={onLongPress}
+      style={({ pressed }) => [
+        style,
+        {
+          opacity: pressed ? 0.8 : 1,
+          justifyContent: "center",
+          alignItems: "center",
+          flex: 1,
+        },
+      ]}
+    >
+      {firstId ? (
+        <FontAwesome
+          name={tabIconForGameId(firstId)}
+          size={w(24)}
+          color={tint}
+          style={{ marginBottom: -4 }}
+        />
+      ) : (
+        <FontAwesome
+          name="plus-circle"
+          size={w(24)}
+          color={tint}
+          style={{ marginBottom: -4 }}
+        />
+      )}
+    </Pressable>
   );
 }
 
@@ -71,28 +93,32 @@ function DrawerToggle() {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { w } = useResponsive();
+  const { user } = useAuth();
+  const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
+  const isLockedForGameSelection = !userHasSelectedGames(confirmedSelectedGames);
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: true,
-        headerLeft: () => <DrawerToggle />,
-        headerRight: () => (
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <ThemeToggle />
-            <LogoutButton />
-          </View>
-        ),
+        headerLeft: () => (isLockedForGameSelection ? null : <DrawerToggle />),
+        headerRight: () =>
+          isLockedForGameSelection ? null : (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <ThemeToggle />
+              <LogoutButton />
+            </View>
+          ),
         tabBarShowLabel: false,
-        tabBarStyle: { paddingHorizontal: w(16) },
+        tabBarStyle: isLockedForGameSelection ? { display: 'none' } : { paddingHorizontal: w(16) },
         tabBarItemStyle: { flex: 1 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "News",
+          title: isLockedForGameSelection ? "Game Selection" : "News",
           tabBarIcon: ({ color }) => (
             <TabBarIcon name="newspaper-o" color={color} />
           ),
@@ -102,6 +128,7 @@ export default function TabLayout() {
         name="shop"
         options={{
           title: "Shop",
+          href: isLockedForGameSelection ? null : undefined,
           tabBarIcon: ({ color }) => (
             <TabBarIcon name="shopping-bag" color={color} />
           ),
@@ -111,13 +138,14 @@ export default function TabLayout() {
         name="follow"
         options={{
           title: "Follow",
-          tabBarIcon: ({ color }) => <FollowTabIcon color={color} />,
+          tabBarButton: (p) => <FollowTabBarButton {...p} />,
         }}
       />
       <Tabs.Screen
         name="tournament"
         options={{
           title: "Tournament",
+          href: isLockedForGameSelection ? null : undefined,
           tabBarIcon: ({ color }) => <TabBarIcon name="trophy" color={color} />,
         }}
       />

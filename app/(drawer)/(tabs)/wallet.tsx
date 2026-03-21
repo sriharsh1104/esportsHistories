@@ -9,7 +9,7 @@ import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     Modal,
@@ -27,7 +27,7 @@ import { useWallet } from '@/context/WalletContext';
 
 export default function WalletScreen() {
   const { user, isAuthenticated, updateUpiIds } = useAuth();
-  const { transactions, fetchTransactions, isLoading: isWalletLoading } = useWallet();
+  const { transactions, fetchTransactions, refreshWallet, isLoading: isWalletLoading } = useWallet();
   const dispatch = useAppDispatch();
   const [showAddUpi, setShowAddUpi] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'topup' | 'withdrawal'>('all');
@@ -62,6 +62,12 @@ export default function WalletScreen() {
     }),
     [w, h, colors]
   );
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void refreshWallet();
+    void fetchTransactions();
+  }, [isAuthenticated, refreshWallet, fetchTransactions]);
 
   const handleAddUpi = async () => {
     setUpiError('');

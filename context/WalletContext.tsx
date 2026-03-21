@@ -47,12 +47,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchWallet();
-      fetchTransactions();
-    }
-  }, [isAuthenticated, fetchWallet, fetchTransactions]);
+  // Avoid background API calls. Wallet data is fetched on-demand by wallet screen/actions.
 
   const topUp = useCallback(
     async (amount: number) => {

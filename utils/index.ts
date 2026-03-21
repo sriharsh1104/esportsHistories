@@ -1,6 +1,7 @@
 /**
  * Common utility functions used across the app.
  */
+export * from './gameSelection';
 export * from './responsive';
 
 /** Format price in INR */

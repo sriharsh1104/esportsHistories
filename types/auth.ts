@@ -17,7 +17,32 @@ export type GameProfile = {
   gameUid: string;
 };
 
+/** DELETE `/profile/game-profile` — body `{ gameId, action: 'removeGame', uid }`. */
+export type DeleteGameProfileInput = {
+  gameUid: string;
+  gameId: string;
+};
+
 export type OnboardingStep = 'profile' | 'games' | 'done';
+
+export type UserRole = 'user' | 'host' | 'admin' | 'org_manager';
+
+export type UserBio = {
+  gender?: string;
+  dateOfBirth?: string;
+  dob?: string;
+};
+
+export type SelectedGame = string | {
+  platform: 'mobile' | 'pc';
+  game: string;
+};
+
+/** User's saved follows from profile API — not the public catalog (that is `/profile/game-options`). */
+export type FollowProfileEntry = {
+  id: string;
+  name: string;
+};
 
 export type User = {
   id: string;
@@ -25,6 +50,10 @@ export type User = {
   displayName: string;
   fullName?: string;
   phone?: string;
+  /** Backend may return this as object or JSON string. */
+  bio?: UserBio | string;
+  role?: UserRole;
+  isVerified?: boolean;
   /** @deprecated Use upiIds. Kept for migration. */
   upiId?: string;
   upiIds?: string[];
@@ -33,18 +62,23 @@ export type User = {
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
   onboardingStep?: OnboardingStep;
-  selectedGames?: string[];
+  selectedGames?: SelectedGame[];
+  followedPersonalities?: FollowProfileEntry[];
+  followedOrganizations?: FollowProfileEntry[];
 };
 
 export type UpdateProfileData = {
   displayName?: string;
   fullName?: string;
   phone?: string;
+  bio?: UserBio | string;
   upiIds?: string[];
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
   onboardingStep?: OnboardingStep;
-  selectedGames?: string[];
+  selectedGames?: SelectedGame[];
+  followedPersonalities?: FollowProfileEntry[];
+  followedOrganizations?: FollowProfileEntry[];
 };
 
 export type AuthState = {
@@ -61,7 +95,6 @@ export type LoginCredentials = {
 
 export type SignupCredentials = LoginCredentials & {
   displayName: string;
-  confirmPassword: string;
 };
 
 export type ChangePasswordData = {

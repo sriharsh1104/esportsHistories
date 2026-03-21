@@ -14,19 +14,22 @@ type SelectedGamesContextType = {
   hasSelectedGames: boolean;
   isLoading: boolean;
   refreshGames: () => Promise<void>;
+  /** Pass `gameIds` to save that list in one API call; omit to use current context selection. */
+  saveSelectedGames: (gameIds?: string[]) => Promise<void>;
 };
 
 const SelectedGamesContext = createContext<SelectedGamesContextType | null>(null);
 
 export function SelectedGamesProvider({ children }: { children: React.ReactNode }) {
-  const { user, updateProfile } = useAuth();
+  const { user, isLoading: authLoading, updateProfile } = useAuth();
   const [availableGames, setAvailableGames] = useState<Game[]>([]);
   const [selectedGameIds, setSelectedGameIdsState] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchGames = useCallback(async () => {
     try {
-      const games = await gamesService.fetchAllGames();
+      setIsLoading(true);
+      const games = await gamesService.fetchGameOptions();
       setAvailableGames(games);
     } catch (error) {
       console.error('Failed to fetch available games:', error);
@@ -35,14 +38,24 @@ export function SelectedGamesProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
+  // Avoid background API calls. Games are fetched on-demand by screens.
   useEffect(() => {
-    fetchGames();
-  }, [fetchGames]);
+    if (authLoading) return;
+    if (!user) {
+      setAvailableGames([]);
+    }
+    setIsLoading(false);
+  }, [authLoading, user]);
 
   useEffect(() => {
     if (user && user.selectedGames) {
       // selectedGames might be populated objects or just IDs from the backend
-      const ids = user.selectedGames.map((g: any) => typeof g === 'object' ? g._id : g);
+      const ids = user.selectedGames
+        .map((g: any) => {
+          if (typeof g !== 'object') return String(g);
+          return String(g._id ?? g.id ?? g.gameId ?? g.name ?? g.game ?? '');
+        })
+        .filter(Boolean);
       setSelectedGameIdsState(ids);
     } else {
       setSelectedGameIdsState([]);
@@ -53,6 +66,27 @@ export function SelectedGamesProvider({ children }: { children: React.ReactNode 
     const trimmed = ids.slice(0, MAX_GAMES);
     setSelectedGameIdsState(trimmed);
   }, []);
+
+  const saveSelectedGames = useCallback(
+    async (gameIdsOverride?: string[]) => {
+      const sourceIds = gameIdsOverride ?? selectedGameIds;
+      const trimmed = sourceIds.slice(0, MAX_GAMES);
+      const selectedGamesWithPlatform = trimmed
+        .map((id) => {
+          const game = availableGames.find((g) => g._id === id);
+          if (!game) return null;
+          return {
+            platform: game.category,
+            game: game.name,
+          } as const;
+        })
+        .filter((row): row is { platform: Game['category']; game: string } => row != null);
+
+      await updateProfile({ selectedGames: selectedGamesWithPlatform });
+      setSelectedGameIdsState(trimmed);
+    },
+    [selectedGameIds, availableGames, updateProfile]
+  );
 
   const toggleGame = useCallback(
     async (gameId: string) => {
@@ -83,6 +117,7 @@ export function SelectedGamesProvider({ children }: { children: React.ReactNode 
     hasSelectedGames,
     isLoading,
     refreshGames: fetchGames,
+    saveSelectedGames,
   };
 
   return (
