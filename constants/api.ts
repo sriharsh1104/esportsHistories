@@ -23,10 +23,21 @@ export const API_ENDPOINTS = {
     PROFILE_ADDRESS: "/profile/addresses",
     /** DELETE — body `{ gameId, action: 'removeGame', uid }`. */
     GAME_PROFILE: "/profile/game-profile",
-    WALLET: "/user/wallet",
-    WALLET_UPI: "/user/wallet/upi",
-    WALLET_TOPUP: "/user/wallet/topup",
-    WALLET_WITHDRAW: "/user/wallet/withdraw",
+    /**
+     * Legacy top-up route — not in `/api/wallet` Swagger; keep until a gateway route replaces it.
+     */
+    LEGACY_WALLET_TOPUP: "/user/wallet/topup",
+  },
+  /** JWT — balance, history, withdraw, cancel; admin: add-balance, add-balance-bulk. */
+  WALLET: {
+    BALANCE: "/wallet/balance",
+    HISTORY: "/wallet/history",
+    TOPUP_HISTORY: "/wallet/topup-history",
+    WITHDRAW: "/wallet/withdraw",
+    WITHDRAW_CANCEL: (transactionId: string) =>
+      `/wallet/withdraw/${encodeURIComponent(transactionId)}/cancel`,
+    ADD_BALANCE: "/wallet/add-balance",
+    ADD_BALANCE_BULK: "/wallet/add-balance-bulk",
   },
   GAMES: {
     /**

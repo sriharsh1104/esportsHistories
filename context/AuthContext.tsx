@@ -122,14 +122,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
   }, []);
 
+  /** Persists via PUT `/profile` as `paymentUPI` (single slot). Last entry wins if multiple passed. */
   const updateUpiIds = useCallback(async (upiIds: string[]) => {
-    const updatedUpiIds = await authService.updateWalletUpi(upiIds);
-    if (user) {
-      const newUser = { ...user, upiIds: updatedUpiIds };
-      setUser(newUser);
-      await authService.saveUserData(newUser);
-    }
-  }, [user]);
+    const paymentUPI =
+      upiIds.length === 0 ? null : (upiIds[upiIds.length - 1]?.trim() || null);
+    const updated = await authService.updateProfile({
+      paymentUPI: paymentUPI === null ? null : paymentUPI,
+    });
+    setUser(updated);
+  }, []);
 
   const refreshUser = useCallback(async () => {
     const freshUser = await authService.getProfile();

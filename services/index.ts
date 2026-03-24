@@ -4,3 +4,4 @@
 export * from './api.service';
 export { commonService, setToken, getToken, clearToken } from './common.service';
 export * from './auth.service';
+export * from './wallet.service';

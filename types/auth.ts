@@ -58,6 +58,10 @@ export type User = {
   isVerified?: boolean;
   /** @deprecated Use upiIds. Kept for migration. */
   upiId?: string;
+  /** Profile `UserPaymentInfo` — primary payout UPI (`name@bank` / PSP handle). */
+  paymentUPI?: string;
+  paymentMethod?: string;
+  isPaymentVerified?: boolean;
   upiIds?: string[];
   walletBalance?: number;
   avatarUrl?: string;
@@ -74,6 +78,8 @@ export type UpdateProfileData = {
   fullName?: string;
   phone?: string;
   bio?: UserBio | string;
+  /** PUT `/profile` — optional; server validates `name@psp` style UPI. Pass `null` to clear. */
+  paymentUPI?: string | null;
   upiIds?: string[];
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];

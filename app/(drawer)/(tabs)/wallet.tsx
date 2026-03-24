@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 
 
+/** Matches typical `name@bank` / PSP UPI handles (server validates on PUT `/profile`). */
 function validateUpiId(v: string): boolean {
   return /^[\w.-]+@[\w.-]+$/.test(v.trim());
 }
@@ -37,7 +38,12 @@ export default function WalletScreen() {
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
-  const upiIds = user?.upiIds ?? [];
+  const savedUpiList = React.useMemo(() => {
+    const p = user?.paymentUPI?.trim();
+    if (p) return [p];
+    const ids = user?.upiIds?.filter(Boolean) ?? [];
+    return ids.length ? ids : [];
+  }, [user?.paymentUPI, user?.upiIds]);
 
   const styles = useMemo(
     () => ({
@@ -80,13 +86,13 @@ export default function WalletScreen() {
       setUpiError('Enter valid UPI ID (e.g. user@upi)');
       return;
     }
-    if (upiIds.includes(trimmed)) {
+    if (savedUpiList.includes(trimmed)) {
       setUpiError('This UPI ID is already saved');
       return;
     }
     dispatch(showLoader());
     try {
-      await updateUpiIds([...upiIds, trimmed]);
+      await updateUpiIds([trimmed]);
       setNewUpiId('');
       setShowAddUpi(false);
     } catch (e) {
@@ -105,7 +111,7 @@ export default function WalletScreen() {
         onPress: async () => {
           dispatch(showLoader());
           try {
-            await updateUpiIds(upiIds.filter((u) => u !== id));
+            await updateUpiIds([]);
           } catch (e) {
             Alert.alert('Error', 'Failed to remove UPI ID');
           } finally {
@@ -152,19 +158,20 @@ export default function WalletScreen() {
 
       <Card style={{ marginTop: h(24), padding: 0 }} padded={false}>
         <View style={{ paddingHorizontal: w(16), paddingTop: h(16) }}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Saved UPI IDs</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Payout UPI</Text>
           <Text style={styles.sectionDesc}>
-            Add UPI IDs here for quick payments. First-time payment UPI IDs are saved automatically.
+            One UPI per account — used for wallet withdrawals and stored on your profile.
+            {user?.isPaymentVerified === true ? ' Verified.' : user?.isPaymentVerified === false ? ' Not verified yet.' : ''}
           </Text>
         </View>
-        {upiIds.length === 0 ? (
+        {savedUpiList.length === 0 ? (
           <View style={[styles.upiRow, { borderBottomWidth: 0 }]}>
             <Text style={{ fontSize: w(14), color: colors.tabIconDefault, flex: 1 }}>
-              No UPI IDs saved yet
+              No payout UPI saved yet
             </Text>
           </View>
         ) : (
-          upiIds.map((id) => (
+          savedUpiList.map((id) => (
             <View key={id} style={styles.upiRow}>
               <FontAwesome name="credit-card" size={w(16)} color={colors.tint} style={{ marginRight: w(12) }} />
               <Text style={{ fontSize: w(14), fontWeight: '500', color: colors.text, flex: 1 }}>{id}</Text>
@@ -183,7 +190,7 @@ export default function WalletScreen() {
           style={[styles.addUpiBtn, { flexDirection: 'row', alignItems: 'center' }]}
         >
           <FontAwesome name="plus-circle" size={w(18)} color={colors.tint} style={{ marginRight: w(10) }} />
-          <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.tint }}>Add UPI ID</Text>
+          <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.tint }}>Set UPI ID</Text>
         </Pressable>
       </Card>
 

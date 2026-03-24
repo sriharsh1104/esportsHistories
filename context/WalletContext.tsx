@@ -1,4 +1,4 @@
-import * as authService from '@/services/auth.service';
+import * as walletService from '@/services/wallet.service';
 import { Transaction, TransactionFilters } from '@/types/auth';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
@@ -25,7 +25,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) return;
     setIsLoading(true);
     try {
-      const data = await authService.getWalletData();
+      const data = await walletService.fetchWalletBalance();
       setBalance(data.walletBalance);
     } catch (error) {
       console.error('Wallet fetch failed:', error);
@@ -38,7 +38,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) return;
     setIsLoading(true);
     try {
-      const data = await authService.getTransactions(filters);
+      const data = await walletService.fetchWalletTopupHistory(filters);
       setTransactions(data);
     } catch (error) {
       console.error('Transactions fetch failed:', error);
@@ -53,7 +53,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     async (amount: number) => {
       if (amount <= 0) return;
       try {
-        const res = await authService.topUp(amount);
+        const res = await walletService.legacyWalletTopUp(amount);
         setBalance(res.walletBalance);
         await fetchTransactions(); // Refresh history
       } catch (error) {
@@ -68,7 +68,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (amount <= 0) return;
       if (amount > balance) throw new Error('Insufficient balance');
       try {
-        const res = await authService.withdraw(amount, upiId);
+        const res = await walletService.requestWalletWithdraw(amount, upiId);
         setBalance(res.walletBalance);
         await fetchTransactions(); // Refresh history
       } catch (error) {

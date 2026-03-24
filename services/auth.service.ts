@@ -3,8 +3,6 @@ import type {
   GameProfile,
   LoginCredentials,
   SignupCredentials,
-  Transaction,
-  TransactionFilters,
   UpdateProfileData,
   User,
   UserAddress,
@@ -310,6 +308,12 @@ function mergeUserFromApiResponse(
   return {
     ...(previousUser ?? migratedUser),
     ...migratedUser,
+    paymentUPI: migratedUser.paymentUPI ?? previousUser?.paymentUPI,
+    paymentMethod: migratedUser.paymentMethod ?? previousUser?.paymentMethod,
+    isPaymentVerified:
+      migratedUser.isPaymentVerified !== undefined
+        ? migratedUser.isPaymentVerified
+        : previousUser?.isPaymentVerified,
     upiIds: migratedUser.upiIds ?? previousUser?.upiIds,
     addresses,
     selectedGames: mergeSelectedGamesForPersistence(migratedUser.selectedGames, gamesBaseline),
@@ -474,12 +478,29 @@ function migrateUserFromAuthData(data: any): User {
   const gameProfiles = mergeGameProfileListsPreferUid(fromGameProfiles, fromFollowedGames);
 
   const rawUpiIds = direct?.upiIds ?? data?.upiIds;
-  const paymentUpi = direct?.paymentUPI ?? data?.paymentUPI;
+  const rawPaymentUPI = direct?.paymentUPI ?? data?.paymentUPI;
+  const paymentUPIStr =
+    rawPaymentUPI != null && String(rawPaymentUPI).trim()
+      ? String(rawPaymentUPI).trim()
+      : undefined;
+  const fromUpiList = Array.isArray(rawUpiIds)
+    ? rawUpiIds.map((x: unknown) => String(x).trim()).filter(Boolean)
+    : [];
   const upiIds =
-    rawUpiIds ??
-    (paymentUpi
-      ? [String(paymentUpi)]
-      : undefined);
+    fromUpiList.length > 0 ? fromUpiList : paymentUPIStr ? [paymentUPIStr] : undefined;
+
+  const paymentMethodRaw = direct?.paymentMethod ?? data?.paymentMethod;
+  const paymentMethod =
+    paymentMethodRaw != null && String(paymentMethodRaw).trim()
+      ? String(paymentMethodRaw).trim()
+      : undefined;
+  const isPaymentVerified =
+    direct?.isPaymentVerified === true ||
+    direct?.isPaymentVerified === false ||
+    data?.isPaymentVerified === true ||
+    data?.isPaymentVerified === false
+      ? Boolean(direct?.isPaymentVerified ?? data?.isPaymentVerified)
+      : undefined;
 
   const rawBio = direct?.bio ?? data?.bio;
   const gender = direct?.gender ?? data?.gender;
@@ -523,6 +544,9 @@ function migrateUserFromAuthData(data: any): User {
     phone,
     role: direct?.role,
     isVerified: direct?.isVerified ?? direct?.isEmailVerified,
+    paymentUPI: paymentUPIStr,
+    paymentMethod,
+    isPaymentVerified,
     upiIds,
     bio,
     avatarUrl,
@@ -751,6 +775,9 @@ function buildProfilePutPayload(
     const entries = sanitizeFollowProfilePayload(data.followedOrganizations) ?? [];
     payload.followedOrganizations = followEntriesToApiStringArray(entries);
   }
+  if (data.paymentUPI !== undefined) {
+    payload.paymentUPI = data.paymentUPI === null || data.paymentUPI === '' ? null : data.paymentUPI;
+  }
   return payload;
 }
 
@@ -760,7 +787,16 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
     const payload = buildProfilePutPayload(data, previousUser);
 
     const res = await api.put<any>(API_ENDPOINTS.USER.PROFILE, payload);
-    const migratedUser = migrateUserFromAuthData(res);
+    let migratedUser = migrateUserFromAuthData(res);
+    if (data.paymentUPI !== undefined) {
+      const cleared = data.paymentUPI === null || data.paymentUPI === '';
+      const trimmed = typeof data.paymentUPI === 'string' ? data.paymentUPI.trim() : '';
+      migratedUser = {
+        ...migratedUser,
+        paymentUPI: cleared ? undefined : trimmed || undefined,
+        upiIds: cleared ? [] : trimmed ? [trimmed] : migratedUser.upiIds,
+      };
+    }
     const normalizedSelectedGames = normalizeSelectedGamesForUpdate(data);
     const personalitiesBaseline =
       data.followedPersonalities !== undefined
@@ -851,47 +887,3 @@ export async function changePassword(
   }
 }
 
-export async function getWalletData(): Promise<{ walletBalance: number; upiIds: string[] }> {
-  try {
-    const res = await api.get<{ walletBalance: number; upiIds: string[] }>(API_ENDPOINTS.USER.WALLET);
-    return res;
-  } catch (error) {
-    rethrowAsApiError(error, 'Failed to fetch wallet data');
-  }
-}
-
-export async function updateWalletUpi(upiIds: string[]): Promise<string[]> {
-  try {
-    const res = await api.post<{ upiIds: string[] }>(API_ENDPOINTS.USER.WALLET_UPI, { upiIds });
-    return res.upiIds;
-  } catch (error) {
-    rethrowAsApiError(error, 'Failed to update UPI IDs');
-  }
-}
-
-export async function topUp(amount: number): Promise<{ walletBalance: number }> {
-  try {
-    const res = await api.post<{ walletBalance: number }>(API_ENDPOINTS.USER.WALLET_TOPUP, { amount });
-    return res;
-  } catch (error) {
-    rethrowAsApiError(error, 'Top up failed');
-  }
-}
-
-export async function withdraw(amount: number, upiId: string): Promise<{ walletBalance: number }> {
-  try {
-    const res = await api.post<{ walletBalance: number }>(API_ENDPOINTS.USER.WALLET_WITHDRAW, { amount, upiId });
-    return res;
-  } catch (error) {
-    rethrowAsApiError(error, 'Withdrawal failed');
-  }
-}
-
-export async function getTransactions(filters: TransactionFilters = {}): Promise<Transaction[]> {
-  try {
-    const res = await api.get<Transaction[]>(API_ENDPOINTS.TRANSACTIONS.LIST, filters as any);
-    return res;
-  } catch (error) {
-    rethrowAsApiError(error, 'Failed to fetch transactions');
-  }
-}

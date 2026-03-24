@@ -32,7 +32,12 @@ export function WalletSection() {
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
-  const upiIds = user?.upiIds ?? [];
+  const savedUpiList = React.useMemo(() => {
+    const p = user?.paymentUPI?.trim();
+    if (p) return [p];
+    const ids = user?.upiIds?.filter(Boolean) ?? [];
+    return ids.length ? ids : [];
+  }, [user?.paymentUPI, user?.upiIds]);
   const [modalType, setModalType] = useState<'topup' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [topUpMethod, setTopUpMethod] = useState<TopUpMethod>('upi');
@@ -84,11 +89,11 @@ export function WalletSection() {
       setError('Enter valid amount');
       return;
     }
-    if (modalType === 'topup' && topUpMethod === 'upi' && (!selectedUpiId || !upiIds.includes(selectedUpiId))) {
+    if (modalType === 'topup' && topUpMethod === 'upi' && (!selectedUpiId || !savedUpiList.includes(selectedUpiId))) {
       setError('Select UPI ID to pay from');
       return;
     }
-    if (modalType === 'withdraw' && (!selectedUpiId || !upiIds.includes(selectedUpiId))) {
+    if (modalType === 'withdraw' && (!selectedUpiId || !savedUpiList.includes(selectedUpiId))) {
       setError('Select UPI ID to receive money');
       return;
     }
@@ -224,13 +229,13 @@ export function WalletSection() {
                     <Text style={{ fontSize: w(13), fontWeight: '600', color: colors.text, marginBottom: h(8) }}>
                       Pay from (saved UPI ID)
                     </Text>
-                    {upiIds.length === 0 ? (
+                    {savedUpiList.length === 0 ? (
                       <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
-                        Add UPI ID in Saved UPI IDs section below first
+                        Add your payout UPI in the section below first
                       </Text>
                     ) : (
                       <ScrollView style={{ maxHeight: h(120) }} showsVerticalScrollIndicator={false}>
-                        {upiIds.map((id) => (
+                        {savedUpiList.map((id) => (
                           <Pressable
                             key={id}
                             onPress={() => setSelectedUpiId(id)}
@@ -264,13 +269,13 @@ export function WalletSection() {
                 <Text style={{ fontSize: w(13), fontWeight: '600', color: colors.text, marginBottom: h(8) }}>
                   Withdraw to (saved UPI ID)
                 </Text>
-                {upiIds.length === 0 ? (
+                {savedUpiList.length === 0 ? (
                   <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
-                    Add UPI ID in Saved UPI IDs section below first
+                    Add your payout UPI in the section below first
                   </Text>
                 ) : (
                   <ScrollView style={{ maxHeight: h(120) }} showsVerticalScrollIndicator={false}>
-                    {upiIds.map((id) => (
+                    {savedUpiList.map((id) => (
                       <Pressable
                         key={id}
                         onPress={() => setSelectedUpiId(id)}
@@ -322,8 +327,8 @@ export function WalletSection() {
                 onPress={handleSubmit}
                 style={styles.btn}
                 disabled={
-                  (modalType === 'topup' && topUpMethod === 'upi' && upiIds.length === 0) ||
-                  (modalType === 'withdraw' && upiIds.length === 0) ||
+                  (modalType === 'topup' && topUpMethod === 'upi' && savedUpiList.length === 0) ||
+                  (modalType === 'withdraw' && savedUpiList.length === 0) ||
                   (modalType === 'topup' && topUpMethod === 'upi' && !selectedUpiId) ||
                   (modalType === 'withdraw' && !selectedUpiId)
                 }
