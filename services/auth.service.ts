@@ -477,7 +477,11 @@ function migrateUserFromAuthData(data: any): User {
   );
   const gameProfiles = mergeGameProfileListsPreferUid(fromGameProfiles, fromFollowedGames);
 
-  const rawUpiIds = direct?.upiIds ?? data?.upiIds;
+  const rawUpiIds =
+    direct?.paymentUPIs ??
+    data?.paymentUPIs ??
+    direct?.upiIds ??
+    data?.upiIds;
   const rawPaymentUPI = direct?.paymentUPI ?? data?.paymentUPI;
   const paymentUPIStr =
     rawPaymentUPI != null && String(rawPaymentUPI).trim()
@@ -594,8 +598,6 @@ async function tryRefreshSession(refreshToken: string): Promise<{ token: string;
       API_ENDPOINTS.AUTH.REFRESH_TOKEN,
       {
         refreshToken,
-        refresh_token: refreshToken,
-        token: refreshToken,
       },
       { skipAuth: true, toast: false }
     );
@@ -775,6 +777,15 @@ function buildProfilePutPayload(
     const entries = sanitizeFollowProfilePayload(data.followedOrganizations) ?? [];
     payload.followedOrganizations = followEntriesToApiStringArray(entries);
   }
+  const rawSavedUpis =
+    data.paymentUPIs !== undefined ? data.paymentUPIs : data.upiIds !== undefined ? data.upiIds : undefined;
+  if (rawSavedUpis !== undefined) {
+    const list = Array.isArray(rawSavedUpis)
+      ? rawSavedUpis.map((x) => String(x).trim()).filter(Boolean)
+      : [];
+    payload.paymentUPIs = list;
+    payload.upiIds = list; // back-compat
+  }
   if (data.paymentUPI !== undefined) {
     payload.paymentUPI = data.paymentUPI === null || data.paymentUPI === '' ? null : data.paymentUPI;
   }
@@ -788,13 +799,18 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
 
     const res = await api.put<any>(API_ENDPOINTS.USER.PROFILE, payload);
     let migratedUser = migrateUserFromAuthData(res);
-    if (data.paymentUPI !== undefined) {
-      const cleared = data.paymentUPI === null || data.paymentUPI === '';
-      const trimmed = typeof data.paymentUPI === 'string' ? data.paymentUPI.trim() : '';
+    const paymentUpiPatchApplied = data.paymentUPI !== undefined;
+    const paymentUpiCleared =
+      paymentUpiPatchApplied && (data.paymentUPI === null || data.paymentUPI === '');
+    const paymentUpiTrimmed =
+      paymentUpiPatchApplied && typeof data.paymentUPI === 'string' ? data.paymentUPI.trim() : '';
+    if (paymentUpiPatchApplied) {
+      // Ensure merge step cannot "resurrect" previous paymentUPI when server responds with null/empty.
+      // Important: do NOT clobber the saved UPI list when merely selecting payout UPI.
       migratedUser = {
         ...migratedUser,
-        paymentUPI: cleared ? undefined : trimmed || undefined,
-        upiIds: cleared ? [] : trimmed ? [trimmed] : migratedUser.upiIds,
+        paymentUPI: paymentUpiCleared ? undefined : paymentUpiTrimmed || undefined,
+        ...(paymentUpiCleared ? { upiIds: [] } : {}),
       };
     }
     const normalizedSelectedGames = normalizeSelectedGamesForUpdate(data);
@@ -815,8 +831,18 @@ export async function updateProfile(data: UpdateProfileData): Promise<User> {
       ...(data.addresses !== undefined && { addressesBaseline: data.addresses }),
     });
 
-    await commonService.setItem(USER_KEY, updatedUser);
-    return updatedUser;
+    // Explicitly enforce payment UPI mutations (set/clear) after merge.
+    const finalUser: User =
+      paymentUpiPatchApplied
+        ? {
+            ...updatedUser,
+            paymentUPI: paymentUpiCleared ? undefined : paymentUpiTrimmed || undefined,
+            ...(paymentUpiCleared ? { upiIds: [] } : {}),
+          }
+        : updatedUser;
+
+    await commonService.setItem(USER_KEY, finalUser);
+    return finalUser;
   } catch (error) {
     rethrowAsApiError(error, 'Profile update failed');
   }

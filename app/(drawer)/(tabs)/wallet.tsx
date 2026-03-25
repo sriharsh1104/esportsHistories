@@ -27,7 +27,7 @@ function validateUpiId(v: string): boolean {
 import { useWallet } from '@/context/WalletContext';
 
 export default function WalletScreen() {
-  const { user, isAuthenticated, updateUpiIds } = useAuth();
+  const { user, isAuthenticated, updateProfile, updateUpiIds } = useAuth();
   const { transactions, fetchTransactions, refreshWallet, isLoading: isWalletLoading } = useWallet();
   const dispatch = useAppDispatch();
   const [showAddUpi, setShowAddUpi] = useState(false);
@@ -35,15 +35,18 @@ export default function WalletScreen() {
   const [datePreset, setDatePreset] = useState<'all' | '7' | '30'>('all');
   const [newUpiId, setNewUpiId] = useState('');
   const [upiError, setUpiError] = useState('');
+  const [deleteUpiConfirmId, setDeleteUpiConfirmId] = useState<string | null>(null);
+  const [selectedUpiDraft, setSelectedUpiDraft] = useState<string | null>(null);
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
+  const payoutUpi = user?.paymentUPI?.trim() ? user.paymentUPI.trim() : null;
   const savedUpiList = React.useMemo(() => {
-    const p = user?.paymentUPI?.trim();
-    if (p) return [p];
-    const ids = user?.upiIds?.filter(Boolean) ?? [];
-    return ids.length ? ids : [];
-  }, [user?.paymentUPI, user?.upiIds]);
+    const ids = (user?.upiIds ?? []).map((x) => String(x).trim()).filter(Boolean);
+    const uniq = [...new Set(ids)];
+    if (payoutUpi && !uniq.includes(payoutUpi)) return [payoutUpi, ...uniq];
+    return uniq;
+  }, [user?.upiIds, payoutUpi]);
 
   const styles = useMemo(
     () => ({
@@ -65,6 +68,14 @@ export default function WalletScreen() {
         borderTopWidth: 1,
         borderTopColor: 'rgba(128,128,128,0.15)',
       },
+      upiPickRow: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        paddingVertical: h(12),
+        paddingHorizontal: w(16),
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(128,128,128,0.15)',
+      },
     }),
     [w, h, colors]
   );
@@ -75,7 +86,12 @@ export default function WalletScreen() {
     void fetchTransactions();
   }, [isAuthenticated, refreshWallet, fetchTransactions]);
 
-  const handleAddUpi = async () => {
+  useEffect(() => {
+    // Keep selection in sync with current payout UPI.
+    setSelectedUpiDraft((prev) => prev ?? payoutUpi);
+  }, [payoutUpi]);
+
+  const handleAddNewUpi = async () => {
     setUpiError('');
     const trimmed = newUpiId.trim();
     if (!trimmed) {
@@ -92,9 +108,13 @@ export default function WalletScreen() {
     }
     dispatch(showLoader());
     try {
-      await updateUpiIds([trimmed]);
+      const next = [...savedUpiList, trimmed];
+      await updateProfile({ paymentUPIs: next, upiIds: next });
       setNewUpiId('');
       setShowAddUpi(false);
+      setSelectedUpiDraft(trimmed);
+      await refreshWallet();
+      await fetchTransactions();
     } catch (e) {
       setUpiError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
@@ -102,24 +122,46 @@ export default function WalletScreen() {
     }
   };
 
-  const handleRemoveUpi = (id: string) => {
-    Alert.alert('Remove UPI ID', `Remove ${id}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          dispatch(showLoader());
-          try {
-            await updateUpiIds([]);
-          } catch (e) {
-            Alert.alert('Error', 'Failed to remove UPI ID');
-          } finally {
-            dispatch(hideLoader());
-          }
-        },
-      },
-    ]);
+  const requestRemoveUpi = (id: string) => {
+    const upi = id.trim();
+    if (!upi) return;
+    setDeleteUpiConfirmId(upi);
+  };
+
+  const runRemoveUpi = async () => {
+    const upi = deleteUpiConfirmId?.trim();
+    if (!upi) return;
+    dispatch(showLoader());
+    try {
+      // Remove from saved list; if it was the active payout UPI, clear payout.
+      const next = savedUpiList.filter((x) => x !== upi);
+      await updateProfile({ paymentUPIs: next, upiIds: next });
+      if (payoutUpi === upi) await updateUpiIds([]);
+      setNewUpiId('');
+      setDeleteUpiConfirmId(null);
+      setSelectedUpiDraft((prev) => (prev === upi ? null : prev));
+      await refreshWallet();
+      await fetchTransactions();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to remove UPI ID');
+    } finally {
+      dispatch(hideLoader());
+    }
+  };
+
+  const handleSetPayoutUpi = async () => {
+    const upi = (selectedUpiDraft ?? '').trim();
+    if (!upi) return;
+    dispatch(showLoader());
+    try {
+      await updateUpiIds([upi]); // PUT /profile { paymentUPI: upi }
+      await refreshWallet();
+      await fetchTransactions();
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to set payout UPI');
+    } finally {
+      dispatch(hideLoader());
+    }
   };
 
   if (!isAuthenticated) {
@@ -171,27 +213,68 @@ export default function WalletScreen() {
             </Text>
           </View>
         ) : (
-          savedUpiList.map((id) => (
-            <View key={id} style={styles.upiRow}>
-              <FontAwesome name="credit-card" size={w(16)} color={colors.tint} style={{ marginRight: w(12) }} />
-              <Text style={{ fontSize: w(14), fontWeight: '500', color: colors.text, flex: 1 }}>{id}</Text>
-              <Pressable onPress={() => handleRemoveUpi(id)} style={{ padding: w(8) }}>
-                <FontAwesome name="trash" size={w(16)} color="#dc3545" />
+          savedUpiList.map((id) => {
+            const isCurrent = payoutUpi === id;
+            const isSelected = selectedUpiDraft === id;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => setSelectedUpiDraft(id)}
+                style={[
+                  styles.upiPickRow,
+                  {
+                    backgroundColor: isSelected ? colors.tint + '12' : 'transparent',
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Select UPI ID ${id}`}
+              >
+                <FontAwesome name="credit-card" size={w(16)} color={colors.tint} style={{ marginRight: w(12) }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text }}>
+                    {id}
+                  </Text>
+                  {isCurrent && (
+                    <Text style={{ fontSize: w(11), color: colors.tabIconDefault, marginTop: h(2) }}>
+                      Current payout UPI
+                    </Text>
+                  )}
+                </View>
+                {isSelected && <FontAwesome name="check-circle" size={w(18)} color={colors.tint} />}
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    requestRemoveUpi(id);
+                  }}
+                  style={{ padding: w(10) }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete UPI ID"
+                >
+                  <FontAwesome name="trash" size={w(16)} color="#dc3545" />
+                </Pressable>
               </Pressable>
-            </View>
-          ))
+            );
+          })
         )}
-        <Pressable
-          onPress={() => {
-            setShowAddUpi(true);
-            setUpiError('');
-            setNewUpiId('');
-          }}
-          style={[styles.addUpiBtn, { flexDirection: 'row', alignItems: 'center' }]}
-        >
-          <FontAwesome name="plus-circle" size={w(18)} color={colors.tint} style={{ marginRight: w(10) }} />
-          <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.tint }}>Set UPI ID</Text>
-        </Pressable>
+        <View style={[styles.addUpiBtn, { gap: w(10) }]}>
+          <Button
+            title="Set UPI ID"
+            onPress={handleSetPayoutUpi}
+            disabled={!selectedUpiDraft || selectedUpiDraft === payoutUpi}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title="Add UPI"
+            variant="outline"
+            onPress={() => {
+              setShowAddUpi(true);
+              setUpiError('');
+              setNewUpiId('');
+            }}
+            style={{ flex: 1 }}
+          />
+        </View>
       </Card>
 
       <Card style={{ marginTop: h(24), padding: 0 }} padded={false}>
@@ -336,7 +419,9 @@ export default function WalletScreen() {
       <Modal visible={showAddUpi} transparent animationType="slide">
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-          onPress={() => setShowAddUpi(false)}
+          onPress={() => {
+            setShowAddUpi(false);
+          }}
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}
@@ -352,7 +437,7 @@ export default function WalletScreen() {
             </Text>
             <Input
               label="UPI ID"
-              placeholder="user@upi / 9876543210@paytm"
+              placeholder="user@upi / 9876543210@okhdfcbank"
               value={newUpiId}
               onChangeText={setNewUpiId}
               autoCapitalize="none"
@@ -360,8 +445,52 @@ export default function WalletScreen() {
               leftIcon="credit-card"
             />
             <View style={{ flexDirection: 'row', gap: w(12), marginTop: h(8) }}>
-              <Button title="Cancel" variant="ghost" onPress={() => setShowAddUpi(false)} style={{ flex: 1 }} />
-              <Button title="Add" onPress={handleAddUpi} style={{ flex: 1 }} />
+              <Button
+                title="Cancel"
+                variant="ghost"
+                onPress={() => {
+                  setShowAddUpi(false);
+                }}
+                style={{ flex: 1 }}
+              />
+              <Button title="Add" onPress={handleAddNewUpi} style={{ flex: 1 }} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!deleteUpiConfirmId} transparent animationType="fade">
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: w(20) }}
+          onPress={() => setDeleteUpiConfirmId(null)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: colors.cardBg,
+              borderRadius: w(16),
+              padding: w(18),
+              borderWidth: 1,
+              borderColor: colors.border,
+              maxWidth: w(360),
+              width: '100%',
+              alignSelf: 'center',
+            }}
+          >
+            <Text style={{ fontSize: w(16), fontWeight: '700', color: colors.text, marginBottom: h(6) }}>
+              Delete UPI ID?
+            </Text>
+            <Text style={{ fontSize: w(13), color: colors.tabIconDefault, marginBottom: h(14) }}>
+              {deleteUpiConfirmId}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: w(12) }}>
+              <Button
+                title="No"
+                variant="ghost"
+                onPress={() => setDeleteUpiConfirmId(null)}
+                style={{ flex: 1 }}
+              />
+              <Button title="Yes" onPress={runRemoveUpi} style={{ flex: 1 }} />
             </View>
           </Pressable>
         </Pressable>

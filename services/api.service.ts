@@ -250,8 +250,6 @@ async function refreshAccessTokenIfNeeded(force = false): Promise<string | null>
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         refreshToken,
-        refresh_token: refreshToken,
-        token: refreshToken,
       }),
     });
     let responseData: any = {};

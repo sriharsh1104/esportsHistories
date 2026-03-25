@@ -80,6 +80,8 @@ export type UpdateProfileData = {
   bio?: UserBio | string;
   /** PUT `/profile` — optional; server validates `name@psp` style UPI. Pass `null` to clear. */
   paymentUPI?: string | null;
+  /** Saved UPI IDs list (backend key observed: `paymentUPIs`). */
+  paymentUPIs?: string[];
   upiIds?: string[];
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];

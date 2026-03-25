@@ -63,4 +63,14 @@ export const API_ENDPOINTS = {
   GEOCODE: {
     REVERSE: "/geocode/reverse",
   },
+  /** UPI QR top-up — authenticated (see Swagger `/api/payment/...` when base URL includes `/api`). */
+  PAYMENT: {
+    CREATE_QR: "/payment/create-qr",
+    QR_STATUS: (qrCodeId: string) =>
+      `/payment/qr-status/${encodeURIComponent(qrCodeId)}`,
+    CLOSE_QR: (qrCodeId: string) =>
+      `/payment/close-qr/${encodeURIComponent(qrCodeId)}`,
+    RAZORPAY_ORDER: "/payment/razorpay/order",
+    RAZORPAY_VERIFY: "/payment/razorpay/verify",
+  },
 } as const;

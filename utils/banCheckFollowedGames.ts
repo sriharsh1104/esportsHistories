@@ -1,8 +1,46 @@
-import type { SelectedGame } from '@/types/auth';
+import type { GameProfile, SelectedGame } from '@/types/auth';
 import {
+  normGameKey,
   selectedGameEntryMatchesKeys,
   selectedGamesToEntries,
+  type SelectedGameEntry,
 } from '@/utils/gameSelection';
+
+function gameProfilesToEntries(profiles: GameProfile[] | undefined): SelectedGameEntry[] {
+  if (!Array.isArray(profiles) || profiles.length === 0) return [];
+  const mapped = profiles
+    .map((p) => {
+      const id = String(p.gameId ?? p.id ?? '').trim();
+      const name = String(p.gameName ?? '').trim();
+      if (!id && !name) return null;
+      const idSlug = (id || name).toLowerCase().replace(/\s+/g, '-');
+      return { id: idSlug, name: name || id };
+    })
+    .filter(Boolean) as SelectedGameEntry[];
+
+  const seen = new Set<string>();
+  return mapped.filter((item) => {
+    const k = normGameKey(item.id);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+function mergeGameEntriesForBanCheck(
+  selectedGames: SelectedGame[] | undefined,
+  gameProfiles: GameProfile[] | undefined
+): SelectedGameEntry[] {
+  const byNorm = new Map<string, SelectedGameEntry>();
+  for (const e of selectedGamesToEntries(selectedGames)) {
+    byNorm.set(normGameKey(e.id), e);
+  }
+  for (const e of gameProfilesToEntries(gameProfiles)) {
+    const k = normGameKey(e.id);
+    if (!byNorm.has(k)) byNorm.set(k, e);
+  }
+  return [...byNorm.values()];
+}
 
 export type BanCheckOption = { label: string; apiGame: string };
 
@@ -53,7 +91,7 @@ const BAN_CHECK_SUPPORTED: readonly {
   {
     apiGame: 'coc',
     defaultLabel: 'Clash of Clans',
-    keys: ['clashofclans'],
+    keys: ['clashofclans', 'coc'],
   },
   {
     apiGame: 'cr',
@@ -106,9 +144,10 @@ const BAN_CHECK_SUPPORTED: readonly {
 
 /** Followed games that map to a supported ban-check title, deduped by `apiGame`. */
 export function getBanCheckOptionsForFollowedGames(
-  selectedGames: SelectedGame[] | undefined
+  selectedGames: SelectedGame[] | undefined,
+  gameProfiles?: GameProfile[] | undefined
 ): BanCheckOption[] {
-  const entries = selectedGamesToEntries(selectedGames);
+  const entries = mergeGameEntriesForBanCheck(selectedGames, gameProfiles);
   const seenApi = new Set<string>();
   const out: BanCheckOption[] = [];
 

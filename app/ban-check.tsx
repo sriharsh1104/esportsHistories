@@ -25,8 +25,9 @@ import {
 export default function BanCheckScreen() {
   const { user, isAuthenticated } = useAuth();
   const gamesForBanCheck = useMemo(
-    () => getBanCheckOptionsForFollowedGames(user?.selectedGames),
-    [user?.selectedGames]
+    () =>
+      getBanCheckOptionsForFollowedGames(user?.selectedGames, user?.gameProfiles),
+    [user?.selectedGames, user?.gameProfiles]
   );
 
   const [selectedGame, setSelectedGame] = useState<string>(

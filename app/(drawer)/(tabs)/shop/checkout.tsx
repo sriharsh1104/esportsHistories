@@ -316,7 +316,7 @@ export default function CheckoutScreen() {
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: w(16), fontWeight: '600', color: colors.text }}>UPI</Text>
             <Text style={{ fontSize: w(13), color: colors.tabIconDefault }}>
-              GPay, PhonePe, Paytm, etc.
+              GPay, PhonePe, BHIM, etc.
             </Text>
           </View>
           {paymentMethod === 'upi' && (
@@ -361,7 +361,7 @@ export default function CheckoutScreen() {
               </>
             ) : null}
             <Input
-              placeholder="user@upi / 9876543210@paytm"
+              placeholder="user@upi / 9876543210@okhdfcbank"
               value={selectedUpiId ? '' : newUpiId}
               onChangeText={(v) => {
                 setSelectedUpiId(null);
