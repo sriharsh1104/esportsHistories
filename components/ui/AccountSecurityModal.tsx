@@ -17,10 +17,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '@/services/api.service';
+import { formatDateTimeDdMmYyyyAmPm } from '@/utils';
 import {
   disableTwoFactor,
   enableTwoFactor,
+  getDeviceHistory,
   getTwoFactorStatus,
+  logoutDevice,
   setupTwoFactor,
   type TwoFactorSetup,
 } from '@/services/auth.service';
@@ -29,18 +32,9 @@ import { Button } from './Button';
 import { Input } from './Input';
 import { SettingsRow } from './SettingsRow';
 
-export type DeviceHistoryItem = {
-  id: string;
-  deviceLabel: string;
-  location?: string;
-  lastSeen?: string;
-  isCurrent?: boolean;
-};
-
 type AccountSecurityModalProps = {
   visible: boolean;
   onClose: () => void;
-  deviceHistory: DeviceHistoryItem[];
 };
 
 /**
@@ -50,7 +44,6 @@ type AccountSecurityModalProps = {
 export function AccountSecurityModal({
   visible,
   onClose,
-  deviceHistory,
 }: AccountSecurityModalProps) {
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
@@ -60,12 +53,148 @@ export function AccountSecurityModal({
   const [loggingOut, setLoggingOut] = useState(false);
   const logoutInFlight = useRef(false);
 
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState<string | null>(null);
+  const [activeDevices, setActiveDevices] = useState<
+    Array<{
+      sessionId: string;
+      label: string;
+      ip?: string;
+      lastUsedAt?: string;
+      expiresAt?: string;
+      isCurrent?: boolean;
+    }>
+  >([]);
+  const [history, setHistory] = useState<
+    Array<{
+      id: string;
+      label: string;
+      action?: string;
+      ip?: string;
+      createdAt?: string;
+      lastUsedAt?: string;
+      expiresAt?: string;
+      loggedInAt?: string;
+      loggedOutAt?: string;
+      logoutReason?: string;
+    }>
+  >([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [sessionsTableOpen, setSessionsTableOpen] = useState(false);
+  const [loginHistoryOpen, setLoginHistoryOpen] = useState(false);
+  const [loginHistoryPage, setLoginHistoryPage] = useState(1);
+  const [loginHistoryLimit] = useState(20);
+  const [loginHistoryTotalPages, setLoginHistoryTotalPages] = useState(1);
+  const [loginHistoryTotal, setLoginHistoryTotal] = useState(0);
+  const [activeSessionsPage, setActiveSessionsPage] = useState(1);
+  const [activeSessionsLimit] = useState(20);
+  const [activeSessionsTotalPages, setActiveSessionsTotalPages] = useState(1);
+
   const [twoFaLoading, setTwoFaLoading] = useState(false);
   const [twoFaEnabled, setTwoFaEnabled] = useState<boolean | null>(null);
   const [twoFaSetup, setTwoFaSetup] = useState<TwoFactorSetup | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaError, setTwoFaError] = useState<string | null>(null);
   const [twoFaModalVisible, setTwoFaModalVisible] = useState(false);
+
+  const formatDeviceLabel = useCallback((deviceInfo: unknown): string => {
+    if (!deviceInfo) return 'Unknown device';
+    if (typeof deviceInfo === 'string') return deviceInfo.trim() || 'Unknown device';
+    if (typeof deviceInfo !== 'object') return 'Unknown device';
+    const o = deviceInfo as Record<string, unknown>;
+    const parts: string[] = [];
+    const brand = String(o.brand ?? o.manufacturer ?? '').trim();
+    const model = String(o.model ?? o.deviceModel ?? o.device ?? '').trim();
+    const os = String(o.os ?? o.platform ?? o.osName ?? '').trim();
+    const osVersion = String(o.osVersion ?? o.systemVersion ?? o.version ?? '').trim();
+    const ua = String(o.userAgent ?? '').trim();
+    if (brand) parts.push(brand);
+    if (model && model !== brand) parts.push(model);
+    if (os) parts.push(os + (osVersion ? ` ${osVersion}` : ''));
+    const out = parts.join(' • ').trim();
+    if (out) return out;
+    if (ua) return ua.length > 48 ? `${ua.slice(0, 48)}…` : ua;
+    return 'Unknown device';
+  }, []);
+
+  const refreshDevices = useCallback(
+    async (opts?: {
+      page?: number;
+      limit?: number;
+      includeHistory?: boolean;
+      includeActive?: boolean;
+    }) => {
+    setDevicesError(null);
+    setDevicesLoading(true);
+    try {
+      const res = await getDeviceHistory(opts);
+      setActiveDevices(
+        (res.activeDevices ?? []).map((d) => ({
+          sessionId: d.sessionId,
+          label: (d.deviceLabel ?? '').trim() || formatDeviceLabel(d.deviceInfo),
+          ip: d.ip,
+          lastUsedAt: d.lastUsedAt,
+          expiresAt: d.expiresAt,
+          isCurrent: d.isCurrent === true,
+        }))
+      );
+      if (opts?.includeHistory) {
+        setHistoryLoaded(true);
+        setHistory(
+          (res.history ?? []).map((h, idx) => ({
+            id: String(h.id ?? `${h.sessionId ?? 'event'}-${idx}`),
+            label: (h.deviceLabel ?? '').trim() || formatDeviceLabel(h.deviceInfo),
+            action: h.action,
+            ip: h.ip,
+            createdAt: h.createdAt,
+            lastUsedAt: h.lastUsedAt,
+            expiresAt: h.expiresAt,
+            loggedInAt: h.loggedInAt,
+            loggedOutAt: h.loggedOutAt,
+            logoutReason: h.logoutReason,
+          }))
+        );
+        if (res.historyMeta) {
+          setLoginHistoryPage(res.historyMeta.page);
+          setLoginHistoryTotalPages(res.historyMeta.totalPages);
+          setLoginHistoryTotal(res.historyMeta.total);
+        } else {
+          // Non-paginated response fallback.
+          setLoginHistoryTotalPages(1);
+          setLoginHistoryTotal((res.history ?? []).length);
+        }
+      } else {
+        // Default: server doesn't send history. Keep it unloaded/empty until explicitly requested.
+        setHistoryLoaded(false);
+        setHistory([]);
+        setLoginHistoryPage(1);
+        setLoginHistoryTotalPages(1);
+        setLoginHistoryTotal(0);
+      }
+
+      if (res.activeDevicesMeta) {
+        setActiveSessionsPage(res.activeDevicesMeta.page);
+        setActiveSessionsTotalPages(res.activeDevicesMeta.totalPages);
+      } else {
+        setActiveSessionsPage(1);
+        setActiveSessionsTotalPages(1);
+      }
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Failed to load device history';
+      setDevicesError(msg);
+      setActiveDevices([]);
+      setHistory([]);
+      setHistoryLoaded(false);
+      setLoginHistoryTotalPages(1);
+      setLoginHistoryTotal(0);
+      setActiveSessionsPage(1);
+      setActiveSessionsTotalPages(1);
+    } finally {
+      setDevicesLoading(false);
+    }
+    },
+    [formatDeviceLabel]
+  );
 
   const twoFaVisibleValue = useMemo(() => {
     if (twoFaEnabled === null) return '…';
@@ -94,6 +223,8 @@ export function AccountSecurityModal({
   useEffect(() => {
     if (!visible) return;
     void refreshTwoFa();
+    // Default load: only active sessions (no history).
+    void refreshDevices({ includeHistory: false });
   }, [visible, refreshTwoFa]);
 
   const onPressTwoFa = useCallback(async () => {
@@ -184,6 +315,28 @@ export function AccountSecurityModal({
     void runLogout(true);
   }, [runLogout]);
 
+  const onPressLogoutSession = useCallback(
+    async (sessionId: string, isCurrent?: boolean) => {
+      if (loggingOut || devicesLoading) return;
+      if (isCurrent) {
+        void runLogout(false);
+        return;
+      }
+      setDevicesError(null);
+      setDevicesLoading(true);
+      try {
+        await logoutDevice(sessionId);
+        await refreshDevices();
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : 'Failed to logout device';
+        setDevicesError(msg);
+      } finally {
+        setDevicesLoading(false);
+      }
+    },
+    [devicesLoading, loggingOut, refreshDevices, runLogout]
+  );
+
   const sectionTitle = {
     fontSize: w(14),
     fontWeight: '600' as const,
@@ -191,6 +344,79 @@ export function AccountSecurityModal({
     color: colors.tabIconDefault,
   };
   const cardStyle = { padding: 0, overflow: 'hidden' as const };
+  const modalCardStyle = useMemo(
+    () => ({
+      backgroundColor: colors.cardBg,
+      borderRadius: w(20),
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingTop: h(12),
+      paddingHorizontal: w(16),
+      paddingBottom: h(16),
+      maxHeight: '92%' as const,
+      width: '100%' as const,
+      maxWidth: w(720),
+      alignSelf: 'center' as const,
+    }),
+    [colors.border, colors.cardBg, h, w]
+  );
+
+  const ModalShell = useCallback(
+    ({
+      open,
+      title,
+      onCloseModal,
+      children,
+    }: {
+      open: boolean;
+      title: string;
+      onCloseModal: () => void;
+      children: React.ReactNode;
+    }) => (
+      <Modal visible={open} transparent animationType="fade" onRequestClose={onCloseModal}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss"
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'flex-start',
+            paddingTop: Math.max(insets.top + h(12), h(20)),
+            paddingHorizontal: w(14),
+            paddingBottom: Math.max(insets.bottom, h(14)),
+          }}
+          onPress={onCloseModal}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()} style={modalCardStyle}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: h(12),
+                gap: w(10),
+              }}
+            >
+              <Text style={{ fontSize: w(18), fontWeight: '700', color: colors.text, flex: 1 }}>
+                {title}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={onCloseModal}
+                hitSlop={12}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: w(8) })}
+              >
+                <FontAwesome name="times" size={w(20)} color={colors.tabIconDefault} />
+              </Pressable>
+            </View>
+            {children}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    ),
+    [colors.cardBg, colors.tabIconDefault, colors.text, h, insets.bottom, insets.top, modalCardStyle, w]
+  );
 
   return (
     <>
@@ -294,64 +520,327 @@ export function AccountSecurityModal({
                   value="Coming soon"
                   showArrow={false}
                 />
+                <SettingsRow
+                  icon="history"
+                  label="Login History"
+                  value={
+                    devicesLoading
+                      ? 'Loading…'
+                      : historyLoaded
+                        ? history.length > 0
+                          ? `${history.length}`
+                          : 'None'
+                        : 'Tap to load'
+                  }
+                  showArrow={!devicesLoading}
+                  onPress={() => {
+                    setLoginHistoryOpen(true);
+                    void refreshDevices({ page: 1, limit: loginHistoryLimit, includeHistory: true });
+                  }}
+                />
               </Card>
             </View>
 
             <View style={{ marginBottom: h(8) }}>
-              <Text style={sectionTitle}>DEVICE HISTORY</Text>
+              <Text style={sectionTitle}>SESSIONS</Text>
               <Card style={cardStyle} padded={false}>
-                {deviceHistory.length === 0 ? (
+                <SettingsRow
+                  icon="desktop"
+                  label="Active sessions"
+                  value={
+                    devicesLoading
+                      ? 'Loading…'
+                      : activeDevices.length > 0
+                        ? `${activeDevices.length}`
+                        : 'None'
+                  }
+                  showArrow={!devicesLoading}
+                  onPress={() => {
+                    setSessionsTableOpen(true);
+                    void refreshDevices({ page: activeSessionsPage, limit: activeSessionsLimit });
+                  }}
+                />
+                {devicesLoading && activeDevices.length === 0 ? (
                   <View style={{ paddingHorizontal: w(16), paddingVertical: h(14) }}>
                     <Text style={{ color: colors.tabIconDefault, fontSize: w(13) }}>
-                      No device history available.
+                      Loading sessions…
+                    </Text>
+                  </View>
+                ) : activeDevices.length === 0 ? (
+                  <View style={{ paddingHorizontal: w(16), paddingVertical: h(14) }}>
+                    <Text style={{ color: colors.tabIconDefault, fontSize: w(13) }}>
+                      No active sessions found.
                     </Text>
                   </View>
                 ) : (
-                  deviceHistory.map((item, index) => (
+                  activeDevices.map((item, index) => (
                     <View
-                      key={item.id}
+                      key={item.sessionId}
                       style={{
                         paddingHorizontal: w(16),
                         paddingVertical: h(14),
-                        borderBottomWidth: index === deviceHistory.length - 1 ? 0 : 1,
+                        borderBottomWidth: index === activeDevices.length - 1 ? 0 : 1,
                         borderBottomColor: colors.border,
                       }}
                     >
-                      <Text style={{ color: colors.text, fontSize: w(15), fontWeight: '600' }}>
-                        {item.deviceLabel}
-                        {item.isCurrent ? ' (Current)' : ''}
-                      </Text>
-                      {!!item.location && (
-                        <Text
-                          style={{
-                            color: colors.tabIconDefault,
-                            fontSize: w(12),
-                            marginTop: h(2),
-                          }}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: w(10) }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: colors.text, fontSize: w(15), fontWeight: '600' }}>
+                            {item.label}
+                            {item.isCurrent ? ' (Current)' : ''}
+                          </Text>
+                          {!!item.ip && (
+                            <Text
+                              style={{
+                                color: colors.tabIconDefault,
+                                fontSize: w(12),
+                                marginTop: h(2),
+                              }}
+                            >
+                              IP: {item.ip}
+                            </Text>
+                          )}
+                          {!!item.lastUsedAt && (
+                            <Text
+                              style={{
+                                color: colors.tabIconDefault,
+                                fontSize: w(12),
+                                marginTop: h(2),
+                              }}
+                            >
+                              Last used: {formatDateTimeDdMmYyyyAmPm(item.lastUsedAt)}
+                            </Text>
+                          )}
+                          {!!item.expiresAt && (
+                            <Text
+                              style={{
+                                color: colors.tabIconDefault,
+                                fontSize: w(12),
+                                marginTop: h(2),
+                              }}
+                            >
+                              Expires: {formatDateTimeDdMmYyyyAmPm(item.expiresAt)}
+                            </Text>
+                          )}
+                        </View>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Logout device"
+                          onPress={() => void onPressLogoutSession(item.sessionId, item.isCurrent)}
+                          style={({ pressed }) => ({
+                            alignSelf: 'flex-start',
+                            paddingVertical: h(6),
+                            paddingHorizontal: w(10),
+                            borderRadius: w(10),
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            opacity: pressed ? 0.7 : 1,
+                            backgroundColor: 'transparent',
+                          })}
                         >
-                          {item.location}
-                        </Text>
-                      )}
-                      {!!item.lastSeen && (
-                        <Text
-                          style={{
-                            color: colors.tabIconDefault,
-                            fontSize: w(12),
-                            marginTop: h(2),
-                          }}
-                        >
-                          Last seen: {item.lastSeen}
-                        </Text>
-                      )}
+                          <Text style={{ color: '#dc3545', fontWeight: '700', fontSize: w(12) }}>
+                            {item.isCurrent ? 'Logout' : 'Logout'}
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
                   ))
                 )}
               </Card>
+              {!!devicesError && (
+                <Text style={{ color: '#dc3545', marginTop: h(10) }}>{devicesError}</Text>
+              )}
             </View>
             </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
+
+      <ModalShell
+        open={sessionsTableOpen}
+        title="Active Sessions"
+        onCloseModal={() => setSessionsTableOpen(false)}
+      >
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {activeDevices.length === 0 ? (
+            <Text style={{ color: colors.tabIconDefault }}>No active sessions found.</Text>
+          ) : (
+            activeDevices.map((s, idx) => (
+              <View
+                key={s.sessionId}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: w(16),
+                  padding: w(12),
+                  marginBottom: h(10),
+                  backgroundColor: 'rgba(127,127,127,0.05)',
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: w(10) }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.tabIconDefault, fontSize: w(12), marginBottom: h(4) }}>
+                      #{idx + 1} {s.isCurrent ? '• Current' : ''}
+                    </Text>
+                    <Text style={{ color: colors.text, fontSize: w(14), fontWeight: '700' }}>
+                      {s.label}
+                    </Text>
+                    <Text style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: h(6) }}>
+                      Last used: {formatDateTimeDdMmYyyyAmPm(s.lastUsedAt)}
+                    </Text>
+                    <Text style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: h(2) }}>
+                      Expires: {formatDateTimeDdMmYyyyAmPm(s.expiresAt)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Logout session"
+                    onPress={() => void onPressLogoutSession(s.sessionId, s.isCurrent)}
+                    style={({ pressed }) => ({
+                      alignSelf: 'flex-start',
+                      opacity: pressed ? 0.75 : 1,
+                      paddingVertical: h(8),
+                      paddingHorizontal: w(12),
+                      borderRadius: w(12),
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: 'transparent',
+                    })}
+                  >
+                    <Text style={{ color: '#dc3545', fontWeight: '800', fontSize: w(12) }}>
+                      Logout
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          )}
+          {activeSessionsTotalPages > 1 && (
+            <>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  marginTop: h(4),
+                }}
+              >
+                <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>
+                  {activeSessionsPage}/{activeSessionsTotalPages}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: w(10), marginTop: h(10) }}>
+                <Button
+                  title="Prev"
+                  onPress={() => {
+                    const nextPage = Math.max(1, activeSessionsPage - 1);
+                    if (nextPage === activeSessionsPage) return;
+                    void refreshDevices({ page: nextPage, limit: activeSessionsLimit });
+                  }}
+                  disabled={devicesLoading || activeSessionsPage <= 1}
+                  fullWidth
+                />
+                <Button
+                  title="Next"
+                  onPress={() => {
+                    const nextPage = Math.min(activeSessionsTotalPages, activeSessionsPage + 1);
+                    if (nextPage === activeSessionsPage) return;
+                    void refreshDevices({ page: nextPage, limit: activeSessionsLimit });
+                  }}
+                  disabled={devicesLoading || activeSessionsPage >= activeSessionsTotalPages}
+                  fullWidth
+                />
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </ModalShell>
+
+      <ModalShell
+        open={loginHistoryOpen}
+        title="Login History"
+        onCloseModal={() => setLoginHistoryOpen(false)}
+      >
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {devicesLoading && history.length === 0 ? (
+            <Text style={{ color: colors.tabIconDefault }}>Loading…</Text>
+          ) : history.length === 0 ? (
+            <Text style={{ color: colors.tabIconDefault }}>No history.</Text>
+          ) : (
+            history.map((row, idx) => (
+              <View
+                key={row.id}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: w(16),
+                  padding: w(12),
+                  marginBottom: h(10),
+                  backgroundColor: 'rgba(127,127,127,0.05)',
+                }}
+              >
+                <Text style={{ color: colors.tabIconDefault, fontSize: w(12), marginBottom: h(4) }}>
+                  #{(loginHistoryPage - 1) * loginHistoryLimit + idx + 1}
+                </Text>
+                <Text style={{ color: colors.text, fontSize: w(14), fontWeight: '800' }}>
+                  {row.label}
+                </Text>
+                <View style={{ marginTop: h(8) }}>
+                  <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>
+                    Logged in: {formatDateTimeDdMmYyyyAmPm(row.loggedInAt)}
+                  </Text>
+                  <Text style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: h(2) }}>
+                    Logged out: {formatDateTimeDdMmYyyyAmPm(row.loggedOutAt)}
+                  </Text>
+                  <Text style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: h(2) }}>
+                    Logout reason: {String(row.logoutReason ?? '').trim() || '-'}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+
+          {loginHistoryTotalPages > 1 && (
+            <>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  marginTop: h(4),
+                }}
+              >
+                <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>
+                  {loginHistoryPage}/{loginHistoryTotalPages}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: w(10), marginTop: h(10) }}>
+                <Button
+                  title="Prev"
+                  onPress={() => {
+                    const nextPage = Math.max(1, loginHistoryPage - 1);
+                    if (nextPage === loginHistoryPage) return;
+                    void refreshDevices({ page: nextPage, limit: loginHistoryLimit, includeHistory: true });
+                  }}
+                  disabled={devicesLoading || loginHistoryPage <= 1}
+                  fullWidth
+                />
+                <Button
+                  title="Next"
+                  onPress={() => {
+                    const nextPage = Math.min(loginHistoryTotalPages, loginHistoryPage + 1);
+                    if (nextPage === loginHistoryPage) return;
+                    void refreshDevices({ page: nextPage, limit: loginHistoryLimit, includeHistory: true });
+                  }}
+                  disabled={devicesLoading || loginHistoryPage >= loginHistoryTotalPages}
+                  fullWidth
+                />
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </ModalShell>
 
       {/* Keep this Modal last so it always overlays the account sheet */}
       <Modal

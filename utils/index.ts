@@ -20,6 +20,32 @@ export function formatDate(date: Date | string | number, options?: Intl.DateTime
   });
 }
 
+/** Project-wide date format: dd/mm/yyyy */
+export function formatDateDdMmYyyy(date?: Date | string | number | null): string {
+  if (date === null || date === undefined) return '-';
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return String(date);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/** Project-wide date+time format: dd/mm/yyyy hh:mm:ss AM/PM */
+export function formatDateTimeDdMmYyyyAmPm(date?: Date | string | number | null): string {
+  if (date === null || date === undefined) return '-';
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return String(date);
+  // en-GB gives dd/mm/yyyy ordering; hour12 true gives AM/PM.
+  const out = d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+  return out.replace(', ', ' ');
+}
+
 /** Format relative time (e.g. "2h ago") */
 export function formatTimeAgo(date: Date | string | number): string {
   const d = typeof date === 'object' ? date : new Date(date);

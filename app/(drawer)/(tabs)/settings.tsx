@@ -3,7 +3,6 @@ import {
   Card,
   Screen,
   SettingsRow,
-  type DeviceHistoryItem,
 } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -17,43 +16,6 @@ import React, { useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Text, View } from 'react-native';
 
-function normalizeDeviceHistory(user: any): DeviceHistoryItem[] {
-  const source =
-    user?.loginHistory ??
-    user?.deviceHistory ??
-    user?.activeSessions ??
-    user?.sessions ??
-    user?.devices ??
-    [];
-
-  if (!Array.isArray(source)) return [];
-
-  return source
-    .map((item: any, index: number) => {
-      if (!item || typeof item !== 'object') return null;
-      const id = String(item.id ?? item._id ?? item.sessionId ?? index);
-      const deviceLabel = String(
-        item.deviceName ??
-          item.device ??
-          item.userAgent ??
-          item.platform ??
-          item.os ??
-          'Unknown device'
-      );
-      const location = item.location ?? item.city ?? item.ip;
-      const lastSeen = item.lastSeen ?? item.lastActive ?? item.loggedAt ?? item.createdAt;
-      const isCurrent = Boolean(item.isCurrent ?? item.currentSession ?? false);
-      return {
-        id,
-        deviceLabel,
-        location: location ? String(location) : undefined,
-        lastSeen: lastSeen ? String(lastSeen) : undefined,
-        isCurrent,
-      };
-    })
-    .filter(Boolean) as DeviceHistoryItem[];
-}
-
 export default function SettingsScreen() {
   const { user, isAuthenticated, refreshUser } = useAuth();
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
@@ -63,7 +25,6 @@ export default function SettingsScreen() {
   const colors = Colors[scheme];
   const extra = Constants.expoConfig?.extra;
   const appEnv = extra?.appEnv || 'development';
-  const deviceHistory = useMemo(() => normalizeDeviceHistory(user), [user]);
 
   const styles = useMemo(
     () => ({
@@ -144,7 +105,7 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>
           PREFERENCES
         </Text>
-        <Card style={[styles.card, { marginBottom: h(12) }]} padded={false}>
+        <Card style={{ ...styles.card, marginBottom: h(12) }} padded={false}>
           <SettingsRow
             icon="gamepad"
             label="Games to follow"
@@ -206,7 +167,6 @@ export default function SettingsScreen() {
         <AccountSecurityModal
           visible={securityModalOpen}
           onClose={() => setSecurityModalOpen(false)}
-          deviceHistory={deviceHistory}
         />
       )}
     </Screen>

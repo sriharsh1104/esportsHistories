@@ -1,5 +1,4 @@
 export { AccountSecurityModal } from './AccountSecurityModal';
-export type { DeviceHistoryItem } from './AccountSecurityModal';
 export { BackButton } from './BackButton';
 export { Button } from './Button';
 export { GlobalLoader } from './GlobalLoader';

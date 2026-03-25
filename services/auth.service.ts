@@ -3,6 +3,7 @@ import type {
   GameProfile,
   LoginCredentials,
   SignupCredentials,
+  DeviceHistoryResponse,
   UpdateProfileData,
   User,
   UserAddress,
@@ -787,6 +788,96 @@ export async function logout(options?: { allDevices?: boolean }): Promise<void> 
   } finally {
     await commonService.multiRemove([TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
     clearToken();
+  }
+}
+
+export async function getDeviceHistory(options?: {
+  page?: number;
+  limit?: number;
+  includeHistory?: boolean;
+  includeActive?: boolean;
+}): Promise<DeviceHistoryResponse> {
+  try {
+    const res = await api.get<any>(API_ENDPOINTS.AUTH.DEVICE_HISTORY, {
+      page: options?.page,
+      limit: options?.limit,
+      includeHistory: options?.includeHistory ? 1 : undefined,
+      includeActive: options?.includeActive === false ? 0 : undefined,
+    });
+    const data = (res?.data ?? res) as any;
+    const activeDevicesContainer = data?.activeDevices;
+    const activeDevicesRaw = Array.isArray(activeDevicesContainer)
+      ? activeDevicesContainer
+      : Array.isArray(activeDevicesContainer?.items)
+        ? activeDevicesContainer.items
+        : [];
+    const activeDevicesMeta =
+      activeDevicesContainer && typeof activeDevicesContainer === 'object' && !Array.isArray(activeDevicesContainer)
+        ? {
+            page: Number(activeDevicesContainer?.page ?? 1) || 1,
+            limit: Number(activeDevicesContainer?.limit ?? (options?.limit ?? 20)) || (options?.limit ?? 20),
+            total: Number(activeDevicesContainer?.total ?? activeDevicesRaw.length) || 0,
+            totalPages: Number(activeDevicesContainer?.totalPages ?? 1) || 1,
+          }
+        : undefined;
+    const historyContainer = data?.history;
+    const historyRaw = Array.isArray(historyContainer)
+      ? historyContainer
+      : Array.isArray(historyContainer?.items)
+        ? historyContainer.items
+        : [];
+    const historyMeta =
+      historyContainer && typeof historyContainer === 'object' && !Array.isArray(historyContainer)
+        ? {
+            page: Number(historyContainer?.page ?? 1) || 1,
+            limit: Number(historyContainer?.limit ?? (options?.limit ?? 20)) || (options?.limit ?? 20),
+            total: Number(historyContainer?.total ?? historyRaw.length) || 0,
+            totalPages: Number(historyContainer?.totalPages ?? 1) || 1,
+          }
+        : undefined;
+
+    return {
+      activeDevices: activeDevicesRaw
+        .map((d: any) => ({
+          sessionId: String(d?.sessionId ?? '').trim(),
+          deviceLabel: d?.deviceLabel != null ? String(d.deviceLabel) : undefined,
+          deviceInfo: d?.deviceInfo,
+          ip: d?.ip != null ? String(d.ip) : undefined,
+          createdAt: d?.createdAt != null ? String(d.createdAt) : undefined,
+          lastUsedAt: d?.lastUsedAt != null ? String(d.lastUsedAt) : undefined,
+          expiresAt: d?.expiresAt != null ? String(d.expiresAt) : undefined,
+          isCurrent: d?.isCurrent === true || d?.current === true,
+        }))
+        .filter((d: any) => d.sessionId),
+      history: historyRaw.map((h: any) => ({
+        id: h?.id != null ? String(h.id) : h?._id != null ? String(h._id) : undefined,
+        sessionId: h?.sessionId != null ? String(h.sessionId) : undefined,
+        deviceLabel: h?.deviceLabel != null ? String(h.deviceLabel) : undefined,
+        deviceInfo: h?.deviceInfo,
+        ip: h?.ip != null ? String(h.ip) : undefined,
+        action: h?.action != null ? String(h.action) : h?.event != null ? String(h.event) : undefined,
+        createdAt: h?.createdAt != null ? String(h.createdAt) : undefined,
+        lastUsedAt: h?.lastUsedAt != null ? String(h.lastUsedAt) : undefined,
+        expiresAt: h?.expiresAt != null ? String(h.expiresAt) : undefined,
+        loggedInAt: h?.loggedInAt != null ? String(h.loggedInAt) : undefined,
+        loggedOutAt: h?.loggedOutAt != null ? String(h.loggedOutAt) : undefined,
+        logoutReason: h?.logoutReason != null ? String(h.logoutReason) : undefined,
+      })),
+      activeDevicesMeta,
+      historyMeta,
+    };
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to fetch device history');
+  }
+}
+
+export async function logoutDevice(sessionId: string): Promise<void> {
+  try {
+    const id = String(sessionId ?? '').trim();
+    if (!id) throw new ApiError('sessionId is required', 400);
+    await api.post(API_ENDPOINTS.AUTH.LOGOUT_DEVICE, { sessionId: id }, { toast: false });
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to logout device');
   }
 }
 

@@ -11,6 +11,10 @@ export const API_ENDPOINTS = {
     RESEND_OTP: "/auth/resend-otp",
     /** POST — single session (Swagger: `/api/auth/logout` when base URL has no `/api` segment). */
     LOGOUT: "/auth/logout",
+    /** GET — device sessions + login/logout history (Swagger: `/api/auth/device-history`). */
+    DEVICE_HISTORY: "/auth/device-history",
+    /** POST — logout a specific session by id (Swagger: `/api/auth/logout-device`). */
+    LOGOUT_DEVICE: "/auth/logout-device",
     /** POST — invalidate all sessions (Swagger: `/api/auth/logout-all`). */
     LOGOUT_ALL: "/auth/logout-all",
     FORGOT_PASSWORD: "/auth/forgot-password",

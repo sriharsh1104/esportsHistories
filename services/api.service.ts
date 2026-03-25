@@ -339,6 +339,9 @@ export async function request<T>(
       const retryRes = await fetchWithTimeout(url, retryInit, API_TIMEOUT);
       const { json: retryJson } = await readResponseBody(retryRes);
       if (!retryRes.ok) {
+        if (retryRes.status === 401) {
+          handleAuthFailure();
+        }
         const retryMsg =
           (retryJson && typeof retryJson === 'object' && (retryJson as any).message) ||
           retryRes.statusText ||
@@ -352,6 +355,14 @@ export async function request<T>(
     const { json } = await readResponseBody(res);
 
     if (!res.ok) {
+      if (
+        res.status === 401 &&
+        !skipAuth &&
+        path !== API_ENDPOINTS.AUTH.REFRESH_TOKEN &&
+        path !== API_ENDPOINTS.AUTH.LOGIN
+      ) {
+        handleAuthFailure();
+      }
       const msg =
         (json && typeof json === 'object' && (json as any).message) ||
         res.statusText ||

@@ -17,6 +17,7 @@ import {
     Text,
     View
 } from 'react-native';
+import { formatDateDdMmYyyy } from '@/utils';
 
 
 /** Matches typical `name@bank` / PSP UPI handles (server validates on PUT `/profile`). */
@@ -381,7 +382,7 @@ export default function WalletScreen() {
                     {t.type === 'topup' ? 'Top Up' : 'Withdrawal'}
                   </Text>
                   <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
-                    {new Date(t.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {formatDateDdMmYyyy(t.createdAt)}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>

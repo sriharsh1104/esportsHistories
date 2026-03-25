@@ -135,3 +135,50 @@ export type TransactionFilters = {
   startDate?: string;
   endDate?: string;
 };
+
+export type ActiveDeviceSession = {
+  sessionId: string;
+  /** Preferred, server-provided label to display in UI. */
+  deviceLabel?: string;
+  deviceInfo?: unknown;
+  ip?: string;
+  createdAt?: string;
+  lastUsedAt?: string;
+  expiresAt?: string;
+  /** Backend may include a hint for current device. */
+  isCurrent?: boolean;
+};
+
+export type DeviceAuthHistoryItem = {
+  /** Backend-defined event id, if present. */
+  id?: string;
+  sessionId?: string;
+  /** Preferred, server-provided label to display in UI. */
+  deviceLabel?: string;
+  deviceInfo?: unknown;
+  ip?: string;
+  /** e.g. "login" / "logout" (backend-defined). */
+  action?: string;
+  createdAt?: string;
+  /** Some backends include these on history rows too. */
+  lastUsedAt?: string;
+  expiresAt?: string;
+  /** Device history fields (when backend tracks login/logout). */
+  loggedInAt?: string;
+  loggedOutAt?: string;
+  logoutReason?: string;
+};
+
+export type DeviceHistoryMeta = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
+export type DeviceHistoryResponse = {
+  activeDevices: ActiveDeviceSession[];
+  history: DeviceAuthHistoryItem[];
+  activeDevicesMeta?: DeviceHistoryMeta;
+  historyMeta?: DeviceHistoryMeta;
+};
