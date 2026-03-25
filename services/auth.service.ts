@@ -27,6 +27,13 @@ const REFRESH_TOKEN_KEY = '@esports_refresh_token';
 const USER_KEY = '@esports_user';
 const TOKEN_EXPIRY_BUFFER_SECONDS = 45;
 
+export type LoginResult =
+  | { kind: 'success'; user: User; token: string }
+  | { kind: '2fa_required'; email: string; twoFactorToken: string };
+
+export type TwoFactorStatus = { enabled: boolean };
+export type TwoFactorSetup = { otpauthUrl?: string; qrCodeDataUrl?: string; secret?: string };
+
 function normalizeGameProfilesFromApi(raw: unknown): GameProfile[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const out: GameProfile[] = [];
@@ -143,6 +150,17 @@ function rethrowAsApiError(error: unknown, fallbackMessage: string): never {
   if (error instanceof ApiError) throw error;
   const message = error instanceof Error && error.message ? error.message : fallbackMessage;
   throw new ApiError(message);
+}
+
+function extractTwoFactorToken(data: any): string | null {
+  const token =
+    data?.twoFactorToken ??
+    data?.two_factor_token ??
+    data?.data?.twoFactorToken ??
+    data?.data?.two_factor_token ??
+    null;
+  const value = token != null ? String(token).trim() : '';
+  return value ? value : null;
 }
 
 /** Login + verify OTP: persist tokens and merge selected games with any cached user. */
@@ -614,10 +632,98 @@ async function tryRefreshSession(refreshToken: string): Promise<{ token: string;
 
 export async function login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
   try {
-    const data = await api.post<any>(API_ENDPOINTS.AUTH.LOGIN, credentials, { skipAuth: true });
+    const data = await api.post<any>(API_ENDPOINTS.AUTH.LOGIN, credentials, {
+      skipAuth: true,
+      toast: false,
+    });
     return await persistAuthSession(data);
   } catch (error) {
     rethrowAsApiError(error, 'Login failed');
+  }
+}
+
+export async function loginWith2fa(credentials: LoginCredentials): Promise<LoginResult> {
+  try {
+    const data = await api.post<any>(API_ENDPOINTS.AUTH.LOGIN, credentials, {
+      skipAuth: true,
+      toast: false,
+    });
+
+    const tokenFields = getTokenFields(data);
+    if (!tokenFields.token) {
+      const twoFactorToken = extractTwoFactorToken(data);
+      if (twoFactorToken) {
+        return { kind: '2fa_required', email: credentials.email, twoFactorToken };
+      }
+    }
+
+    const persisted = await persistAuthSession(data);
+    return { kind: 'success', user: persisted.user, token: persisted.token };
+  } catch (error) {
+    rethrowAsApiError(error, 'Login failed');
+  }
+}
+
+export async function verifyLogin2fa(input: {
+  twoFactorToken: string;
+  code: string;
+}): Promise<{ user: User; token: string }> {
+  try {
+    const data = await api.post<any>(
+      API_ENDPOINTS.AUTH.VERIFY_LOGIN_2FA,
+      {
+        twoFactorToken: input.twoFactorToken,
+        code: input.code,
+      },
+      { skipAuth: true, toast: false }
+    );
+    return await persistAuthSession(data);
+  } catch (error) {
+    rethrowAsApiError(error, '2FA verification failed');
+  }
+}
+
+export async function getTwoFactorStatus(): Promise<TwoFactorStatus> {
+  try {
+    const res = await api.get<any>(API_ENDPOINTS.AUTH.TWO_FA.STATUS);
+    const enabledRaw =
+      res?.enabled ??
+      res?.data?.enabled ??
+      res?.twoFactorEnabled ??
+      res?.is2FAEnabled ??
+      res?.isTwoFactorEnabled;
+    return { enabled: Boolean(enabledRaw) };
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to fetch 2FA status');
+  }
+}
+
+export async function setupTwoFactor(): Promise<TwoFactorSetup> {
+  try {
+    const res = await api.post<any>(API_ENDPOINTS.AUTH.TWO_FA.SETUP, undefined, { toast: false });
+    const src = (res?.data ?? res) as Record<string, unknown> | undefined;
+    const otpauthUrl = String(src?.otpauthUrl ?? '').trim() || undefined;
+    const qrCodeDataUrl = String(src?.qrCodeDataUrl ?? '').trim() || undefined;
+    const secret = String(src?.secret ?? '').trim() || undefined;
+    return { otpauthUrl, qrCodeDataUrl, secret };
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to setup 2FA');
+  }
+}
+
+export async function enableTwoFactor(code: string): Promise<void> {
+  try {
+    await api.post(API_ENDPOINTS.AUTH.TWO_FA.ENABLE, { code }, { toast: false });
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to enable 2FA');
+  }
+}
+
+export async function disableTwoFactor(code: string): Promise<void> {
+  try {
+    await api.post(API_ENDPOINTS.AUTH.TWO_FA.DISABLE, { code }, { toast: false });
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to disable 2FA');
   }
 }
 

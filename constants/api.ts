@@ -4,6 +4,8 @@
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: "/auth/login",
+    /** POST — complete login when 2FA enabled (Swagger: `/api/auth/2fa/verify-login`). */
+    VERIFY_LOGIN_2FA: "/auth/2fa/verify-login",
     SIGNUP: "/auth/register",
     VERIFY_OTP: "/auth/verify-otp",
     RESEND_OTP: "/auth/resend-otp",
@@ -15,6 +17,16 @@ export const API_ENDPOINTS = {
     RESET_PASSWORD: "/auth/reset-password",
     CHANGE_PASSWORD: "/auth/change-password",
     REFRESH_TOKEN: "/auth/refresh-token",
+    TWO_FA: {
+      /** GET — returns whether TOTP 2FA is enabled for the current user. */
+      STATUS: "/auth/2fa/status",
+      /** POST — generate temporary secret + QR (call ENABLE to activate). */
+      SETUP: "/auth/2fa/setup",
+      /** POST — enable 2FA after verifying code from authenticator app. */
+      ENABLE: "/auth/2fa/enable",
+      /** POST — disable 2FA after verifying current code. */
+      DISABLE: "/auth/2fa/disable",
+    },
   },
   USER: {
     PROFILE: "/profile",

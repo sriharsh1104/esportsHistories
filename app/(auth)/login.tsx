@@ -78,8 +78,16 @@ export default function LoginScreen() {
     }
     dispatch(showLoader());
     try {
-      const loggedInUser = await login({ email: email.trim(), password });
-      const user = await refreshUser().catch(() => loggedInUser);
+      const res = await login({ email: email.trim(), password });
+      if (res.kind === '2fa_required') {
+        router.push({
+          pathname: ROUTES.VERIFY_2FA,
+          params: { email: res.email, twoFactorToken: res.twoFactorToken },
+        });
+        return;
+      }
+
+      const user = await refreshUser().catch(() => res.user);
       const complete = isProfileComplete(user);
 
       if (!complete) {

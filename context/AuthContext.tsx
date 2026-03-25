@@ -16,7 +16,8 @@ type AuthContextType = {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (c: LoginCredentials) => Promise<User>;
+  login: (c: LoginCredentials) => Promise<authService.LoginResult>;
+  verifyLogin2fa: (input: { twoFactorToken: string; code: string }) => Promise<User>;
   signup: (c: SignupCredentials) => Promise<{ email: string }>;
   verifyOtp: (email: string, otp: string) => Promise<User>;
   resendOtp: (email: string) => Promise<void>;
@@ -70,7 +71,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
-    const { user: u } = await authService.login(credentials);
+    const res = await authService.loginWith2fa(credentials);
+    if (res.kind !== 'success') return res;
+    setUser(res.user);
+    try {
+      const fresh = await authService.getProfile();
+      setUser(fresh);
+      return { ...res, user: fresh };
+    } catch {
+      return res;
+    }
+  }, []);
+
+  const verifyLogin2fa = useCallback(async (input: { twoFactorToken: string; code: string }) => {
+    const { user: u } = await authService.verifyLogin2fa(input);
     setUser(u);
     try {
       const fresh = await authService.getProfile();
@@ -148,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     isAuthenticated: !!user,
     login,
+    verifyLogin2fa,
     signup,
     verifyOtp,
     resendOtp,

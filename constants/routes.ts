@@ -9,6 +9,7 @@ export const PUBLIC_ROUTES = [
   '/(auth)/signup',
   '/(auth)/forgot-password',
   '/(auth)/verify-otp',
+  '/(auth)/verify-2fa',
   '/privacy-policy',
   '/terms',
   '/help-faq',
@@ -47,6 +48,7 @@ export const ROUTES = {
   LOGIN: '/(auth)/login',
   SIGNUP: '/(auth)/signup',
   VERIFY_OTP: '/(auth)/verify-otp' as any,
+  VERIFY_2FA: '/(auth)/verify-2fa' as any,
   FORGOT_PASSWORD: '/(auth)/forgot-password',
   CHANGE_PASSWORD: '/(auth)/change-password',
 
