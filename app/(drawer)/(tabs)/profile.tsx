@@ -9,7 +9,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
+import { getApiBaseUrl } from '@/services/api.service';
 
 export default function ProfileScreen() {
   const { user, isAuthenticated, refreshUser } = useAuth();
@@ -39,6 +40,17 @@ export default function ProfileScreen() {
   }
 
   const genderAge = parseBioGenderAge(user?.bio);
+
+  function getProfileImageUrl(profileImage?: string): string | null {
+    const raw = String(profileImage ?? '').trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const apiBase = String(getApiBaseUrl() ?? '').trim();
+    if (!apiBase) return raw;
+    const trimmed = apiBase.replace(/\/$/, '');
+    const publicBase = trimmed.replace(/\/api\/?$/i, '');
+    return `${publicBase}${raw.startsWith('/') ? '' : '/'}${raw}`;
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -129,9 +141,27 @@ export default function ProfileScreen() {
           onPress={() => router.push(ROUTES.EDIT_PROFILE)}
           style={[styles.avatar, { backgroundColor: colors.tint }]}
         >
-          <Text style={styles.avatarText}>
-            {user.displayName.charAt(0).toUpperCase()}
-          </Text>
+          {(() => {
+            const uri = getProfileImageUrl(user.profileImage ?? user.avatarUrl);
+            if (uri) {
+              return (
+                <Image
+                  source={{ uri }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: styles.avatar.borderRadius as number,
+                  }}
+                  resizeMode="cover"
+                />
+              );
+            }
+            return (
+              <Text style={styles.avatarText}>
+                {user.displayName.charAt(0).toUpperCase()}
+              </Text>
+            );
+          })()}
           <View style={styles.editPhotoBadge}>
             <FontAwesome name="camera" size={w(12)} color="#fff" />
           </View>

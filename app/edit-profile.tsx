@@ -11,9 +11,13 @@ import DateTimePicker, {
   DateTimePickerAndroid,
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import React, { createElement, useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -23,12 +27,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getApiBaseUrl } from '@/services/api.service';
 
 const GENDER_OPTIONS = ['male', 'female', 'other', 'prefer not to say'] as const;
 
 export default function EditProfileScreen() {
   const { from } = useLocalSearchParams<{ from?: string }>();
-  const { user, refreshUser, updateProfile } = useAuth();
+  const { user, refreshUser, updateProfile, uploadAvatar } = useAuth();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -37,6 +42,11 @@ export default function EditProfileScreen() {
   const [dobInput, setDobInput] = useState('');
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
+  /** From POST `/profile/avatar`; sent as `profileImageUploadId` / `uploadId` on PUT `/profile` when saving. */
+  const [pendingProfileImageUploadId, setPendingProfileImageUploadId] = useState<string | null>(null);
+  const [didInitForm, setDidInitForm] = useState(false);
 
   const [nameError, setNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
@@ -49,6 +59,17 @@ export default function EditProfileScreen() {
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const insets = useSafeAreaInsets();
+
+  function getProfileImageUrl(profileImage?: string): string | null {
+    const raw = String(profileImage ?? '').trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const apiBase = String(getApiBaseUrl() ?? '').trim();
+    if (!apiBase) return raw;
+    const trimmed = apiBase.replace(/\/$/, '');
+    const publicBase = trimmed.replace(/\/api\/?$/i, '');
+    return `${publicBase}${raw.startsWith('/') ? '' : '/'}${raw}`;
+  }
 
   function parseBioGenderAge(bio?: UserBio | string): UserBio {
     if (!bio) return {};
@@ -127,24 +148,26 @@ export default function EditProfileScreen() {
   }, [refreshUser]);
 
   useEffect(() => {
-    if (user) {
-      setEmail(user.email || '');
-      setName(user.fullName || '');
-      setPhone(user.phone || '');
-      const genderAge = parseBioGenderAge(user.bio);
-      setGender(genderAge.gender ? String(genderAge.gender) : '');
-      const storedDob = genderAge.dateOfBirth ?? genderAge.dob;
-      if (storedDob) {
-        const parsedDob = new Date(storedDob);
-        const safeDob = Number.isNaN(parsedDob.getTime()) ? null : parsedDob;
-        setDob(safeDob);
-        setDobInput(formatDob(safeDob));
-      } else {
-        setDob(null);
-        setDobInput('');
-      }
+    // Initialize once from the current profile; do not clobber in-progress edits
+    // when `user` changes (e.g. after avatar upload).
+    if (!user || didInitForm) return;
+    setEmail(user.email || '');
+    setName(user.fullName || user.displayName || '');
+    setPhone(user.phone || '');
+    const genderAge = parseBioGenderAge(user.bio);
+    setGender(genderAge.gender ? String(genderAge.gender) : '');
+    const storedDob = genderAge.dateOfBirth ?? genderAge.dob;
+    if (storedDob) {
+      const parsedDob = new Date(storedDob);
+      const safeDob = Number.isNaN(parsedDob.getTime()) ? null : parsedDob;
+      setDob(safeDob);
+      setDobInput(formatDob(safeDob));
+    } else {
+      setDob(null);
+      setDobInput('');
     }
-  }, [user]);
+    setDidInitForm(true);
+  }, [user, didInitForm]);
 
   const styles = useMemo(
     () => ({
@@ -153,12 +176,133 @@ export default function EditProfileScreen() {
       subtitle: { fontSize: w(16), marginBottom: h(32) },
       form: { flex: 1 },
       btn: { marginTop: h(24) },
+      avatarRow: { alignItems: 'center' as const, marginBottom: h(20) },
+      avatar: {
+        width: w(80),
+        height: w(80),
+        borderRadius: w(40),
+        backgroundColor: colors.tint,
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        position: 'relative' as const,
+        overflow: 'hidden' as const,
+      },
+      avatarText: { fontSize: w(32), fontWeight: '700' as const, color: '#fff' },
+      editPhotoBadge: {
+        position: 'absolute' as const,
+        bottom: 0,
+        right: 0,
+        width: w(26),
+        height: w(26),
+        borderRadius: w(13),
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+      },
+      avatarHint: { fontSize: w(12), marginTop: h(10) },
     }),
     [w, h, colors]
   );
 
+  const compressAvatarUnder50kb = async (uri: string): Promise<{ uri: string; mimeType: string }> => {
+    // Expo ImageManipulator writes a new file; use JPEG for consistent size control.
+    const TARGET_BYTES = 50 * 1024;
+    const minQuality = 0.15;
+    let quality = 0.85;
+    let width = 640;
+    let currentUri = uri;
+
+    // In case we can't read size reliably (some platforms), still run a couple of passes.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const manipulated = await ImageManipulator.manipulateAsync(
+        currentUri,
+        [{ resize: { width } }],
+        {
+          compress: quality,
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
+      );
+
+      currentUri = manipulated.uri;
+
+      let size: number | null = null;
+      try {
+        const res = await fetch(currentUri);
+        const blob = await res.blob();
+        size = blob.size;
+      } catch {
+        size = null;
+      }
+
+      if (size != null && size <= TARGET_BYTES) {
+        return { uri: currentUri, mimeType: 'image/jpeg' };
+      }
+
+      // Reduce quality first, then scale down.
+      quality = Math.max(minQuality, quality - 0.15);
+      if (quality <= minQuality + 1e-6) {
+        width = Math.max(320, Math.round(width * 0.85));
+      }
+
+      if (size == null && attempt >= 2) {
+        // Best-effort: after a few passes, stop to avoid over-processing when size is unknown.
+        return { uri: currentUri, mimeType: 'image/jpeg' };
+      }
+    }
+
+    return { uri: currentUri, mimeType: 'image/jpeg' };
+  };
+
+  const handlePickAvatar = async () => {
+    setAvatarError('');
+    dispatch(showLoader());
+    try {
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          setAvatarError('Media library permission is required to change your photo.');
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.9,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        setAvatarError('No image selected.');
+        return;
+      }
+
+      const compressed = await compressAvatarUnder50kb(asset.uri);
+      // Optimistic UI preview immediately.
+      setAvatarPreviewUri(compressed.uri);
+
+      const fileName = `avatar-${Date.now()}.jpg`;
+      const mimeType = compressed.mimeType;
+
+      const uploadId = await uploadAvatar({
+        uri: compressed.uri,
+        fileName,
+        mimeType,
+      });
+      if (uploadId) setPendingProfileImageUploadId(uploadId);
+    } catch (e) {
+      // If upload fails, revert optimistic preview.
+      setAvatarPreviewUri(null);
+      setAvatarError(e instanceof Error ? e.message : 'Failed to upload avatar');
+    } finally {
+      dispatch(hideLoader());
+    }
+  };
+
   const handleSubmit = async () => {
     setError('');
+    setAvatarError('');
     setNameError('');
     setPhoneError('');
     setGenderError('');
@@ -194,10 +338,18 @@ export default function EditProfileScreen() {
           gender: genderTrimmed,
           dateOfBirth: parsedDob.toISOString(),
         },
+        ...(pendingProfileImageUploadId
+          ? { profileImageUploadId: pendingProfileImageUploadId }
+          : {}),
         ...(from === 'signup' && { onboardingStep: 'done' as const }),
       });
 
-      router.replace(ROUTES.HOME);
+      setPendingProfileImageUploadId(null);
+      if (from === 'signup') {
+        router.replace(ROUTES.HOME);
+      } else {
+        router.replace(ROUTES.PROFILE);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Update failed');
     } finally {
@@ -250,6 +402,39 @@ export default function EditProfileScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+          <View style={styles.avatarRow}>
+            <Pressable onPress={handlePickAvatar} style={styles.avatar}>
+              {(() => {
+                const uri = avatarPreviewUri ?? getProfileImageUrl(user.profileImage ?? user.avatarUrl);
+                if (uri) {
+                  return (
+                    <Image
+                      source={{ uri }}
+                      style={{ width: '100%', height: '100%', borderRadius: styles.avatar.borderRadius as number }}
+                      resizeMode="cover"
+                    />
+                  );
+                }
+                return (
+                  <Text style={styles.avatarText}>
+                    {(user.fullName || user.displayName || 'U').charAt(0).toUpperCase()}
+                  </Text>
+                );
+              })()}
+              <View style={styles.editPhotoBadge}>
+                <FontAwesome name="camera" size={w(12)} color="#fff" />
+              </View>
+            </Pressable>
+            <Text style={[styles.avatarHint, { color: colors.tabIconDefault }]}>
+              Tap photo to change
+            </Text>
+            {!!avatarError && (
+              <Text style={{ color: '#dc3545', marginTop: h(6), fontSize: w(12) }}>
+                {avatarError}
+              </Text>
+            )}
+          </View>
+
           <Input
             label="Email"
             value={email}

@@ -64,6 +64,9 @@ export type User = {
   isPaymentVerified?: boolean;
   upiIds?: string[];
   walletBalance?: number;
+  /** Server path/URL to the user's avatar (e.g. `/uploads/avatars/...`). */
+  profileImage?: string;
+  /** @deprecated Prefer profileImage. Kept for back-compat. */
   avatarUrl?: string;
   addresses?: UserAddress[];
   gameProfiles?: GameProfile[];
@@ -78,6 +81,8 @@ export type UpdateProfileData = {
   fullName?: string;
   phone?: string;
   bio?: UserBio | string;
+  /** From POST `/profile/avatar` response (`data.uploadId` / `uploadId`). Sent on PUT `/profile` to finalize. */
+  profileImageUploadId?: string;
   /** PUT `/profile` — optional; server validates `name@psp` style UPI. Pass `null` to clear. */
   paymentUPI?: string | null;
   /** Saved UPI IDs list (backend key observed: `paymentUPIs`). */

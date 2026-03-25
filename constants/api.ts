@@ -35,6 +35,8 @@ export const API_ENDPOINTS = {
   USER: {
     PROFILE: "/profile",
     UPADATE_PROFILE: "/profile",
+    /** POST multipart/form-data — upload avatar image under `image`. */
+    PROFILE_AVATAR: "/profile/avatar",
     /** POST — append one row; body = flat address fields (`addressLine1`, `city`, …) at root. */
     PROFILE_ADDRESS: "/profile/addresses",
     /** DELETE — body `{ gameId, action: 'removeGame', uid }`. */

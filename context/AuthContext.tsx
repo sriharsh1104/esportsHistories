@@ -23,6 +23,8 @@ type AuthContextType = {
   resendOtp: (email: string) => Promise<void>;
   logout: (options?: { allDevices?: boolean }) => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
+  /** Returns `profileImageUploadId` from avatar API when present; include it on PUT `/profile` to finalize. */
+  uploadAvatar: (input: { uri: string; fileName?: string; mimeType?: string }) => Promise<string | undefined>;
   updateAddresses: (addresses: UserAddress[]) => Promise<void>;
   addAddress: (addr: UserAddress) => Promise<void>;
   updateUpiIds: (upiIds: string[]) => Promise<void>;
@@ -126,6 +128,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
   }, []);
 
+  const uploadAvatar = useCallback(async (input: { uri: string; fileName?: string; mimeType?: string }) => {
+    const { user: updated, profileImageUploadId } = await authService.uploadProfileAvatar(input);
+    setUser(updated);
+    return profileImageUploadId;
+  }, []);
+
   const updateAddresses = useCallback(async (addresses: UserAddress[]) => {
     const updated = await authService.updateAddresses(addresses);
     setUser(updated);
@@ -168,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resendOtp,
     logout,
     updateProfile,
+    uploadAvatar,
     updateAddresses,
     addAddress,
     updateUpiIds,

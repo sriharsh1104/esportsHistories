@@ -9,6 +9,7 @@ import type {
   UserAddress,
 } from '@/types/auth';
 import { API_ENDPOINTS } from '@/constants/api';
+import { Platform } from 'react-native';
 import {
   mergeGameProfileListsPreferUid,
   mergeGameProfilesForPersistence,
@@ -536,7 +537,19 @@ function migrateUserFromAuthData(data: any): User {
           dateOfBirth: dateOfBirth ? String(dateOfBirth) : undefined,
         }
       : undefined);
-  const avatarUrl = direct?.profilePic ?? data?.profilePic ?? direct?.avatarUrl ?? data?.avatarUrl;
+  const profileImage =
+    direct?.profileImage ??
+    data?.profileImage ??
+    direct?.profile_image ??
+    data?.profile_image ??
+    direct?.avatar ??
+    data?.avatar ??
+    direct?.profilePic ??
+    data?.profilePic ??
+    direct?.avatarUrl ??
+    data?.avatarUrl ??
+    undefined;
+  const avatarUrl = profileImage;
 
   const followedPersonalities = mergeFollowProfileSources(
     direct?.followedPersonalities,
@@ -572,6 +585,7 @@ function migrateUserFromAuthData(data: any): User {
     isPaymentVerified,
     upiIds,
     bio,
+    profileImage: profileImage != null ? String(profileImage) : undefined,
     avatarUrl,
     addresses,
     gameProfiles,
@@ -580,6 +594,81 @@ function migrateUserFromAuthData(data: any): User {
     followedPersonalities,
     followedOrganizations,
   };
+}
+
+export async function uploadProfileAvatar(input: {
+  uri: string;
+  fileName?: string;
+  mimeType?: string;
+}): Promise<{ user: User; profileImageUploadId?: string }> {
+  try {
+    const uri = String(input.uri ?? '').trim();
+    if (!uri) throw new ApiError('Image is required', 400);
+
+    const fileName = String(input.fileName ?? 'avatar.jpg').trim() || 'avatar.jpg';
+    const mimeType = String(input.mimeType ?? '').trim() || inferMimeTypeFromName(fileName) || 'image/jpeg';
+
+    const form = new FormData();
+    if (Platform.OS === 'web') {
+      // Web needs real Blob/File; `{ uri, name, type }` will not upload bytes.
+      const blob = await (await fetch(uri)).blob();
+      if (blob.size > 1024 * 1024) {
+        throw new ApiError('Image must be 1MB or smaller', 400);
+      }
+      const file = new File([blob], fileName, { type: mimeType });
+      form.append('image', file);
+    } else {
+      // React Native file part shape
+      form.append('image', { uri, name: fileName, type: mimeType } as any);
+    }
+
+    const res = await api.post<any>(API_ENDPOINTS.USER.PROFILE_AVATAR, form as any, {
+      toast: false,
+    });
+
+    const uploadIdRaw =
+      res?.data?.uploadId ??
+      res?.uploadId ??
+      res?.data?.profileImageUploadId ??
+      res?.profileImageUploadId ??
+      undefined;
+    const profileImageUploadId =
+      uploadIdRaw != null && String(uploadIdRaw).trim() ? String(uploadIdRaw).trim() : undefined;
+
+    const profileImageRaw =
+      res?.profileImage ??
+      res?.data?.profileImage ??
+      res?.user?.profileImage ??
+      res?.data?.user?.profileImage ??
+      undefined;
+    const profileImage = profileImageRaw != null ? String(profileImageRaw).trim() : '';
+
+    const previousUser = await commonService.getItem<User>(USER_KEY);
+    const migratedUser = migrateUserFromAuthData(res);
+    const merged = mergeUserFromApiResponse(migratedUser, previousUser);
+
+    const next: User =
+      profileImage
+        ? {
+            ...merged,
+            profileImage,
+            avatarUrl: profileImage,
+          }
+        : merged;
+
+    await commonService.setItem(USER_KEY, next);
+    return { user: next, profileImageUploadId };
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to upload avatar');
+  }
+}
+
+function inferMimeTypeFromName(name: string): string | null {
+  const lower = String(name ?? '').toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  return null;
 }
 
 function getTokenFields(data: any): { token: string; refreshToken: string } {
@@ -985,6 +1074,13 @@ function buildProfilePutPayload(
   }
   if (data.paymentUPI !== undefined) {
     payload.paymentUPI = data.paymentUPI === null || data.paymentUPI === '' ? null : data.paymentUPI;
+  }
+  if (data.profileImageUploadId !== undefined) {
+    const id = String(data.profileImageUploadId ?? '').trim();
+    if (id) {
+      payload.profileImageUploadId = id;
+      payload.uploadId = id;
+    }
   }
   return payload;
 }
