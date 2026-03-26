@@ -129,7 +129,7 @@ function buildFollowedGamesWithUidsPayload(
   return rows.length ? rows : undefined;
 }
 
-/** Profile PUT — API expects `uid` (and often `gameUid`); skip client draft `id` for new rows. */
+/** Profile PUT — send `uid` only; skip client draft `id` for new rows. */
 function mapGameProfilesForProfilePut(profiles: GameProfile[]): unknown[] {
   return profiles.map((p) => {
     const uid = String(p.gameUid ?? '').trim();
@@ -137,7 +137,6 @@ function mapGameProfilesForProfilePut(profiles: GameProfile[]): unknown[] {
     const row: Record<string, unknown> = {
       gameId: p.gameId,
       gameName: p.gameName,
-      gameUid: uid,
       uid,
     };
     if (!draftId && String(p.id).trim()) {

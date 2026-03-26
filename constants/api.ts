@@ -91,4 +91,13 @@ export const API_ENDPOINTS = {
     RAZORPAY_ORDER: "/payment/razorpay/order",
     RAZORPAY_VERIFY: "/payment/razorpay/verify",
   },
+  TOURNAMENT: {
+    /**
+     * GET — tournaments list (Swagger: `/api/tournament/list`).
+     * Query: status, date, fromDate, toDate, subMode, mode (depends on backend).
+     */
+    LIST: "/tournament/list",
+    /** GET (SSE) — stream tournaments; `game` query required by backend. */
+    STREAM: "/tournament/list/stream",
+  },
 } as const;
