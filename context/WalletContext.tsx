@@ -47,7 +47,23 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated]);
 
-  // Avoid background API calls. Wallet data is fetched on-demand by wallet screen/actions.
+  // Keep drawer balance accurate: sync from profile when present, otherwise fetch once.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setBalance(0);
+      setTransactions([]);
+      return;
+    }
+
+    const wb = Number((user as { walletBalance?: unknown } | null)?.walletBalance);
+    if (Number.isFinite(wb)) {
+      setBalance(wb);
+      return;
+    }
+
+    // Profile didn't include wallet balance; fetch it once.
+    void fetchWallet();
+  }, [isAuthenticated, user?.walletBalance, fetchWallet]);
 
   const topUp = useCallback(
     async (amount: number) => {

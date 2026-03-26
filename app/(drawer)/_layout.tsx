@@ -13,11 +13,13 @@ import { Drawer } from "expo-router/drawer";
 import React, { useMemo } from "react";
 import {
     ActivityIndicator,
+    Image,
     Pressable,
     ScrollView,
     Text,
     View,
 } from "react-native";
+import { getProfileImageUrl } from "@/utils/profileImage";
 
 const MENU_ITEMS = [
   { icon: "user" as const, label: "Profile", route: ROUTES.PROFILE },
@@ -32,6 +34,10 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
   const colors = Colors[scheme];
   const { user, isAuthenticated } = useAuth();
   const { balance, isLoading } = useWallet();
+  const avatarUri = useMemo(
+    () => getProfileImageUrl(user?.profileImage ?? user?.avatarUrl),
+    [user?.profileImage, user?.avatarUrl]
+  );
 
   const closeDrawer = () =>
     props.navigation?.dispatch(DrawerActions.closeDrawer());
@@ -67,13 +73,20 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
               backgroundColor: colors.tint,
               alignItems: "center",
               justifyContent: "center",
+              overflow: "hidden",
             }}
           >
-            <Text style={{ fontSize: w(24), fontWeight: "700", color: "#fff" }}>
-              {isAuthenticated && user
-                ? user.displayName.charAt(0).toUpperCase()
-                : "?"}
-            </Text>
+            {avatarUri ? (
+              <Image
+                source={{ uri: avatarUri }}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={{ fontSize: w(24), fontWeight: "700", color: "#fff" }}>
+                {isAuthenticated && user ? user.displayName.charAt(0).toUpperCase() : "?"}
+              </Text>
+            )}
           </View>
           <View style={{ flex: 1, marginLeft: w(14) }}>
             <Text

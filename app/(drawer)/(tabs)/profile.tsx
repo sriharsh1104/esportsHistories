@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
-import { getApiBaseUrl } from '@/services/api.service';
+import { getProfileImageUrl } from '@/utils/profileImage';
 
 export default function ProfileScreen() {
   const { user, isAuthenticated, refreshUser } = useAuth();
@@ -40,17 +40,6 @@ export default function ProfileScreen() {
   }
 
   const genderAge = parseBioGenderAge(user?.bio);
-
-  function getProfileImageUrl(profileImage?: string): string | null {
-    const raw = String(profileImage ?? '').trim();
-    if (!raw) return null;
-    if (/^https?:\/\//i.test(raw)) return raw;
-    const apiBase = String(getApiBaseUrl() ?? '').trim();
-    if (!apiBase) return raw;
-    const trimmed = apiBase.replace(/\/$/, '');
-    const publicBase = trimmed.replace(/\/api\/?$/i, '');
-    return `${publicBase}${raw.startsWith('/') ? '' : '/'}${raw}`;
-  }
 
   useFocusEffect(
     useCallback(() => {

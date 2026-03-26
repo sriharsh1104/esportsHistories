@@ -27,7 +27,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getApiBaseUrl } from '@/services/api.service';
+import { getProfileImageUrl } from '@/utils/profileImage';
 
 const GENDER_OPTIONS = ['male', 'female', 'other', 'prefer not to say'] as const;
 
@@ -59,17 +59,6 @@ export default function EditProfileScreen() {
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const insets = useSafeAreaInsets();
-
-  function getProfileImageUrl(profileImage?: string): string | null {
-    const raw = String(profileImage ?? '').trim();
-    if (!raw) return null;
-    if (/^https?:\/\//i.test(raw)) return raw;
-    const apiBase = String(getApiBaseUrl() ?? '').trim();
-    if (!apiBase) return raw;
-    const trimmed = apiBase.replace(/\/$/, '');
-    const publicBase = trimmed.replace(/\/api\/?$/i, '');
-    return `${publicBase}${raw.startsWith('/') ? '' : '/'}${raw}`;
-  }
 
   function parseBioGenderAge(bio?: UserBio | string): UserBio {
     if (!bio) return {};
