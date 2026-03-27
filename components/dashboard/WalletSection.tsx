@@ -26,6 +26,37 @@ import * as walletService from '@/services/wallet.service';
 import { WebView } from 'react-native-webview';
 
 type TopUpMethod = 'upi' | 'card' | 'qr';
+type RazorpayCheckoutResponse = {
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+};
+type RazorpayCheckoutFailure = {
+  error?: {
+    description?: string;
+    reason?: string;
+  };
+};
+type RazorpayWebOptions = {
+  key: string;
+  order_id: string;
+  amount: number;
+  currency: 'INR';
+  name: string;
+  description: string;
+  handler: (response: RazorpayCheckoutResponse) => void;
+  modal?: {
+    ondismiss?: () => void;
+  };
+  theme?: {
+    color?: string;
+  };
+};
+type RazorpayWebInstance = {
+  open: () => void;
+  on: (event: 'payment.failed', callback: (response: RazorpayCheckoutFailure) => void) => void;
+};
+type RazorpayWebConstructor = new (options: RazorpayWebOptions) => RazorpayWebInstance;
 
 const TOP_UP_OPTIONS: { id: TopUpMethod; icon: string; label: string; desc: string }[] = [
   { id: 'upi', icon: 'credit-card', label: 'UPI', desc: 'GPay, PhonePe, BHIM, etc.' },
@@ -67,6 +98,7 @@ export function WalletSection() {
   const [razorpaySession, setRazorpaySession] = useState<{
     amountINR: number;
     order: RazorpayOrderResult;
+    method: 'upi' | 'card';
   } | null>(null);
   const [qrGenLoading, setQrGenLoading] = useState(false);
   const [razorpayError, setRazorpayError] = useState<string>('');
@@ -168,14 +200,144 @@ export function WalletSection() {
     setRazorpayError('');
   };
 
+  const startWebRazorpayPayment = async (opts: {
+    order: RazorpayOrderResult;
+    amountINR: number;
+    method: 'upi' | 'card';
+  }) => {
+    if (Platform.OS !== 'web') return;
+    const win = globalThis as typeof globalThis & { Razorpay?: RazorpayWebConstructor };
+    const Razorpay = win.Razorpay;
+    if (!Razorpay) {
+      throw new Error('Razorpay web SDK not loaded. Refresh the page and try again.');
+    }
+
+    const verification = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const finishOnce = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+
+      const checkout = new Razorpay({
+        key: opts.order.keyId,
+        order_id: opts.order.orderId,
+        amount: opts.order.amountPaise,
+        currency: 'INR',
+        name: 'BooyahX',
+        description: `Wallet topup ₹${opts.amountINR.toFixed(2)}`,
+        handler: async (response) => {
+          const orderId = String(response.razorpay_order_id ?? '').trim();
+          const paymentId = String(response.razorpay_payment_id ?? '').trim();
+          const signature = String(response.razorpay_signature ?? '').trim();
+          if (!orderId || !paymentId || !signature) {
+            finishOnce(() => reject(new Error('Missing payment details from Razorpay.')));
+            return;
+          }
+          try {
+            const result = await walletService.verifyRazorpayPayment({
+              orderId,
+              paymentId,
+              signature,
+            });
+            if (result.status !== 'success') {
+              finishOnce(() => reject(new Error('Payment verification failed.')));
+              return;
+            }
+            finishOnce(() => resolve());
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Verification failed';
+            finishOnce(() => reject(new Error(message)));
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            finishOnce(() => reject(new Error('Payment cancelled by user.')));
+          },
+        },
+        theme: { color: '#6d4aff' },
+        config:
+          opts.method === 'card'
+            ? {
+                display: {
+                  blocks: {
+                    card: {
+                      name: 'Card',
+                      instruments: [{ method: 'card' }],
+                    },
+                  },
+                  sequence: ['block.card'],
+                  preferences: {
+                    show_default_blocks: false,
+                  },
+                },
+              }
+            : {
+                display: {
+                  blocks: {
+                    upi: {
+                      name: 'UPI',
+                      instruments: [{ method: 'upi' }],
+                    },
+                  },
+                  sequence: ['block.upi'],
+                  preferences: {
+                    show_default_blocks: false,
+                  },
+                },
+              },
+      });
+
+      checkout.on('payment.failed', (resp) => {
+        const desc = resp?.error?.description || resp?.error?.reason || 'Payment failed';
+        finishOnce(() => reject(new Error(desc)));
+      });
+
+      try {
+        checkout.open();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not open Razorpay checkout';
+        finishOnce(() => reject(new Error(message)));
+      }
+    });
+
+    await verification;
+  };
+
   const buildRazorpayCheckoutHtml = (session: {
     amountINR: number;
     order: RazorpayOrderResult;
+    method: 'upi' | 'card';
   }) => {
     const amountPaise = session.order.amountPaise;
     const keyId = session.order.keyId.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const orderId = session.order.orderId.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const name = 'Esports Histories';
+    const displayConfigSnippet =
+      session.method === 'card'
+        ? `
+          display: {
+            blocks: {
+              card: {
+                name: 'Card',
+                instruments: [{ method: 'card' }]
+              }
+            },
+            sequence: ['block.card'],
+            preferences: { show_default_blocks: false }
+          }`
+        : `
+          display: {
+            blocks: {
+              upi: {
+                name: 'UPI',
+                instruments: [{ method: 'upi' }]
+              }
+            },
+            sequence: ['block.upi'],
+            preferences: { show_default_blocks: false }
+          }`;
 
     return `<!doctype html>
 <html>
@@ -231,7 +393,8 @@ export function WalletSection() {
           },
           modal: {
             ondismiss: function() { post({ type: 'dismiss' }); }
-          }
+          },
+          ${displayConfigSnippet}
         };
         try {
           var rz = new Razorpay(options);
@@ -344,9 +507,23 @@ export function WalletSection() {
       dispatch(showLoader());
       try {
         const order = await walletService.createRazorpayOrder(val);
-        setRazorpaySession({ amountINR: val, order });
         if (Platform.OS === 'web') {
-          setError('Razorpay checkout is not supported on web in this app build.');
+          await startWebRazorpayPayment({
+            order,
+            amountINR: val,
+            method: topUpMethod === 'card' ? 'card' : 'upi',
+          });
+          setAmount('');
+          setModalType(null);
+          await refreshWallet();
+          await fetchTransactions();
+          Toast.show({ type: 'success', text1: 'Top-up completed' });
+        } else {
+          setRazorpaySession({
+            amountINR: val,
+            order,
+            method: topUpMethod === 'card' ? 'card' : 'upi',
+          });
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not start Razorpay checkout');

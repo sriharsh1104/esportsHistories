@@ -6,6 +6,7 @@ export { Card } from './Card';
 export { CustomPhoneInput } from './CustomPhoneInput';
 export { Input } from './Input';
 export { LogoutButton } from './LogoutButton';
+export { NoDataFound } from './NoDataFound';
 export { Screen } from './Screen';
 export { SettingsRow } from './SettingsRow';
 

@@ -22,6 +22,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
 
         {/* Using raw CSS styles as an escape-hatch to ensure the background color never flickers in dark-mode. */}
         <style dangerouslySetInnerHTML={{ __html: responsiveBackground }} />
+        <script src="https://checkout.razorpay.com/v1/checkout.js" />
         {/* Add any additional <head> elements that you want globally available on web... */}
       </head>
       <body>{children}</body>

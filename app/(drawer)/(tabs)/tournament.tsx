@@ -1,4 +1,4 @@
-import { Button, Card, Screen } from '@/components/ui';
+import { Button, Card, NoDataFound, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
@@ -6,6 +6,8 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
 import type { TournamentUiItem } from '@/services/tournament.service';
 import { fetchTournamentList } from '@/services/tournament.service';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { ROUTES } from '@/constants/routes';
 import { router } from 'expo-router';
@@ -84,6 +86,7 @@ function TournamentCard({
 }
 
 export default function TournamentScreen() {
+  const dispatch = useAppDispatch();
   const { isAuthenticated } = useAuth();
   const { selectedGameIds, availableGames, refreshGames } = useSelectedGames();
   const scheme = useColorScheme() ?? 'light';
@@ -173,6 +176,7 @@ export default function TournamentScreen() {
       try {
         setIsLoadingTournaments(true);
         setTournamentError(null);
+        dispatch(showLoader());
         const [live, upcoming] = await Promise.all([
           fetchTournamentList({ status: 'live', game: activeGame.name }),
           fetchTournamentList({ status: 'upcoming', game: activeGame.name }),
@@ -187,13 +191,15 @@ export default function TournamentScreen() {
         }
       } finally {
         if (!cancelled) setIsLoadingTournaments(false);
+        dispatch(hideLoader());
       }
     })();
 
     return () => {
       cancelled = true;
+      dispatch(hideLoader());
     };
-  }, [isAuthenticated, activeGame]);
+  }, [isAuthenticated, activeGame, dispatch]);
 
   const { paidTournaments, specialTournaments } = useMemo(() => {
     const paid: TournamentUiItem[] = [];
@@ -304,23 +310,17 @@ export default function TournamentScreen() {
 
       {isEmpty ? (
         <View style={styles.section}>
-          <Card style={{ padding: w(16) }}>
-            <Text style={{ fontSize: w(14), fontWeight: '700', color: colors.text }}>
-              No Tournament Available
-            </Text>
-            <Text style={{ fontSize: w(12), color: colors.tabIconDefault, marginTop: h(6) }}>
-              Try a different game or check back later.
-            </Text>
-          </Card>
+          <NoDataFound
+            title="No Data Found"
+            description="No tournaments found for this game. Try another game or check back later."
+          />
         </View>
       ) : null}
 
       {!isEmpty ? (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>PAID TOURNAMENTS</Text>
-          {isLoadingTournaments ? (
-            <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>Loading tournaments…</Text>
-          ) : tournamentError ? (
+          {tournamentError ? (
             <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>{tournamentError}</Text>
           ) : paidTournaments.length > 0 ? (
             <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
@@ -337,9 +337,7 @@ export default function TournamentScreen() {
           <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>
             SPECIAL (FREE / SPONSORED)
           </Text>
-          {isLoadingTournaments ? (
-            <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>Loading tournaments…</Text>
-          ) : tournamentError ? (
+          {tournamentError ? (
             <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>{tournamentError}</Text>
           ) : specialTournaments.length > 0 ? (
             <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
