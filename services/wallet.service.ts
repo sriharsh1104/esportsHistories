@@ -1,5 +1,5 @@
 import { API_ENDPOINTS } from '@/constants/api';
-import type { Transaction, TransactionFilters } from '@/types/auth';
+import type { TopupHistoryPagination, Transaction, TransactionFilters } from '@/types/auth';
 import type {
   CreatePaymentQrResult,
   RazorpayOrderResult,
@@ -36,6 +36,21 @@ function firstString(...vals: unknown[]): string | undefined {
     if (v != null && String(v).trim()) return String(v).trim();
   }
   return undefined;
+}
+
+/** Wallet APIs often return `balanceINR`; older shapes use `balance` / `walletBalance`. */
+function parseWalletBalanceFromRoot(root: Record<string, unknown> | null | undefined): number {
+  if (!root || typeof root !== 'object') return 0;
+  const raw =
+    root.balanceINR ??
+    root.balanceInr ??
+    root.balance_inr ??
+    root.walletBalance ??
+    root.balance ??
+    root.availableBalance ??
+    0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
 }
 
 /** Builds `Image` `uri` from base64 or URL returned by payment APIs. */
@@ -119,13 +134,11 @@ export async function fetchWalletBalance(): Promise<WalletBalanceResult> {
       res && typeof res === 'object' && 'data' in res && (res as { data?: unknown }).data != null
         ? ((res as { data: Record<string, unknown> }).data as Record<string, unknown>)
         : (res as Record<string, unknown>);
-    const walletBalance = Number(
-      root.balance ?? root.walletBalance ?? root.availableBalance ?? 0
-    );
+    const walletBalance = parseWalletBalanceFromRoot(root);
     const withdrawalLimits =
       (root.withdrawalLimits ?? root.limits) as WalletBalanceResult['withdrawalLimits'];
     return {
-      walletBalance: Number.isFinite(walletBalance) ? walletBalance : 0,
+      walletBalance,
       withdrawalLimits:
         withdrawalLimits && typeof withdrawalLimits === 'object' ? withdrawalLimits : undefined,
     };
@@ -150,15 +163,27 @@ function mapTopupHistoryRow(row: Record<string, unknown>): Transaction | null {
   const typeRaw = String(row.type ?? row.kind ?? 'topup').toLowerCase();
   const type: Transaction['type'] =
     typeRaw === 'withdrawal' || typeRaw === 'withdraw' ? 'withdrawal' : 'topup';
-  const statusRaw = String(row.status ?? 'success').toLowerCase();
+  const statusSource = row.displayStatus ?? row.status ?? 'success';
+  const statusRaw = String(statusSource).toLowerCase().trim();
   const status: Transaction['status'] =
-    statusRaw === 'pending' ? 'pending' : statusRaw === 'failed' ? 'failed' : 'success';
+    statusRaw === 'pending' || statusRaw === 'processing'
+      ? 'pending'
+      : statusRaw === 'failed' ||
+          statusRaw === 'fail' ||
+          statusRaw === 'failure' ||
+          statusRaw === 'error' ||
+          statusRaw === 'rejected'
+        ? 'failed'
+        : 'success';
   const created = row.createdAt ?? row.created_at ?? new Date().toISOString();
   const updated = row.updatedAt ?? row.updated_at ?? created;
+  const rawAmount =
+    row.amountINR ?? row.amountInr ?? row.amount_inr ?? row.amount ?? row.value ?? 0;
+  const parsedAmount = Number(rawAmount);
   return {
     _id: id,
     type,
-    amount: Number(row.amount ?? 0),
+    amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
     status,
     upiId:
       row.upiId != null
@@ -175,6 +200,67 @@ function mapTopupHistoryRow(row: Record<string, unknown>): Transaction | null {
   };
 }
 
+function parseTopupHistoryPagination(raw: unknown): TopupHistoryPagination | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const po = raw as Record<string, unknown>;
+  const currentPage = Number(po.currentPage ?? po.page ?? 1) || 1;
+  const totalPages = Number(po.totalPages ?? 1) || 1;
+  const totalItems = Number(po.totalItems ?? po.total ?? 0) || 0;
+  const itemsPerPage = Number(po.itemsPerPage ?? po.limit ?? 20) || 20;
+  const hasNextPage = Boolean(
+    po.hasNextPage ?? (totalPages > 0 ? currentPage < totalPages : false)
+  );
+  const hasPrevPage = Boolean(po.hasPrevPage ?? currentPage > 1);
+  return {
+    currentPage,
+    totalPages,
+    totalItems,
+    itemsPerPage,
+    hasNextPage,
+    hasPrevPage,
+  };
+}
+
+/**
+ * Normalizes `/wallet/topup-history` payload: either a bare array, or `{ history, pagination }` inside `data`.
+ */
+function parseTopupHistoryResponse(res: unknown): {
+  history: Transaction[];
+  pagination: TopupHistoryPagination | null;
+} {
+  if (Array.isArray(res)) {
+    const history = (res as Record<string, unknown>[])
+      .map(mapTopupHistoryRow)
+      .filter((x): x is Transaction => x != null);
+    return { history, pagination: null };
+  }
+  const root = res && typeof res === 'object' ? (res as Record<string, unknown>) : {};
+  let rows: Record<string, unknown>[] = [];
+  if (Array.isArray(root.history)) {
+    rows = root.history as Record<string, unknown>[];
+  } else if (Array.isArray(root.items)) {
+    rows = root.items as Record<string, unknown>[];
+  } else {
+    rows = unwrapArray<Record<string, unknown>>(res);
+  }
+  const history = rows.map(mapTopupHistoryRow).filter((x): x is Transaction => x != null);
+  const pagination = parseTopupHistoryPagination(root.pagination);
+  return { history, pagination };
+}
+
+function topupHistoryQueryParams(
+  filters: TransactionFilters
+): Record<string, string | number | boolean | undefined> {
+  const params: Record<string, string | number | boolean | undefined> = {};
+  if (filters.type) params.type = filters.type;
+  if (filters.status) params.status = filters.status;
+  if (filters.startDate) params.startDate = filters.startDate;
+  if (filters.endDate) params.endDate = filters.endDate;
+  if (filters.page != null && filters.page > 0) params.page = filters.page;
+  if (filters.limit != null && filters.limit > 0) params.limit = filters.limit;
+  return params;
+}
+
 /**
  * GET `/wallet/topup-history` — deposits + withdrawals only (not tournament ledger).
  */
@@ -182,15 +268,26 @@ export async function fetchWalletTopupHistory(
   filters: TransactionFilters = {}
 ): Promise<Transaction[]> {
   try {
-    const params: Record<string, string | number | boolean | undefined> = {};
-    if (filters.type) params.type = filters.type;
-    if (filters.status) params.status = filters.status;
-    if (filters.startDate) params.startDate = filters.startDate;
-    if (filters.endDate) params.endDate = filters.endDate;
+    const res = await api.get<unknown>(
+      API_ENDPOINTS.WALLET.TOPUP_HISTORY,
+      topupHistoryQueryParams(filters)
+    );
+    return parseTopupHistoryResponse(res).history;
+  } catch (error) {
+    rethrowAsApiError(error, 'Failed to fetch top-up / withdrawal history');
+  }
+}
 
-    const res = await api.get<unknown>(API_ENDPOINTS.WALLET.TOPUP_HISTORY, params);
-    const rows = unwrapArray<Record<string, unknown>>(res);
-    return rows.map(mapTopupHistoryRow).filter((x): x is Transaction => x != null);
+/** Same as `fetchWalletTopupHistory` but returns pagination for modals / lists. */
+export async function fetchWalletTopupHistoryWithPagination(
+  filters: TransactionFilters = {}
+): Promise<{ history: Transaction[]; pagination: TopupHistoryPagination | null }> {
+  try {
+    const res = await api.get<unknown>(
+      API_ENDPOINTS.WALLET.TOPUP_HISTORY,
+      topupHistoryQueryParams(filters)
+    );
+    return parseTopupHistoryResponse(res);
   } catch (error) {
     rethrowAsApiError(error, 'Failed to fetch top-up / withdrawal history');
   }
@@ -201,29 +298,36 @@ export type WalletWithdrawResponse = {
 };
 
 /**
- * POST `/wallet/withdraw` — cash-out; payout UPI usually comes from profile `paymentUPI`.
+ * POST `/payment/withdraw` — body `{ amountINR, description, upiId? }`.
+ * Omit `upiId` when empty so the server can use the UPI saved on the profile.
  */
 export async function requestWalletWithdraw(
   amount: number,
-  paymentUPI?: string
+  upiId?: string,
+  description = 'UPI payout'
 ): Promise<WalletWithdrawResponse> {
   try {
-    const body: Record<string, unknown> = { amount };
-    const upi = paymentUPI?.trim();
-    if (upi) body.paymentUPI = upi;
+    const body: Record<string, unknown> = {
+      amountINR: amount,
+      description: description.trim() || 'UPI payout',
+    };
+    const upi = upiId?.trim();
+    if (upi) body.upiId = upi;
     const res = await api.post<Record<string, unknown>>(API_ENDPOINTS.WALLET.WITHDRAW, body);
     const root =
       res && typeof res === 'object' && 'data' in res && (res as { data?: unknown }).data != null
         ? ((res as { data: Record<string, unknown> }).data as Record<string, unknown>)
         : res;
-    const walletBalance = Number(root?.walletBalance ?? root?.balance ?? 0);
-    return { walletBalance: Number.isFinite(walletBalance) ? walletBalance : 0 };
+    const walletBalance = parseWalletBalanceFromRoot(
+      root && typeof root === 'object' ? (root as Record<string, unknown>) : undefined
+    );
+    return { walletBalance };
   } catch (error) {
     rethrowAsApiError(error, 'Withdrawal failed');
   }
 }
 
-/** POST `/wallet/withdraw/:transactionId/cancel` */
+/** POST `/payment/withdraw/:transactionId/cancel` */
 export async function cancelWalletWithdrawal(transactionId: string): Promise<void> {
   try {
     const id = transactionId.trim();
@@ -355,8 +459,10 @@ export async function legacyWalletTopUp(amount: number): Promise<WalletWithdrawR
       res && typeof res === 'object' && 'data' in res && (res as { data?: unknown }).data != null
         ? ((res as { data: Record<string, unknown> }).data as Record<string, unknown>)
         : res;
-    const walletBalance = Number(root?.walletBalance ?? root?.balance ?? 0);
-    return { walletBalance: Number.isFinite(walletBalance) ? walletBalance : 0 };
+    const walletBalance = parseWalletBalanceFromRoot(
+      root && typeof root === 'object' ? (root as Record<string, unknown>) : undefined
+    );
+    return { walletBalance };
   } catch (error) {
     rethrowAsApiError(error, 'Top up failed');
   }

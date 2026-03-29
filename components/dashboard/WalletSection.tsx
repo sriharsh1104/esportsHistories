@@ -6,13 +6,11 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useWallet } from '@/context/WalletContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
-import type { CreatePaymentQrResult, RazorpayOrderResult } from '@/types/payment';
+import type { RazorpayOrderResult } from '@/types/payment';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -25,7 +23,7 @@ import Toast from 'react-native-toast-message';
 import * as walletService from '@/services/wallet.service';
 import { WebView } from 'react-native-webview';
 
-type TopUpMethod = 'upi' | 'card' | 'qr';
+type TopUpMethod = 'upi' | 'card';
 type RazorpayCheckoutResponse = {
   razorpay_order_id?: string;
   razorpay_payment_id?: string;
@@ -44,12 +42,22 @@ type RazorpayWebOptions = {
   currency: 'INR';
   name: string;
   description: string;
+  prefill?: { email?: string; contact?: string };
+  /** Razorpay: UPI path `{ upi: true }` (UPI-first); card path `{ card: true }` + custom block. No UPI display.blocks. */
+  method?: { upi?: boolean; card?: boolean };
   handler: (response: RazorpayCheckoutResponse) => void;
   modal?: {
     ondismiss?: () => void;
   };
   theme?: {
     color?: string;
+  };
+  config?: {
+    display?: {
+      blocks?: Record<string, { name: string; instruments: { method: string }[] }>;
+      sequence?: string[];
+      preferences?: { show_default_blocks?: boolean };
+    };
   };
 };
 type RazorpayWebInstance = {
@@ -59,9 +67,9 @@ type RazorpayWebInstance = {
 type RazorpayWebConstructor = new (options: RazorpayWebOptions) => RazorpayWebInstance;
 
 const TOP_UP_OPTIONS: { id: TopUpMethod; icon: string; label: string; desc: string }[] = [
-  { id: 'upi', icon: 'credit-card', label: 'UPI', desc: 'GPay, PhonePe, BHIM, etc.' },
+  { id: 'upi', icon: 'mobile', label: 'UPI', desc: 'Razorpay checkout — GPay, PhonePe, BHIM' },
   { id: 'card', icon: 'credit-card-alt', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay' },
-  { id: 'qr', icon: 'qrcode', label: 'QR Code', desc: 'Scan to pay' },
+  /* Manual QR top-up (POST /payment/create-qr, poll, scan UI) — disabled; full flow archived at bottom of this file. */
 ];
 
 function validateUpiId(v: string): boolean {
@@ -91,19 +99,30 @@ export function WalletSection() {
   const [upiFormError, setUpiFormError] = useState('');
   const [editingUpiId, setEditingUpiId] = useState<string | null>(null);
   const [deleteUpiConfirmId, setDeleteUpiConfirmId] = useState<string | null>(null);
+  /*
   const [qrPaySession, setQrPaySession] = useState<{
     amount: number;
     result: CreatePaymentQrResult;
   } | null>(null);
+  */
   const [razorpaySession, setRazorpaySession] = useState<{
     amountINR: number;
     order: RazorpayOrderResult;
     method: 'upi' | 'card';
+    prefill?: { email?: string; contact?: string };
   } | null>(null);
-  const [qrGenLoading, setQrGenLoading] = useState(false);
+  // const [qrGenLoading, setQrGenLoading] = useState(false);
   const [razorpayError, setRazorpayError] = useState<string>('');
 
   const dispatch = useAppDispatch();
+
+  const razorpayPrefill = useMemo(
+    () => ({
+      email: user?.email?.trim() ?? '',
+      contact: user?.phone?.trim() ?? '',
+    }),
+    [user?.email, user?.phone]
+  );
 
   useEffect(() => {
     if (savedUpiList.length === 1 && !selectedUpiId) {
@@ -111,33 +130,16 @@ export function WalletSection() {
     }
   }, [savedUpiList, selectedUpiId]);
 
+  /* Manual QR: poll GET /payment/qr-status/:id
   useEffect(() => {
     const id = qrPaySession?.result.qrCodeId;
     if (!id || modalType !== 'topup') return;
-
-    const tick = async () => {
-      try {
-        const { status } = await walletService.getPaymentQrStatus(id);
-        if (status === 'success') {
-          setQrPaySession(null);
-          setAmount('');
-          setModalType(null);
-          await refreshWallet();
-          await fetchTransactions();
-          Toast.show({ type: 'success', text1: 'Top-up completed' });
-        } else if (status === 'failed') {
-          setQrPaySession(null);
-          setError('Payment expired or failed. Generate a new QR.');
-        }
-      } catch {
-        /* ignore transient poll errors */
-      }
-    };
-
+    const tick = async () => { ... };
     void tick();
     const interval = setInterval(() => void tick(), 4000);
     return () => clearInterval(interval);
   }, [qrPaySession?.result.qrCodeId, modalType, refreshWallet, fetchTransactions]);
+  */
 
   useEffect(() => {
     if (!razorpaySession || modalType !== 'topup') return;
@@ -181,22 +183,24 @@ export function WalletSection() {
     [w, h, colors]
   );
 
+  /* Manual QR: POST /payment/close-qr/:id
   const dismissQrOnServer = (result: CreatePaymentQrResult | null) => {
     const qid = result?.qrCodeId;
     if (!qid) return;
     void walletService.closePaymentQr(qid).catch(() => {});
   };
+  */
 
   const closeModal = () => {
-    if (qrPaySession?.result) dismissQrOnServer(qrPaySession.result);
-    setQrPaySession(null);
+    // if (qrPaySession?.result) dismissQrOnServer(qrPaySession.result);
+    // setQrPaySession(null);
     setRazorpaySession(null);
     setModalType(null);
     setAmount('');
     setTopUpMethod('upi');
     setSelectedUpiId(null);
     setError('');
-    setQrGenLoading(false);
+    // setQrGenLoading(false);
     setRazorpayError('');
   };
 
@@ -204,6 +208,7 @@ export function WalletSection() {
     order: RazorpayOrderResult;
     amountINR: number;
     method: 'upi' | 'card';
+    prefill?: { email?: string; contact?: string };
   }) => {
     if (Platform.OS !== 'web') return;
     const win = globalThis as typeof globalThis & { Razorpay?: RazorpayWebConstructor };
@@ -220,6 +225,10 @@ export function WalletSection() {
         fn();
       };
 
+      const prefill: { email?: string; contact?: string } = {};
+      if (opts.prefill?.email) prefill.email = opts.prefill.email;
+      if (opts.prefill?.contact) prefill.contact = opts.prefill.contact;
+
       const checkout = new Razorpay({
         key: opts.order.keyId,
         order_id: opts.order.orderId,
@@ -227,6 +236,8 @@ export function WalletSection() {
         currency: 'INR',
         name: 'BooyahX',
         description: `Wallet topup ₹${opts.amountINR.toFixed(2)}`,
+        ...(Object.keys(prefill).length ? { prefill } : {}),
+        method: opts.method === 'card' ? { card: true } : { upi: true },
         handler: async (response) => {
           const orderId = String(response.razorpay_order_id ?? '').trim();
           const paymentId = String(response.razorpay_payment_id ?? '').trim();
@@ -257,9 +268,9 @@ export function WalletSection() {
           },
         },
         theme: { color: '#6d4aff' },
-        config:
-          opts.method === 'card'
-            ? {
+        ...(opts.method === 'card'
+          ? {
+              config: {
                 display: {
                   blocks: {
                     card: {
@@ -272,21 +283,9 @@ export function WalletSection() {
                     show_default_blocks: false,
                   },
                 },
-              }
-            : {
-                display: {
-                  blocks: {
-                    upi: {
-                      name: 'UPI',
-                      instruments: [{ method: 'upi' }],
-                    },
-                  },
-                  sequence: ['block.upi'],
-                  preferences: {
-                    show_default_blocks: false,
-                  },
-                },
               },
+            }
+          : {}),
       });
 
       checkout.on('payment.failed', (resp) => {
@@ -309,35 +308,39 @@ export function WalletSection() {
     amountINR: number;
     order: RazorpayOrderResult;
     method: 'upi' | 'card';
+    prefill?: { email?: string; contact?: string };
   }) => {
     const amountPaise = session.order.amountPaise;
     const keyId = session.order.keyId.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const orderId = session.order.orderId.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const name = 'Esports Histories';
-    const displayConfigSnippet =
+    const prefillObj: Record<string, string> = {};
+    if (session.prefill?.email?.trim()) prefillObj.email = session.prefill.email.trim();
+    if (session.prefill?.contact?.trim()) prefillObj.contact = session.prefill.contact.trim();
+    const prefillLine =
+      Object.keys(prefillObj).length > 0 ? `prefill: ${JSON.stringify(prefillObj)},` : '';
+    const methodLine =
+      session.method === 'card'
+        ? `method: ${JSON.stringify({ card: true })},`
+        : `method: ${JSON.stringify({ upi: true })},`;
+    const checkoutExtraSnippet =
       session.method === 'card'
         ? `
-          display: {
-            blocks: {
-              card: {
-                name: 'Card',
-                instruments: [{ method: 'card' }]
-              }
-            },
-            sequence: ['block.card'],
-            preferences: { show_default_blocks: false }
-          }`
+          theme: { color: '#6d4aff' },
+          config: {
+            display: {
+              blocks: {
+                card: {
+                  name: 'Card',
+                  instruments: [{ method: 'card' }]
+                }
+              },
+              sequence: ['block.card'],
+              preferences: { show_default_blocks: false }
+            }
+          },`
         : `
-          display: {
-            blocks: {
-              upi: {
-                name: 'UPI',
-                instruments: [{ method: 'upi' }]
-              }
-            },
-            sequence: ['block.upi'],
-            preferences: { show_default_blocks: false }
-          }`;
+          theme: { color: '#6d4aff' },`;
 
     return `<!doctype html>
 <html>
@@ -383,6 +386,8 @@ export function WalletSection() {
           currency: 'INR',
           name: '${name}',
           description: 'Wallet top-up',
+          ${prefillLine}
+          ${methodLine}
           handler: function (response) {
             post({
               type: 'success',
@@ -394,7 +399,7 @@ export function WalletSection() {
           modal: {
             ondismiss: function() { post({ type: 'dismiss' }); }
           },
-          ${displayConfigSnippet}
+          ${checkoutExtraSnippet}
         };
         try {
           var rz = new Razorpay(options);
@@ -477,19 +482,18 @@ export function WalletSection() {
       setError('Enter valid amount');
       return;
     }
-    if (modalType === 'topup' && topUpMethod === 'upi' && (!selectedUpiId || !savedUpiList.includes(selectedUpiId))) {
-      setError('Select UPI ID to pay from');
-      return;
-    }
+    /* Manual QR top-up
     if (modalType === 'topup' && topUpMethod === 'qr' && (!selectedUpiId || !savedUpiList.includes(selectedUpiId))) {
       setError('Select saved UPI ID first');
       return;
     }
+    */
     if (modalType === 'withdraw' && (!selectedUpiId || !savedUpiList.includes(selectedUpiId))) {
       setError('Select UPI ID to receive money');
       return;
     }
 
+    /* Manual QR: walletService.createPaymentQr
     if (modalType === 'topup' && topUpMethod === 'qr') {
       setQrGenLoading(true);
       try {
@@ -502,6 +506,7 @@ export function WalletSection() {
       }
       return;
     }
+    */
 
     if (modalType === 'topup') {
       dispatch(showLoader());
@@ -512,6 +517,7 @@ export function WalletSection() {
             order,
             amountINR: val,
             method: topUpMethod === 'card' ? 'card' : 'upi',
+            prefill: razorpayPrefill,
           });
           setAmount('');
           setModalType(null);
@@ -523,6 +529,7 @@ export function WalletSection() {
             amountINR: val,
             order,
             method: topUpMethod === 'card' ? 'card' : 'upi',
+            prefill: razorpayPrefill,
           });
         }
       } catch (e) {
@@ -545,21 +552,13 @@ export function WalletSection() {
     }
   };
 
-  const qrImageUri =
-    qrPaySession && walletService.paymentQrToImageUri(qrPaySession.result);
+  // const qrImageUri = qrPaySession && walletService.paymentQrToImageUri(qrPaySession.result);
 
-  const topUpSubmitLabel =
-    modalType === 'topup' && topUpMethod === 'qr' ? 'Generate QR' : modalType === 'topup' ? 'Add' : 'Withdraw';
+  const topUpSubmitLabel = modalType === 'topup' ? 'Pay with Razorpay' : 'Withdraw';
 
-  const needsUpiForTopup =
-    modalType === 'topup' &&
-    (topUpMethod === 'upi' || topUpMethod === 'qr') &&
-    (savedUpiList.length === 0 || !selectedUpiId);
-
+  // Manual QR needed saved UPI + Generate QR label — removed with QR flow
   const primaryDisabled =
-    needsUpiForTopup ||
-    (modalType === 'withdraw' && (savedUpiList.length === 0 || !selectedUpiId)) ||
-    qrGenLoading;
+    modalType === 'withdraw' && (savedUpiList.length === 0 || !selectedUpiId);
 
   const renderSavedUpiPicker = (opts: { title: string }) => (
     <View style={{ marginBottom: h(12) }}>
@@ -805,59 +804,9 @@ export function WalletSection() {
                   </View>
                 )}
               </>
-            ) : qrPaySession ? (
-              <>
-                <Text
-                  style={{
-                    fontSize: w(20),
-                    fontWeight: '700',
-                    color: colors.text,
-                    marginBottom: h(8),
-                  }}
-                >
-                  Scan to pay
-                </Text>
-                <Text style={{ fontSize: w(14), color: colors.tabIconDefault, marginBottom: h(16) }}>
-                  ₹{qrPaySession.amount.toFixed(2)} — open any UPI app and scan the QR. This screen closes when
-                  payment is detected.
-                </Text>
-                {qrImageUri ? (
-                  <View style={{ alignItems: 'center', marginBottom: h(16) }}>
-                    <Image
-                      source={{ uri: qrImageUri }}
-                      style={{ width: w(220), height: w(220) }}
-                      resizeMode="contain"
-                    />
-                  </View>
-                ) : (
-                  <Text style={{ fontSize: w(13), color: colors.tabIconDefault, marginBottom: h(12) }}>
-                    No QR image in response. If your app opened a payment link, complete the payment there—we are
-                    still checking status.
-                  </Text>
-                )}
-                {(qrPaySession.result.upiLink || qrPaySession.result.paymentLink) && (
-                  <Text
-                    selectable
-                    style={{ fontSize: w(11), color: colors.tabIconDefault, marginBottom: h(12) }}
-                  >
-                    {qrPaySession.result.upiLink || qrPaySession.result.paymentLink}
-                  </Text>
-                )}
-                <View style={styles.actions}>
-                  <Button
-                    title="Back"
-                    variant="outline"
-                    style={styles.btn}
-                    onPress={() => {
-                      dismissQrOnServer(qrPaySession.result);
-                      setQrPaySession(null);
-                    }}
-                  />
-                  <Button title="Close" variant="ghost" onPress={closeModal} style={styles.btn} />
-                </View>
-              </>
             ) : (
               <>
+                {/* Manual QR “Scan to pay” branch removed — see WALLET_MANUAL_QR_FLOW_ARCHIVE at EOF */}
                 <Text
                   style={{
                     fontSize: w(20),
@@ -878,7 +827,7 @@ export function WalletSection() {
                         key={opt.id}
                         onPress={() => {
                           setTopUpMethod(opt.id);
-                          if (opt.id !== 'upi' && opt.id !== 'qr') setSelectedUpiId(null);
+                          setSelectedUpiId(null);
                         }}
                         style={[
                           styles.payOpt,
@@ -905,10 +854,32 @@ export function WalletSection() {
                         )}
                       </Pressable>
                     ))}
-                    {(topUpMethod === 'upi' || topUpMethod === 'qr') &&
-                      renderSavedUpiPicker({
-                        title: topUpMethod === 'qr' ? 'Your UPI (for this payment)' : 'Pay from (saved UPI ID)',
-                      })}
+                    {modalType === 'topup' && topUpMethod === 'upi' && (
+                      <Text
+                        style={{
+                          fontSize: w(12),
+                          color: colors.tabIconDefault,
+                          marginBottom: h(10),
+                          lineHeight: Math.round(w(17)),
+                        }}
+                      >
+                        Opens Razorpay with UPI only (after UPI is enabled on your Razorpay merchant). Test:{' '}
+                        <Text style={{ fontWeight: '700', color: colors.text }}>success@razorpay</Text>.
+                      </Text>
+                    )}
+                    {modalType === 'topup' && topUpMethod === 'card' && (
+                      <Text
+                        style={{
+                          fontSize: w(12),
+                          color: colors.tabIconDefault,
+                          marginBottom: h(10),
+                          lineHeight: Math.round(w(17)),
+                        }}
+                      >
+                        Opens Razorpay with cards only. Use Razorpay test cards in sandbox.
+                      </Text>
+                    )}
+                    {/* Manual QR: renderSavedUpiPicker for merchant QR generation */}
                     <View style={{ height: h(8) }} />
                   </>
                 )}
@@ -932,16 +903,13 @@ export function WalletSection() {
                     {error}
                   </Text>
                 )}
-                {qrGenLoading && (
-                  <ActivityIndicator size="small" color={colors.tint} style={{ marginBottom: h(12) }} />
-                )}
                 <View style={styles.actions}>
                   <Button title="Cancel" variant="ghost" onPress={closeModal} style={styles.btn} />
                   <Button
                     title={topUpSubmitLabel}
                     onPress={handleSubmit}
                     style={styles.btn}
-                    disabled={primaryDisabled || qrGenLoading}
+                    disabled={primaryDisabled}
                   />
                 </View>
               </>
@@ -1034,3 +1002,18 @@ export function WalletSection() {
     </>
   );
 }
+
+/*
+ * =============================================================================
+ * WALLET_MANUAL_QR_FLOW_ARCHIVE (disabled)
+ * Restore by: re-add `CreatePaymentQrResult` import; `Image`, `Linking` from RN;
+ * `TopUpMethod` += 'qr'; QR row in TOP_UP_OPTIONS; state qrPaySession + qrGenLoading;
+ * useEffect polling walletService.getPaymentQrStatus; dismissQrOnServer +
+ * walletService.closePaymentQr; handleSubmit branches for qr validation +
+ * walletService.createPaymentQr; qrImageUri via paymentQrToImageUri; modal branch
+ * `qrPaySession ? (scan UI + Linking.openURL)` between razorpaySession and form;
+ * needsUpiForTopup for qr; primaryDisabled + qrGenLoading; ActivityIndicator when
+ * generating QR; renderSavedUpiPicker when topUpMethod === 'qr'.
+ * APIs: POST /payment/create-qr, GET /payment/qr-status/:id, POST /payment/close-qr/:id
+ * =============================================================================
+ */

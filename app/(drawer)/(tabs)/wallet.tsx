@@ -9,13 +9,17 @@ import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
+    Dimensions,
+    FlatList,
     Modal,
     Pressable,
+    StyleSheet,
     Text,
-    View
+    View,
 } from 'react-native';
 import { formatDateDdMmYyyy } from '@/utils';
 
@@ -26,10 +30,27 @@ function validateUpiId(v: string): boolean {
 }
 
 import { useWallet } from '@/context/WalletContext';
+import { fetchWalletTopupHistoryWithPagination } from '@/services/wallet.service';
+import type { TopupHistoryPagination, Transaction, TransactionFilters } from '@/types/auth';
+
+function buildTopupHistoryFilters(
+  type: 'all' | 'topup' | 'withdrawal',
+  preset: 'all' | '7' | '30',
+  page: number
+): TransactionFilters {
+  const f: TransactionFilters = { page, limit: 20 };
+  if (type !== 'all') f.type = type;
+  if (preset !== 'all') {
+    const d = new Date();
+    d.setDate(d.getDate() - parseInt(preset, 10));
+    f.startDate = d.toISOString();
+  }
+  return f;
+}
 
 export default function WalletScreen() {
   const { user, isAuthenticated, updateProfile, updateUpiIds } = useAuth();
-  const { transactions, fetchTransactions, refreshWallet, isLoading: isWalletLoading } = useWallet();
+  const { transactions, fetchTransactions, refreshWallet } = useWallet();
   const dispatch = useAppDispatch();
   const [showAddUpi, setShowAddUpi] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'topup' | 'withdrawal'>('all');
@@ -38,6 +59,14 @@ export default function WalletScreen() {
   const [upiError, setUpiError] = useState('');
   const [deleteUpiConfirmId, setDeleteUpiConfirmId] = useState<string | null>(null);
   const [selectedUpiDraft, setSelectedUpiDraft] = useState<string | null>(null);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [modalFilterType, setModalFilterType] = useState<'all' | 'topup' | 'withdrawal'>('all');
+  const [modalDatePreset, setModalDatePreset] = useState<'all' | '7' | '30'>('all');
+  const [modalPage, setModalPage] = useState(1);
+  const [modalHistory, setModalHistory] = useState<Transaction[]>([]);
+  const [modalPagination, setModalPagination] = useState<TopupHistoryPagination | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -91,6 +120,105 @@ export default function WalletScreen() {
     // Keep selection in sync with current payout UPI.
     setSelectedUpiDraft((prev) => prev ?? payoutUpi);
   }, [payoutUpi]);
+
+  const loadModalHistory = useCallback(async () => {
+    setModalLoading(true);
+    setModalError(null);
+    try {
+      const { history, pagination } = await fetchWalletTopupHistoryWithPagination(
+        buildTopupHistoryFilters(modalFilterType, modalDatePreset, modalPage)
+      );
+      setModalHistory(history);
+      setModalPagination(pagination);
+    } catch (e) {
+      setModalError(e instanceof Error ? e.message : 'Failed to load history');
+      setModalHistory([]);
+      setModalPagination(null);
+    } finally {
+      setModalLoading(false);
+    }
+  }, [modalFilterType, modalDatePreset, modalPage]);
+
+  useEffect(() => {
+    if (!historyModalVisible) return;
+    void loadModalHistory();
+  }, [historyModalVisible, loadModalHistory]);
+
+  const openHistoryModal = () => {
+    setModalFilterType(filterType);
+    setModalDatePreset(datePreset);
+    setModalPage(1);
+    setModalHistory([]);
+    setModalPagination(null);
+    setModalError(null);
+    setHistoryModalVisible(true);
+  };
+
+  const historySheetHeight = useMemo(() => Dimensions.get('window').height * 0.85, []);
+
+  const renderHistoryRow = useCallback(
+    (t: Transaction) => (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: h(12),
+          paddingHorizontal: w(4),
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: 'rgba(128,128,128,0.2)',
+        }}
+      >
+        <View
+          style={{
+            width: w(40),
+            height: w(40),
+            borderRadius: w(20),
+            backgroundColor: t.type === 'topup' ? '#28a74520' : '#dc354520',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: w(12),
+          }}
+        >
+          <FontAwesome
+            name={t.type === 'topup' ? 'arrow-down' : 'arrow-up'}
+            size={w(14)}
+            color={t.type === 'topup' ? '#28a745' : '#dc3545'}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text }}>
+            {t.type === 'topup' ? 'Top Up' : 'Withdrawal'}
+          </Text>
+          <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
+            {formatDateDdMmYyyy(t.createdAt)}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text
+            style={{
+              fontSize: w(15),
+              fontWeight: '700',
+              color: t.type === 'topup' ? '#28a745' : '#dc3545',
+            }}
+          >
+            {t.type === 'topup' ? '+' : '-'}₹{t.amount.toFixed(2)}
+          </Text>
+          <Text
+            style={{
+              fontSize: w(10),
+              fontWeight: '600',
+              color:
+                t.status === 'success' ? '#28a745' : t.status === 'pending' ? '#ffc107' : '#dc3545',
+              textTransform: 'uppercase',
+            }}
+          >
+            {t.status}
+          </Text>
+        </View>
+      </View>
+    ),
+    [colors.text, colors.tabIconDefault, h, w]
+  );
 
   const handleAddNewUpi = async () => {
     setUpiError('');
@@ -404,18 +532,190 @@ export default function WalletScreen() {
                 </View>
               </View>
             ))}
-            {transactions.length > 10 && (
-              <Button 
-                title="View All History" 
-                variant="ghost" 
-                onPress={() => {}} // Could navigate to a dedicated history page
-                style={{ marginTop: h(8) }}
+            {transactions.length > 0 && (
+              <Button
+                title="View All History"
+                variant="outline"
+                onPress={openHistoryModal}
+                style={{ marginTop: h(8), marginHorizontal: w(16), marginBottom: h(8) }}
               />
             )}
           </View>
         )}
       </Card>
       <View style={{ height: h(40) }} />
+
+      <Modal
+        visible={historyModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setHistoryModalVisible(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+          onPress={() => setHistoryModalVisible(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: colors.cardBg,
+              borderTopLeftRadius: w(20),
+              borderTopRightRadius: w(20),
+              height: historySheetHeight,
+              paddingHorizontal: w(16),
+              paddingTop: h(14),
+              paddingBottom: h(12),
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: h(12),
+              }}
+            >
+              <Text style={{ fontSize: w(18), fontWeight: '700', color: colors.text }}>
+                Transaction history
+              </Text>
+              <Pressable
+                onPress={() => setHistoryModalVisible(false)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Close history"
+              >
+                <FontAwesome name="times" size={w(22)} color={colors.tabIconDefault} />
+              </Pressable>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: w(8), marginBottom: h(8) }}>
+              {(['all', 'topup', 'withdrawal'] as const).map((type) => (
+                <Pressable
+                  key={type}
+                  onPress={() => {
+                    setModalFilterType(type);
+                    setModalPage(1);
+                  }}
+                  style={{
+                    paddingVertical: h(6),
+                    paddingHorizontal: w(12),
+                    borderRadius: w(16),
+                    backgroundColor: modalFilterType === type ? colors.tint : colors.border + '40',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: w(12),
+                      fontWeight: '600',
+                      color: modalFilterType === type ? '#fff' : colors.text,
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {type}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: w(8), marginBottom: h(10) }}>
+              {(['all', '7', '30'] as const).map((preset) => (
+                <Pressable
+                  key={preset}
+                  onPress={() => {
+                    setModalDatePreset(preset);
+                    setModalPage(1);
+                  }}
+                  style={{
+                    paddingVertical: h(4),
+                    paddingHorizontal: w(10),
+                    borderRadius: w(12),
+                    borderWidth: 1,
+                    borderColor: modalDatePreset === preset ? colors.tint : colors.border,
+                    backgroundColor: modalDatePreset === preset ? colors.tint + '10' : 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: w(11),
+                      fontWeight: '500',
+                      color: modalDatePreset === preset ? colors.tint : colors.tabIconDefault,
+                    }}
+                  >
+                    {preset === 'all' ? 'All Time' : `Last ${preset} Days`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {modalError ? (
+              <Text style={{ color: '#dc3545', fontSize: w(13), marginBottom: h(8) }}>{modalError}</Text>
+            ) : null}
+
+            {modalLoading && modalHistory.length === 0 ? (
+              <View style={{ flex: 1, justifyContent: 'center', paddingVertical: h(40) }}>
+                <ActivityIndicator size="large" color={colors.tint} />
+              </View>
+            ) : (
+              <FlatList
+                data={modalHistory}
+                keyExtractor={(item) => item._id}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: h(8) }}
+                refreshing={modalLoading}
+                onRefresh={() => void loadModalHistory()}
+                renderItem={({ item }) => renderHistoryRow(item)}
+                ListEmptyComponent={
+                  !modalLoading ? (
+                    <Text style={{ fontSize: w(14), color: colors.tabIconDefault, textAlign: 'center', paddingVertical: h(24) }}>
+                      No transactions for this filter.
+                    </Text>
+                  ) : null
+                }
+              />
+            )}
+
+            {modalPagination ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingTop: h(10),
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: 'rgba(128,128,128,0.2)',
+                  gap: w(8),
+                }}
+              >
+                <Button
+                  title="Previous"
+                  variant="outline"
+                  disabled={!modalPagination.hasPrevPage || modalLoading}
+                  onPress={() => setModalPage((p) => Math.max(1, p - 1))}
+                  style={{ flex: 1 }}
+                />
+                <Text
+                  style={{
+                    fontSize: w(12),
+                    fontWeight: '600',
+                    color: colors.tabIconDefault,
+                    minWidth: w(100),
+                    textAlign: 'center',
+                  }}
+                >
+                  {modalPagination.currentPage} / {modalPagination.totalPages}
+                </Text>
+                <Button
+                  title="Next"
+                  variant="outline"
+                  disabled={!modalPagination.hasNextPage || modalLoading}
+                  onPress={() => setModalPage((p) => p + 1)}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={showAddUpi} transparent animationType="slide">
         <Pressable

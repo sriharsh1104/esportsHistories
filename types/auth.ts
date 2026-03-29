@@ -139,6 +139,19 @@ export type TransactionFilters = {
   status?: 'pending' | 'success' | 'failed';
   startDate?: string;
   endDate?: string;
+  /** 1-based page for `/wallet/topup-history` when the backend supports it. */
+  page?: number;
+  limit?: number;
+};
+
+/** Pagination block returned inside `data` for top-up / withdrawal history. */
+export type TopupHistoryPagination = {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
 };
 
 export type ActiveDeviceSession = {

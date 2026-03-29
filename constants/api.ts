@@ -46,14 +46,14 @@ export const API_ENDPOINTS = {
      */
     LEGACY_WALLET_TOPUP: "/user/wallet/topup",
   },
-  /** JWT — balance, history, withdraw, cancel; admin: add-balance, add-balance-bulk. */
+  /** JWT — balance, history; admin: add-balance, add-balance-bulk. Withdraw POST is `/api/payment/withdraw` when base includes `/api`. */
   WALLET: {
     BALANCE: "/wallet/balance",
     HISTORY: "/wallet/history",
     TOPUP_HISTORY: "/wallet/topup-history",
-    WITHDRAW: "/wallet/withdraw",
+    WITHDRAW: "/payment/withdraw",
     WITHDRAW_CANCEL: (transactionId: string) =>
-      `/wallet/withdraw/${encodeURIComponent(transactionId)}/cancel`,
+      `/payment/withdraw/${encodeURIComponent(transactionId)}/cancel`,
     ADD_BALANCE: "/wallet/add-balance",
     ADD_BALANCE_BULK: "/wallet/add-balance-bulk",
   },

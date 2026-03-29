@@ -47,7 +47,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated]);
 
-  // Keep drawer balance accurate: sync from profile when present, otherwise fetch once.
+  // Drawer + wallet screen share `balance` from context. Prefer `/wallet/balance` (`balanceINR`)
+  // over profile/JWT `walletBalance`, which can be missing or stale (e.g. 0 while API has funds).
   useEffect(() => {
     if (!isAuthenticated) {
       setBalance(0);
@@ -58,10 +59,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const wb = Number((user as { walletBalance?: unknown } | null)?.walletBalance);
     if (Number.isFinite(wb)) {
       setBalance(wb);
-      return;
     }
 
-    // Profile didn't include wallet balance; fetch it once.
     void fetchWallet();
   }, [isAuthenticated, user?.walletBalance, fetchWallet]);
 
