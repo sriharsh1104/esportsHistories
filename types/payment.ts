@@ -8,21 +8,28 @@ export type CreatePaymentQrResult = {
   paymentLink?: string;
 };
 
-/** Payload returned by POST `/payment/razorpay/order` to start Razorpay Checkout. */
-export type RazorpayOrderResult = {
-  keyId: string;
+export type CashfreePgEnvironment = 'sandbox' | 'production';
+
+/** Payload from POST `/payment/cashfree/order` (`data` after API unwrap). */
+export type CashfreeOrderResult = {
+  environment: CashfreePgEnvironment;
+  /** Cashfree app id for frontend — never the secret. */
+  clientId: string;
+  paymentSessionId: string;
+  /** Merchant order id — use for verify and match return URL `order_id`. */
   orderId: string;
-  amountPaise: number;
+  amountINR?: number;
+  walletTransactionId?: string;
 };
 
-export type RazorpayVerifyBody = {
+export type CashfreeVerifyBody = {
   orderId: string;
-  paymentId: string;
-  signature: string;
 };
 
-/** Normalized state after server-side `/payment/razorpay/verify` check. */
-export type RazorpayVerifyResult = {
+/** Normalized state after POST `/payment/cashfree/verify`. */
+export type CashfreeVerifyResult = {
   status: 'success' | 'pending' | 'failed';
+  balanceINR?: number;
+  message?: string;
   rawStatus?: string;
 };

@@ -6,7 +6,8 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useWallet } from '@/context/WalletContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
-import type { RazorpayOrderResult } from '@/types/payment';
+import type { CashfreeOrderResult } from '@/types/payment';
+import { cashfreeModeFromEnvironment, loadCashfreeFactory } from '@/utils/cashfreeWeb';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -22,55 +23,6 @@ import {
 import Toast from 'react-native-toast-message';
 import * as walletService from '@/services/wallet.service';
 import { WebView } from 'react-native-webview';
-
-type TopUpMethod = 'upi' | 'card';
-type RazorpayCheckoutResponse = {
-  razorpay_order_id?: string;
-  razorpay_payment_id?: string;
-  razorpay_signature?: string;
-};
-type RazorpayCheckoutFailure = {
-  error?: {
-    description?: string;
-    reason?: string;
-  };
-};
-type RazorpayWebOptions = {
-  key: string;
-  order_id: string;
-  amount: number;
-  currency: 'INR';
-  name: string;
-  description: string;
-  prefill?: { email?: string; contact?: string };
-  /** Razorpay: UPI path `{ upi: true }` (UPI-first); card path `{ card: true }` + custom block. No UPI display.blocks. */
-  method?: { upi?: boolean; card?: boolean };
-  handler: (response: RazorpayCheckoutResponse) => void;
-  modal?: {
-    ondismiss?: () => void;
-  };
-  theme?: {
-    color?: string;
-  };
-  config?: {
-    display?: {
-      blocks?: Record<string, { name: string; instruments: { method: string }[] }>;
-      sequence?: string[];
-      preferences?: { show_default_blocks?: boolean };
-    };
-  };
-};
-type RazorpayWebInstance = {
-  open: () => void;
-  on: (event: 'payment.failed', callback: (response: RazorpayCheckoutFailure) => void) => void;
-};
-type RazorpayWebConstructor = new (options: RazorpayWebOptions) => RazorpayWebInstance;
-
-const TOP_UP_OPTIONS: { id: TopUpMethod; icon: string; label: string; desc: string }[] = [
-  { id: 'upi', icon: 'mobile', label: 'UPI', desc: 'Razorpay checkout — GPay, PhonePe, BHIM' },
-  { id: 'card', icon: 'credit-card-alt', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay' },
-  /* Manual QR top-up (POST /payment/create-qr, poll, scan UI) — disabled; full flow archived at bottom of this file. */
-];
 
 function validateUpiId(v: string): boolean {
   return /^[\w.-]+@[\w.-]+$/.test(v.trim());
@@ -91,7 +43,6 @@ export function WalletSection() {
 
   const [modalType, setModalType] = useState<'topup' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
-  const [topUpMethod, setTopUpMethod] = useState<TopUpMethod>('upi');
   const [selectedUpiId, setSelectedUpiId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showAddUpiModal, setShowAddUpiModal] = useState(false);
@@ -105,24 +56,14 @@ export function WalletSection() {
     result: CreatePaymentQrResult;
   } | null>(null);
   */
-  const [razorpaySession, setRazorpaySession] = useState<{
+  const [cashfreeSession, setCashfreeSession] = useState<{
     amountINR: number;
-    order: RazorpayOrderResult;
-    method: 'upi' | 'card';
-    prefill?: { email?: string; contact?: string };
+    order: CashfreeOrderResult;
   } | null>(null);
   // const [qrGenLoading, setQrGenLoading] = useState(false);
-  const [razorpayError, setRazorpayError] = useState<string>('');
+  const [cashfreeError, setCashfreeError] = useState<string>('');
 
   const dispatch = useAppDispatch();
-
-  const razorpayPrefill = useMemo(
-    () => ({
-      email: user?.email?.trim() ?? '',
-      contact: user?.phone?.trim() ?? '',
-    }),
-    [user?.email, user?.phone]
-  );
 
   useEffect(() => {
     if (savedUpiList.length === 1 && !selectedUpiId) {
@@ -142,9 +83,9 @@ export function WalletSection() {
   */
 
   useEffect(() => {
-    if (!razorpaySession || modalType !== 'topup') return;
-    setRazorpayError('');
-  }, [razorpaySession, modalType]);
+    if (!cashfreeSession || modalType !== 'topup') return;
+    setCashfreeError('');
+  }, [cashfreeSession, modalType]);
 
   const styles = useMemo(
     () => ({
@@ -171,14 +112,6 @@ export function WalletSection() {
         color: colors.text,
         marginBottom: h(16),
       },
-      payOpt: {
-        flexDirection: 'row' as const,
-        alignItems: 'center' as const,
-        padding: w(14),
-        borderRadius: w(12),
-        borderWidth: 2,
-        marginBottom: h(10),
-      },
     }),
     [w, h, colors]
   );
@@ -194,160 +127,71 @@ export function WalletSection() {
   const closeModal = () => {
     // if (qrPaySession?.result) dismissQrOnServer(qrPaySession.result);
     // setQrPaySession(null);
-    setRazorpaySession(null);
+    setCashfreeSession(null);
     setModalType(null);
     setAmount('');
-    setTopUpMethod('upi');
     setSelectedUpiId(null);
     setError('');
     // setQrGenLoading(false);
-    setRazorpayError('');
+    setCashfreeError('');
   };
 
-  const startWebRazorpayPayment = async (opts: {
-    order: RazorpayOrderResult;
-    amountINR: number;
-    method: 'upi' | 'card';
-    prefill?: { email?: string; contact?: string };
-  }) => {
-    if (Platform.OS !== 'web') return;
-    const win = globalThis as typeof globalThis & { Razorpay?: RazorpayWebConstructor };
-    const Razorpay = win.Razorpay;
-    if (!Razorpay) {
-      throw new Error('Razorpay web SDK not loaded. Refresh the page and try again.');
+  function cashfreeCheckoutErrorMessage(result: unknown): string | null {
+    if (!result || typeof result !== 'object') return null;
+    const err = (result as { error?: { message?: string; toString?: () => string } }).error;
+    if (!err) return null;
+    if (typeof err === 'string') return err;
+    if (typeof err.message === 'string' && err.message.trim()) return err.message;
+    return 'Payment could not be completed';
+  }
+
+  const finalizeCashfreeTopUp = async (orderId: string) => {
+    const verified = await walletService.verifyCashfreePaymentWithPoll(orderId);
+    if (verified.status === 'success') {
+      return;
     }
+    if (verified.status === 'failed') {
+      throw new Error(verified.message?.trim() || 'Payment failed');
+    }
+    throw new Error(
+      verified.message?.trim() || 'Payment not completed yet. Check your wallet or try again.'
+    );
+  };
 
-    const verification = new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const finishOnce = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        fn();
-      };
-
-      const prefill: { email?: string; contact?: string } = {};
-      if (opts.prefill?.email) prefill.email = opts.prefill.email;
-      if (opts.prefill?.contact) prefill.contact = opts.prefill.contact;
-
-      const checkout = new Razorpay({
-        key: opts.order.keyId,
-        order_id: opts.order.orderId,
-        amount: opts.order.amountPaise,
-        currency: 'INR',
-        name: 'BooyahX',
-        description: `Wallet topup ₹${opts.amountINR.toFixed(2)}`,
-        ...(Object.keys(prefill).length ? { prefill } : {}),
-        method: opts.method === 'card' ? { card: true } : { upi: true },
-        handler: async (response) => {
-          const orderId = String(response.razorpay_order_id ?? '').trim();
-          const paymentId = String(response.razorpay_payment_id ?? '').trim();
-          const signature = String(response.razorpay_signature ?? '').trim();
-          if (!orderId || !paymentId || !signature) {
-            finishOnce(() => reject(new Error('Missing payment details from Razorpay.')));
-            return;
-          }
-          try {
-            const result = await walletService.verifyRazorpayPayment({
-              orderId,
-              paymentId,
-              signature,
-            });
-            if (result.status !== 'success') {
-              finishOnce(() => reject(new Error('Payment verification failed.')));
-              return;
-            }
-            finishOnce(() => resolve());
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Verification failed';
-            finishOnce(() => reject(new Error(message)));
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            finishOnce(() => reject(new Error('Payment cancelled by user.')));
-          },
-        },
-        theme: { color: '#6d4aff' },
-        ...(opts.method === 'card'
-          ? {
-              config: {
-                display: {
-                  blocks: {
-                    card: {
-                      name: 'Card',
-                      instruments: [{ method: 'card' }],
-                    },
-                  },
-                  sequence: ['block.card'],
-                  preferences: {
-                    show_default_blocks: false,
-                  },
-                },
-              },
-            }
-          : {}),
-      });
-
-      checkout.on('payment.failed', (resp) => {
-        const desc = resp?.error?.description || resp?.error?.reason || 'Payment failed';
-        finishOnce(() => reject(new Error(desc)));
-      });
-
-      try {
-        checkout.open();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Could not open Razorpay checkout';
-        finishOnce(() => reject(new Error(message)));
-      }
+  const startWebCashfreePayment = async (order: CashfreeOrderResult, amountINR: number) => {
+    if (Platform.OS !== 'web') return;
+    const Cashfree = await loadCashfreeFactory();
+    const mode = cashfreeModeFromEnvironment(order.environment);
+    const cf = Cashfree({ mode });
+    const result = await cf.checkout({
+      paymentSessionId: order.paymentSessionId,
+      redirectTarget: '_modal',
+      mode,
     });
 
-    await verification;
+    const errMsg = cashfreeCheckoutErrorMessage(result);
+    if (errMsg) {
+      const lower = errMsg.toLowerCase();
+      if (lower.includes('aborted') || lower.includes('cancel')) {
+        throw new Error('Payment cancelled.');
+      }
+      throw new Error(errMsg);
+    }
+
+    await finalizeCashfreeTopUp(order.orderId);
   };
 
-  const buildRazorpayCheckoutHtml = (session: {
-    amountINR: number;
-    order: RazorpayOrderResult;
-    method: 'upi' | 'card';
-    prefill?: { email?: string; contact?: string };
-  }) => {
-    const amountPaise = session.order.amountPaise;
-    const keyId = session.order.keyId.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const orderId = session.order.orderId.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const name = 'Esports Histories';
-    const prefillObj: Record<string, string> = {};
-    if (session.prefill?.email?.trim()) prefillObj.email = session.prefill.email.trim();
-    if (session.prefill?.contact?.trim()) prefillObj.contact = session.prefill.contact.trim();
-    const prefillLine =
-      Object.keys(prefillObj).length > 0 ? `prefill: ${JSON.stringify(prefillObj)},` : '';
-    const methodLine =
-      session.method === 'card'
-        ? `method: ${JSON.stringify({ card: true })},`
-        : `method: ${JSON.stringify({ upi: true })},`;
-    const checkoutExtraSnippet =
-      session.method === 'card'
-        ? `
-          theme: { color: '#6d4aff' },
-          config: {
-            display: {
-              blocks: {
-                card: {
-                  name: 'Card',
-                  instruments: [{ method: 'card' }]
-                }
-              },
-              sequence: ['block.card'],
-              preferences: { show_default_blocks: false }
-            }
-          },`
-        : `
-          theme: { color: '#6d4aff' },`;
-
+  const buildCashfreeCheckoutHtml = (session: { amountINR: number; order: CashfreeOrderResult }) => {
+    const mode = cashfreeModeFromEnvironment(session.order.environment);
+    const sessionIdJson = JSON.stringify(session.order.paymentSessionId);
+    const orderIdJson = JSON.stringify(session.order.orderId);
+    const modeJson = JSON.stringify(mode);
     return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Razorpay Checkout</title>
+    <title>Cashfree Checkout</title>
     <style>
       :root { color-scheme: light; }
       body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; background: #0b1220; color: #e6eefc; }
@@ -355,63 +199,50 @@ export function WalletSection() {
       .card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; padding: 16px; }
       .title { font-size: 16px; font-weight: 700; margin: 0 0 8px; }
       .sub { font-size: 12px; opacity: 0.8; margin: 0 0 14px; }
-      .btn { width: 100%; padding: 14px 12px; border-radius: 12px; border: 0; background: #2f7cf6; color: white; font-weight: 800; font-size: 14px; }
-      .btn:active { transform: scale(0.99); }
       .muted { font-size: 11px; opacity: 0.7; margin-top: 12px; word-break: break-all; }
     </style>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
   </head>
   <body>
     <div class="wrap">
       <div class="card">
         <p class="title">Complete payment</p>
-        <p class="sub">This will open Razorpay checkout.</p>
-        <button class="btn" onclick="openCheckout()">Pay ₹${session.amountINR.toFixed(2)}</button>
-        <div class="muted">Order: ${orderId}</div>
+        <p class="sub">Opening Cashfree secure checkout…</p>
+        <div class="muted">Order: ${String(session.order.orderId).replace(/</g, '&lt;')}</div>
+        <div class="muted">Amount: ₹${session.amountINR.toFixed(2)}</div>
       </div>
     </div>
     <script>
       function post(payload) {
         try { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(payload)); } catch (e) {}
       }
-      function openCheckout() {
-        if (!window.Razorpay) {
-          post({ type: 'error', message: 'Razorpay SDK failed to load' });
+      function runCheckout() {
+        if (!window.Cashfree) {
+          post({ type: 'error', message: 'Cashfree SDK failed to load' });
           return;
         }
-        var options = {
-          key: '${keyId}',
-          order_id: '${orderId}',
-          amount: ${Number.isFinite(amountPaise) ? amountPaise : 0},
-          currency: 'INR',
-          name: '${name}',
-          description: 'Wallet top-up',
-          ${prefillLine}
-          ${methodLine}
-          handler: function (response) {
-            post({
-              type: 'success',
-              orderId: response.razorpay_order_id,
-              paymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature
-            });
-          },
-          modal: {
-            ondismiss: function() { post({ type: 'dismiss' }); }
-          },
-          ${checkoutExtraSnippet}
-        };
+        var mode = ${modeJson};
+        var paymentSessionId = ${sessionIdJson};
+        var merchantOrderId = ${orderIdJson};
         try {
-          var rz = new Razorpay(options);
-          rz.on('payment.failed', function (resp) {
-            post({ type: 'failed', message: (resp && resp.error && resp.error.description) ? resp.error.description : 'Payment failed', raw: resp });
-          });
-          rz.open();
+          var cf = Cashfree({ mode: mode });
+          cf.checkout({ paymentSessionId: paymentSessionId, redirectTarget: '_modal', mode: mode })
+            .then(function (result) {
+              if (result && result.error) {
+                var m = result.error && result.error.message ? result.error.message : 'Payment failed';
+                post({ type: 'failed', message: String(m) });
+                return;
+              }
+              post({ type: 'checkout_done', orderId: merchantOrderId });
+            })
+            .catch(function (e) {
+              post({ type: 'error', message: (e && e.message) ? e.message : 'Checkout error' });
+            });
         } catch (e) {
           post({ type: 'error', message: (e && e.message) ? e.message : 'Checkout error' });
         }
       }
-      setTimeout(openCheckout, 50);
+      setTimeout(runCheckout, 80);
     </script>
   </body>
 </html>`;
@@ -478,7 +309,15 @@ export function WalletSection() {
   const handleSubmit = async () => {
     setError('');
     const val = parseFloat(amount);
-    if (isNaN(val) || val <= 0) {
+    if (Number.isNaN(val)) {
+      setError('Enter valid amount');
+      return;
+    }
+    if (modalType === 'topup' && val < 1) {
+      setError('Minimum top-up is ₹1');
+      return;
+    }
+    if (modalType === 'withdraw' && val <= 0) {
       setError('Enter valid amount');
       return;
     }
@@ -510,33 +349,36 @@ export function WalletSection() {
 
     if (modalType === 'topup') {
       dispatch(showLoader());
+      let order: CashfreeOrderResult;
       try {
-        const order = await walletService.createRazorpayOrder(val);
-        if (Platform.OS === 'web') {
-          await startWebRazorpayPayment({
-            order,
-            amountINR: val,
-            method: topUpMethod === 'card' ? 'card' : 'upi',
-            prefill: razorpayPrefill,
-          });
+        order = await walletService.createCashfreeOrder(val);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not start payment');
+        dispatch(hideLoader());
+        return;
+      }
+      dispatch(hideLoader());
+
+      if (Platform.OS === 'web') {
+        try {
+          dispatch(showLoader());
+          await startWebCashfreePayment(order, val);
           setAmount('');
           setModalType(null);
           await refreshWallet();
           await fetchTransactions();
           Toast.show({ type: 'success', text1: 'Top-up completed' });
-        } else {
-          setRazorpaySession({
-            amountINR: val,
-            order,
-            method: topUpMethod === 'card' ? 'card' : 'upi',
-            prefill: razorpayPrefill,
-          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : 'Payment failed';
+          setError(msg);
+          Toast.show({ type: 'error', text1: msg });
+        } finally {
+          dispatch(hideLoader());
         }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not start Razorpay checkout');
-      } finally {
-        dispatch(hideLoader());
+        return;
       }
+
+      setCashfreeSession({ amountINR: val, order });
       return;
     }
 
@@ -554,7 +396,7 @@ export function WalletSection() {
 
   // const qrImageUri = qrPaySession && walletService.paymentQrToImageUri(qrPaySession.result);
 
-  const topUpSubmitLabel = modalType === 'topup' ? 'Pay with Razorpay' : 'Withdraw';
+  const topUpSubmitLabel = modalType === 'topup' ? 'Pay with Cashfree' : 'Withdraw';
 
   // Manual QR needed saved UPI + Generate QR label — removed with QR flow
   const primaryDisabled =
@@ -704,7 +546,7 @@ export function WalletSection() {
               padding: w(24),
             }}
           >
-            {razorpaySession ? (
+            {cashfreeSession ? (
               <>
                 <Text
                   style={{
@@ -714,22 +556,22 @@ export function WalletSection() {
                     marginBottom: h(8),
                   }}
                 >
-                  Complete Razorpay payment
+                  Complete payment
                 </Text>
                 <Text style={{ fontSize: w(14), color: colors.tabIconDefault, marginBottom: h(6) }}>
-                  Amount: ₹{razorpaySession.amountINR.toFixed(2)}
+                  Amount: ₹{cashfreeSession.amountINR.toFixed(2)}
                 </Text>
                 <Text style={{ fontSize: w(13), color: colors.tabIconDefault, marginBottom: h(16) }}>
-                  Payment window will open inside the app. Complete payment to finish top-up.
+                  Cashfree checkout opens below. After paying, we confirm and credit your wallet.
                 </Text>
                 <Text selectable style={{ fontSize: w(11), color: colors.tabIconDefault, marginBottom: h(12) }}>
-                  Order ID: {razorpaySession.order.orderId}
+                  Order ID: {cashfreeSession.order.orderId}
                 </Text>
                 {error ? (
                   <Text style={{ color: '#dc3545', fontSize: w(12), marginBottom: h(8) }}>{error}</Text>
                 ) : null}
-                {razorpayError ? (
-                  <Text style={{ color: '#dc3545', fontSize: w(12), marginBottom: h(8) }}>{razorpayError}</Text>
+                {cashfreeError ? (
+                  <Text style={{ color: '#dc3545', fontSize: w(12), marginBottom: h(8) }}>{cashfreeError}</Text>
                 ) : null}
                 <View style={styles.actions}>
                   <Button
@@ -737,7 +579,7 @@ export function WalletSection() {
                     variant="outline"
                     style={styles.btn}
                     onPress={async () => {
-                      setRazorpaySession(null);
+                      setCashfreeSession(null);
                     }}
                   />
                   <Button title="Close" variant="ghost" onPress={closeModal} style={styles.btn} />
@@ -746,7 +588,7 @@ export function WalletSection() {
                 {Platform.OS !== 'web' && (
                   <View style={{ height: h(360), marginTop: h(12), borderRadius: w(12), overflow: 'hidden' }}>
                     <WebView
-                      source={{ html: buildRazorpayCheckoutHtml(razorpaySession) }}
+                      source={{ html: buildCashfreeCheckoutHtml(cashfreeSession) }}
                       originWhitelist={['*']}
                       javaScriptEnabled
                       domStorageEnabled
@@ -754,50 +596,33 @@ export function WalletSection() {
                         try {
                           const payload = JSON.parse(String(evt.nativeEvent.data ?? '{}')) as Record<string, unknown>;
                           const type = String(payload.type ?? '');
-                          if (type === 'dismiss') {
-                            setRazorpayError('Checkout closed. If amount was debited, wait a few seconds and try again.');
-                            return;
-                          }
                           if (type === 'failed' || type === 'error') {
-                            setRazorpayError(String(payload.message ?? 'Payment failed'));
+                            setCashfreeError(String(payload.message ?? 'Payment failed'));
                             return;
                           }
-                          if (type === 'success') {
-                            const orderId = String(payload.orderId ?? '').trim();
-                            const paymentId = String(payload.paymentId ?? '').trim();
-                            const signature = String(payload.signature ?? '').trim();
-                            if (!orderId || !paymentId || !signature) {
-                              setRazorpayError('Missing payment details from checkout.');
+                          if (type === 'checkout_done') {
+                            const orderId = String(payload.orderId ?? cashfreeSession.order.orderId ?? '').trim();
+                            if (!orderId) {
+                              setCashfreeError('Missing order reference.');
                               return;
                             }
-
                             dispatch(showLoader());
                             try {
-                              const result = await walletService.verifyRazorpayPayment({
-                                orderId,
-                                paymentId,
-                                signature,
-                              });
-                              if (result.status === 'success') {
-                                setRazorpaySession(null);
-                                setAmount('');
-                                setModalType(null);
-                                await refreshWallet();
-                                await fetchTransactions();
-                                Toast.show({ type: 'success', text1: 'Top-up completed' });
-                              } else if (result.status === 'pending') {
-                                setRazorpayError('Payment pending. Please wait a few seconds and try again.');
-                              } else {
-                                setRazorpayError('Payment failed or cancelled.');
-                              }
+                              await finalizeCashfreeTopUp(orderId);
+                              setCashfreeSession(null);
+                              setAmount('');
+                              setModalType(null);
+                              await refreshWallet();
+                              await fetchTransactions();
+                              Toast.show({ type: 'success', text1: 'Top-up completed' });
                             } catch (e) {
-                              setRazorpayError(e instanceof Error ? e.message : 'Verification failed');
+                              setCashfreeError(e instanceof Error ? e.message : 'Verification failed');
                             } finally {
                               dispatch(hideLoader());
                             }
                           }
                         } catch {
-                          setRazorpayError('Unexpected checkout response.');
+                          setCashfreeError('Unexpected checkout response.');
                         }
                       }}
                     />
@@ -818,70 +643,16 @@ export function WalletSection() {
                   {modalType === 'topup' ? 'Top Up Wallet' : 'Withdraw'}
                 </Text>
                 {modalType === 'topup' && (
-                  <>
-                    <Text style={{ fontSize: w(14), fontWeight: '600', color: colors.text, marginBottom: h(10) }}>
-                      Payment method
-                    </Text>
-                    {TOP_UP_OPTIONS.map((opt) => (
-                      <Pressable
-                        key={opt.id}
-                        onPress={() => {
-                          setTopUpMethod(opt.id);
-                          setSelectedUpiId(null);
-                        }}
-                        style={[
-                          styles.payOpt,
-                          {
-                            backgroundColor: colors.cardBg,
-                            borderColor: topUpMethod === opt.id ? colors.tint : colors.border,
-                          },
-                        ]}
-                      >
-                        <FontAwesome
-                          name={opt.icon as keyof typeof FontAwesome.glyphMap}
-                          size={w(22)}
-                          color={colors.tint}
-                          style={{ marginRight: w(12) }}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: w(15), fontWeight: '600', color: colors.text }}>
-                            {opt.label}
-                          </Text>
-                          <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>{opt.desc}</Text>
-                        </View>
-                        {topUpMethod === opt.id && (
-                          <FontAwesome name="check-circle" size={w(20)} color={colors.tint} />
-                        )}
-                      </Pressable>
-                    ))}
-                    {modalType === 'topup' && topUpMethod === 'upi' && (
-                      <Text
-                        style={{
-                          fontSize: w(12),
-                          color: colors.tabIconDefault,
-                          marginBottom: h(10),
-                          lineHeight: Math.round(w(17)),
-                        }}
-                      >
-                        Opens Razorpay with UPI only (after UPI is enabled on your Razorpay merchant). Test:{' '}
-                        <Text style={{ fontWeight: '700', color: colors.text }}>success@razorpay</Text>.
-                      </Text>
-                    )}
-                    {modalType === 'topup' && topUpMethod === 'card' && (
-                      <Text
-                        style={{
-                          fontSize: w(12),
-                          color: colors.tabIconDefault,
-                          marginBottom: h(10),
-                          lineHeight: Math.round(w(17)),
-                        }}
-                      >
-                        Opens Razorpay with cards only. Use Razorpay test cards in sandbox.
-                      </Text>
-                    )}
-                    {/* Manual QR: renderSavedUpiPicker for merchant QR generation */}
-                    <View style={{ height: h(8) }} />
-                  </>
+                  <Text
+                    style={{
+                      fontSize: w(12),
+                      color: colors.tabIconDefault,
+                      marginBottom: h(12),
+                      lineHeight: Math.round(w(17)),
+                    }}
+                  >
+                    UPI, cards, netbanking and more via Cashfree. Minimum ₹1.
+                  </Text>
                 )}
                 {modalType === 'withdraw' && renderSavedUpiPicker({ title: 'Withdraw to (saved UPI ID)' })}
                 <TextInput
@@ -1011,7 +782,7 @@ export function WalletSection() {
  * useEffect polling walletService.getPaymentQrStatus; dismissQrOnServer +
  * walletService.closePaymentQr; handleSubmit branches for qr validation +
  * walletService.createPaymentQr; qrImageUri via paymentQrToImageUri; modal branch
- * `qrPaySession ? (scan UI + Linking.openURL)` between razorpaySession and form;
+ * `qrPaySession ? (scan UI + Linking.openURL)` between cashfreeSession and form;
  * needsUpiForTopup for qr; primaryDisabled + qrGenLoading; ActivityIndicator when
  * generating QR; renderSavedUpiPicker when topUpMethod === 'qr'.
  * APIs: POST /payment/create-qr, GET /payment/qr-status/:id, POST /payment/close-qr/:id

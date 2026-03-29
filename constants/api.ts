@@ -88,8 +88,8 @@ export const API_ENDPOINTS = {
       `/payment/qr-status/${encodeURIComponent(qrCodeId)}`,
     CLOSE_QR: (qrCodeId: string) =>
       `/payment/close-qr/${encodeURIComponent(qrCodeId)}`,
-    RAZORPAY_ORDER: "/payment/razorpay/order",
-    RAZORPAY_VERIFY: "/payment/razorpay/verify",
+    CASHFREE_ORDER: "/payment/cashfree/order",
+    CASHFREE_VERIFY: "/payment/cashfree/verify",
   },
   TOURNAMENT: {
     /**

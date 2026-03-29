@@ -1,10 +1,10 @@
 import { API_ENDPOINTS } from '@/constants/api';
 import type { TopupHistoryPagination, Transaction, TransactionFilters } from '@/types/auth';
 import type {
+  CashfreeOrderResult,
+  CashfreeVerifyBody,
+  CashfreeVerifyResult,
   CreatePaymentQrResult,
-  RazorpayOrderResult,
-  RazorpayVerifyBody,
-  RazorpayVerifyResult,
 } from '@/types/payment';
 import type {
   WalletAddBalanceBody,
@@ -70,11 +70,47 @@ function normalizeQrStatus(raw: string): string {
   return 'pending';
 }
 
-function normalizeRazorpayStatus(raw: string): RazorpayVerifyResult['status'] {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseCodeFromApiResponse(response: unknown): string | undefined {
+  if (!response || typeof response !== 'object') return undefined;
+  const o = response as Record<string, unknown>;
+  const code = o.code ?? o.errorCode ?? o.error_code;
+  return code != null && String(code).trim() ? String(code).trim() : undefined;
+}
+
+function normalizeCashfreeEnvironment(
+  raw: string | undefined
+): CashfreeOrderResult['environment'] | undefined {
+  if (raw == null) return undefined;
+  const s = String(raw).toLowerCase().trim();
+  if (s === 'production' || s === 'prod' || s === 'live') return 'production';
+  if (s === 'sandbox' || s === 'test') return 'sandbox';
+  return undefined;
+}
+
+function normalizeCashfreeVerifyStatus(raw: string): CashfreeVerifyResult['status'] {
   const s = raw.toLowerCase();
-  if (['success', 'successful', 'captured', 'paid', 'payment_captured'].includes(s)) return 'success';
-  if (['failed', 'failure', 'cancelled', 'canceled'].includes(s)) return 'failed';
+  if (['success', 'successful', 'captured', 'paid', 'completed', 'complete'].includes(s)) {
+    return 'success';
+  }
+  if (['failed', 'failure', 'cancelled', 'canceled', 'error'].includes(s)) return 'failed';
   return 'pending';
+}
+
+function rethrowAsCashfreeOrderError(error: unknown): never {
+  if (error instanceof ApiError) {
+    const code = parseCodeFromApiResponse(error.response);
+    if (error.statusCode === 503 && code === 'CASHFREE_PG_NOT_CONFIGURED') {
+      throw new ApiError('Wallet top-up is temporarily unavailable.', error.statusCode, error.response);
+    }
+    if (error.statusCode === 502 && code === 'CASHFREE_ORDER_FAILED') {
+      throw new ApiError('Could not start payment. Try again shortly.', error.statusCode, error.response);
+    }
+  }
+  rethrowAsApiError(error, 'Could not create payment order');
 }
 
 function mapCreateQrResponse(res: unknown): CreatePaymentQrResult {
@@ -394,58 +430,116 @@ export async function closePaymentQr(qrCodeId: string): Promise<void> {
   }
 }
 
-/** POST `/payment/razorpay/order` — create pending top-up + Razorpay order. */
-export async function createRazorpayOrder(amountINR: number): Promise<RazorpayOrderResult> {
+/** POST `/payment/cashfree/order` — create Cashfree session for wallet top-up. */
+export async function createCashfreeOrder(amountINR: number): Promise<CashfreeOrderResult> {
   try {
-    if (!Number.isFinite(amountINR) || amountINR <= 0) {
-      throw new ApiError('Valid amount is required', 400);
+    if (!Number.isFinite(amountINR) || amountINR < 1) {
+      throw new ApiError('Amount must be at least ₹1', 400);
     }
-    const res = await api.post<unknown>(API_ENDPOINTS.PAYMENT.RAZORPAY_ORDER, { amountINR });
+    const res = await api.post<unknown>(
+      API_ENDPOINTS.PAYMENT.CASHFREE_ORDER,
+      { amountINR },
+      { toast: false }
+    );
     const root = unwrapDataRecord(res);
-    const keyId = firstString(root.keyId, root.razorpayKeyId, root.key_id);
-    const orderId = firstString(root.orderId, root.order_id, root.razorpayOrderId);
-    const amountPaise = Number(root.amountPaise ?? root.amount_paise ?? root.amount);
+    const environment =
+      normalizeCashfreeEnvironment(firstString(root.environment, root.env, root.mode)) ?? 'sandbox';
+    const clientId = firstString(root.clientId, root.client_id, root.appId, root.app_id) ?? '';
+    const paymentSessionId =
+      firstString(root.paymentSessionId, root.payment_session_id, root.sessionId, root.session_id) ?? '';
+    const orderId =
+      firstString(root.orderId, root.order_id, root.merchantOrderId, root.merchant_order_id) ?? '';
 
-    if (!keyId || !orderId || !Number.isFinite(amountPaise) || amountPaise <= 0) {
-      throw new ApiError('Invalid Razorpay order response', 502, res);
+    if (!paymentSessionId || !orderId) {
+      throw new ApiError('Invalid Cashfree order response', 502, res);
     }
 
-    return { keyId, orderId, amountPaise };
+    const amountParsed = Number(root.amountINR ?? root.amountInr ?? root.amount_inr);
+    return {
+      environment,
+      clientId,
+      paymentSessionId,
+      orderId,
+      amountINR: Number.isFinite(amountParsed) ? amountParsed : undefined,
+      walletTransactionId: firstString(root.walletTransactionId, root.wallet_transaction_id),
+    };
   } catch (error) {
-    rethrowAsApiError(error, 'Could not create Razorpay order');
+    rethrowAsCashfreeOrderError(error);
   }
 }
 
-/** POST `/payment/razorpay/verify` — verify signature + finalize wallet credit on success. */
-export async function verifyRazorpayPayment(body: RazorpayVerifyBody): Promise<RazorpayVerifyResult> {
+/** POST `/payment/cashfree/verify` — finalize top-up when payment completes. */
+export async function verifyCashfreePayment(body: CashfreeVerifyBody): Promise<CashfreeVerifyResult> {
   try {
     const orderId = body.orderId.trim();
-    const paymentId = body.paymentId.trim();
-    const signature = body.signature.trim();
     if (!orderId) throw new ApiError('orderId is required', 400);
-    if (!paymentId) throw new ApiError('paymentId is required', 400);
-    if (!signature) throw new ApiError('signature is required', 400);
 
-    const res = await api.post<unknown>(API_ENDPOINTS.PAYMENT.RAZORPAY_VERIFY, {
-      orderId,
-      paymentId,
-      signature,
-    });
-    const root = unwrapDataRecord(res);
-    const rawStatus = firstString(
-      root.status,
-      root.paymentStatus,
-      root.orderStatus,
-      root.resultStatus,
-      root.state
+    const res = await api.post<unknown>(
+      API_ENDPOINTS.PAYMENT.CASHFREE_VERIFY,
+      { orderId },
+      { toast: false }
     );
+    const root = unwrapDataRecord(res);
+    const rawStatus =
+      firstString(
+        root.status,
+        root.paymentStatus,
+        root.payment_status,
+        root.orderStatus,
+        root.state
+      ) ?? 'pending';
+    const status = normalizeCashfreeVerifyStatus(rawStatus);
+    const balanceRaw =
+      root.balanceINR ?? root.balanceInr ?? root.balance_inr ?? root.walletBalance ?? root.balance;
+    const balanceN = Number(balanceRaw);
+    const message = firstString(root.message, root.msg);
     return {
-      status: normalizeRazorpayStatus(rawStatus ?? 'pending'),
+      status,
+      balanceINR: Number.isFinite(balanceN) ? balanceN : undefined,
+      message,
       rawStatus,
     };
   } catch (error) {
-    rethrowAsApiError(error, 'Failed to verify Razorpay payment');
+    rethrowAsApiError(error, 'Failed to verify payment');
   }
+}
+
+/**
+ * Poll verify until success/failure or timeout. Retries on transient 502s.
+ */
+export async function verifyCashfreePaymentWithPoll(
+  orderId: string,
+  options?: { intervalMs?: number; maxAttempts?: number }
+): Promise<CashfreeVerifyResult> {
+  const intervalMs = options?.intervalMs ?? 2500;
+  const maxAttempts = options?.maxAttempts ?? 36;
+  let last: CashfreeVerifyResult | undefined;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      last = await verifyCashfreePayment({ orderId });
+    } catch (e) {
+      const retry502 = e instanceof ApiError && e.statusCode === 502 && i < maxAttempts - 1;
+      if (!retry502) throw e;
+      await sleep(intervalMs);
+      continue;
+    }
+
+    if (last.status === 'success' || last.status === 'failed') {
+      return last;
+    }
+
+    if (i < maxAttempts - 1) {
+      await sleep(intervalMs);
+    }
+  }
+
+  return (
+    last ?? {
+      status: 'pending',
+      message: 'Payment not confirmed yet. Check your balance or try verifying again.',
+    }
+  );
 }
 
 /** POST `/user/wallet/topup` — legacy until a public top-up route exists under `/wallet`. */
