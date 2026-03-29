@@ -40,7 +40,13 @@ export type AdminDashboardStats = {
   totalHostFeePaid?: number;
   platformFeeCollected?: number;
   casterFeeCollected?: number;
+  /** Platform + caster fee from finished lobbies (tournament se earn). */
   platformProfit?: number;
+  tournamentFeeProfitINR?: number;
+  /** Same as tournament fee profit (legacy / convenience). */
+  netProfit?: number;
+  /** User top-ups minus prizes — wallet flow, not platform fee profit. */
+  walletNetFlowINR?: number;
   feesBreakdown?: AdminFeesBreakdown;
   [key: string]: unknown;
 };
@@ -65,3 +71,12 @@ export type AdminUsersPage = {
 };
 
 export type AdminUserRoleFilter = 'ALL' | 'ADMIN' | 'HOST' | 'USER' | 'ORG_MANAGER';
+
+export type AdminFinancePeriod = 'daily' | 'weekly' | 'monthly';
+
+/** Normalized points for the admin revenue / profit chart. */
+export type AdminFinancialSeries = {
+  labels: string[];
+  totalIncome: number[];
+  netProfit: number[];
+};

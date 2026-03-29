@@ -2,6 +2,8 @@ import Constants from 'expo-constants';
 import { API_ENDPOINTS } from '@/constants/api';
 import type {
   AdminDashboardStats,
+  AdminFinancePeriod,
+  AdminFinancialSeries,
   AdminUserRow,
   AdminUsersPage,
   AdminUserRoleFilter,
@@ -134,7 +136,10 @@ export function normalizeDashboardStats(raw: unknown): AdminDashboardStats {
     totalHostFeePaid: num(data.totalHostFeePaid),
     platformFeeCollected: num(data.platformFeeCollected),
     casterFeeCollected: num(data.casterFeeCollected),
-    platformProfit: num(data.platformProfit),
+    platformProfit: num(data.platformProfit ?? data.tournamentFeeProfitINR),
+    tournamentFeeProfitINR: num(data.tournamentFeeProfitINR ?? data.platformProfit),
+    netProfit: num(data.netProfit ?? data.platformProfit ?? data.tournamentFeeProfitINR),
+    walletNetFlowINR: num(data.walletNetFlowINR),
     feesBreakdown: normalizeFeesBreakdown(feesRaw),
   };
 }
@@ -175,6 +180,206 @@ export function buildAdminDashboardStreamUrl(accessToken: string): string {
   const path = API_ENDPOINTS.ADMIN.DASHBOARD_STREAM.replace(/^\//, '');
   const t = encodeURIComponent(accessToken);
   return `${base}/${path}?access_token=${t}`;
+}
+
+function formatChartLabel(raw: string): string {
+  const s = raw.trim();
+  if (!s) return '';
+  const ts = Date.parse(s);
+  if (!Number.isNaN(ts)) {
+    try {
+      return new Intl.DateTimeFormat('en', { weekday: 'short' }).format(new Date(ts));
+    } catch {
+      return s.length > 6 ? s.slice(0, 6) : s;
+    }
+  }
+  return s.length > 10 ? s.slice(0, 10) : s;
+}
+
+function toNumArrayLoose(v: unknown): number[] | undefined {
+  if (!Array.isArray(v) || v.length === 0) return undefined;
+  const out: number[] = [];
+  for (const x of v) {
+    const n = typeof x === 'number' ? x : Number(x);
+    out.push(Number.isFinite(n) ? n : 0);
+  }
+  return out;
+}
+
+function toLabelArray(v: unknown): string[] | undefined {
+  if (!Array.isArray(v) || v.length === 0) return undefined;
+  return v.map((x) => formatChartLabel(String(x)));
+}
+
+function pickNumberSeries(obj: Record<string, unknown>, keys: string[]): number[] | undefined {
+  for (const k of keys) {
+    const arr = toNumArrayLoose(obj[k]);
+    if (arr && arr.length) return arr;
+  }
+  return undefined;
+}
+
+function pickLabelSeries(obj: Record<string, unknown>, keys: string[]): string[] | undefined {
+  for (const k of keys) {
+    const v = obj[k];
+    if (Array.isArray(v) && v.length) return toLabelArray(v);
+  }
+  return undefined;
+}
+
+function seriesFromPointRows(rows: unknown[]): AdminFinancialSeries | null {
+  const labels: string[] = [];
+  const totalIncome: number[] = [];
+  const netProfit: number[] = [];
+  let idx = 0;
+  for (const r of rows) {
+    const o = asRecord(r);
+    if (!o) continue;
+    const rawLabel = o.label ?? o.date ?? o.period ?? o.week ?? o.month ?? o.day ?? o.name;
+    const label =
+      rawLabel != null && String(rawLabel).trim()
+        ? formatChartLabel(String(rawLabel))
+        : String(idx + 1);
+    const inc = num(o.totalIncome ?? o.income ?? o.totalIncomeINR ?? o.deposits ?? o.deposit);
+    const pr = num(o.netProfit ?? o.profit ?? o.netProfitINR ?? o.platformProfit);
+    if (inc == null && pr == null) continue;
+    labels.push(label);
+    totalIncome.push(inc ?? 0);
+    netProfit.push(pr ?? 0);
+    idx += 1;
+  }
+  return labels.length ? { labels, totalIncome, netProfit } : null;
+}
+
+/** When only one series exists, pad the other with zeros; allow mismatched lengths. */
+function mergeFlexibleSeries(
+  labels: string[] | undefined,
+  income: number[] | undefined,
+  profit: number[] | undefined
+): AdminFinancialSeries | null {
+  const ni = income?.length ?? 0;
+  const np = profit?.length ?? 0;
+  if (ni === 0 && np === 0) return null;
+  const n = Math.max(ni, np, labels?.length ?? 0, 1);
+  const inc = Array.from({ length: n }, (_, i) => (i < ni && income ? income[i]! : 0));
+  const pr = Array.from({ length: n }, (_, i) => (i < np && profit ? profit[i]! : 0));
+  let L: string[];
+  if (labels && labels.length >= n) L = labels.slice(0, n);
+  else if (labels && labels.length > 0) {
+    L = [
+      ...labels,
+      ...Array.from({ length: n - labels.length }, (_, i) => String(labels.length + i + 1)),
+    ];
+  } else {
+    L = Array.from({ length: n }, (_, i) => String(i + 1));
+  }
+  return { labels: L, totalIncome: inc, netProfit: pr };
+}
+
+function seriesHasPoints(s: AdminFinancialSeries): boolean {
+  return s.totalIncome.length > 0 || s.netProfit.length > 0;
+}
+
+function extractFinancialSeriesFromData(data: Record<string, unknown>): AdminFinancialSeries | null {
+  const nestedKeys = [
+    'financialAnalytics',
+    'analytics',
+    'financial',
+    'chart',
+    'timeSeries',
+    'timeseries',
+  ];
+  for (const nk of nestedKeys) {
+    const inner = asRecord(data[nk]);
+    if (inner) {
+      const got = extractFinancialSeriesFromData(inner);
+      if (got != null && seriesHasPoints(got)) return got;
+    }
+  }
+
+  const rows = data.series ?? data.points ?? data.buckets ?? data.records;
+  if (Array.isArray(rows) && rows.length && typeof rows[0] === 'object') {
+    const fromRows = seriesFromPointRows(rows);
+    if (fromRows) return fromRows;
+  }
+
+  const income = pickNumberSeries(data, [
+    'totalIncome',
+    'totalIncomeINR',
+    'income',
+    'totalDeposits',
+    'totalDepositsINR',
+    'deposits',
+    'rewards',
+    'totalRewards',
+    'totalIncomeSeries',
+    'incomes',
+    'depositSeries',
+    'depositTrend',
+  ]);
+  const profit = pickNumberSeries(data, [
+    'netProfit',
+    'netProfitINR',
+    'profit',
+    'profits',
+    'platformProfit',
+    'profitSeries',
+    'netProfits',
+    'profitTrend',
+  ]);
+  const labels = pickLabelSeries(data, [
+    'labels',
+    'categories',
+    'dates',
+    'periods',
+    'xLabels',
+    'axisLabels',
+  ]);
+
+  return mergeFlexibleSeries(labels, income, profit);
+}
+
+/** Normalize admin financial chart data from `/admin/analytics` or `/admin/dashboard/stats?period=`. */
+export function normalizeFinancialSeries(raw: unknown): AdminFinancialSeries {
+  const root = asRecord(raw);
+  const data = asRecord(root?.data) ?? root ?? {};
+  const got = extractFinancialSeriesFromData(data);
+  return got ?? { labels: [], totalIncome: [], netProfit: [] };
+}
+
+/**
+ * One analytics request (lowercase `period`, Swagger-style), then one stats fallback — no casing retries.
+ */
+export async function fetchAdminFinancialSeries(
+  period: AdminFinancePeriod
+): Promise<AdminFinancialSeries> {
+  const p = String(period).toLowerCase() as AdminFinancePeriod;
+  try {
+    const raw = await request<unknown>(API_ENDPOINTS.ADMIN.ANALYTICS, {
+      params: { period: p },
+      toast: false,
+    });
+    const s = normalizeFinancialSeries(raw);
+    if (seriesHasPoints(s)) return s;
+  } catch {
+    /* fall through to stats */
+  }
+  try {
+    const raw = await request<unknown>(API_ENDPOINTS.ADMIN.DASHBOARD_STATS, {
+      params: { period: p },
+      toast: false,
+    });
+    const s = normalizeFinancialSeries(raw);
+    if (seriesHasPoints(s)) return s;
+  } catch {
+    /* empty */
+  }
+  return { labels: [], totalIncome: [], netProfit: [] };
+}
+
+/** True if SSE / envelope includes plottable series (same rules as API normalize). */
+export function adminFinancialChartHasData(s: AdminFinancialSeries): boolean {
+  return seriesHasPoints(s);
 }
 
 export type FetchAdminUsersParams = {

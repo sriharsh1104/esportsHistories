@@ -95,6 +95,8 @@ export const API_ENDPOINTS = {
   ADMIN: {
     DASHBOARD_STATS: '/admin/dashboard/stats',
     DASHBOARD_STREAM: '/admin/dashboard/stream',
+    /** GET — financial time-series (`period`: daily | weekly | monthly). */
+    ANALYTICS: '/admin/analytics',
     USERS: '/admin/users',
   },
   TOURNAMENT: {

@@ -1,3 +1,4 @@
+import { AdminFinancialChart } from '@/components/admin';
 import { Button, Card, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -5,13 +6,22 @@ import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import {
+  adminFinancialChartHasData,
   buildAdminDashboardStreamUrl,
   fetchAdminDashboardStats,
+  fetchAdminFinancialSeries,
   fetchAdminUsers,
+  normalizeFinancialSeries,
   parseAdminDashboardStreamPayload,
 } from '@/services/admin.service';
 import { ApiError } from '@/services/api.service';
-import type { AdminDashboardStats, AdminUserRoleFilter, AdminUserRow } from '@/types/admin';
+import type {
+  AdminDashboardStats,
+  AdminFinancePeriod,
+  AdminFinancialSeries,
+  AdminUserRoleFilter,
+  AdminUserRow,
+} from '@/types/admin';
 import { isAdminUser } from '@/utils/adminUser';
 import { Redirect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -30,15 +40,37 @@ import Toast from 'react-native-toast-message';
 
 type AdminSection = 'overview' | 'users';
 
+const FINANCE_PERIODS: { id: AdminFinancePeriod; label: string }[] = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+];
+
 const ROLE_FILTERS: AdminUserRoleFilter[] = ['ALL', 'ADMIN', 'HOST', 'USER', 'ORG_MANAGER'];
 
-/** Chip / list: show `ORG MANAGER` instead of `ORG_MANAGER`, `org manager` instead of `org_manager`. */
+/** Underscores → spaces for role strings from API. */
 function humanizeRoleLabel(role: string): string {
-  return role.replace(/_/g, ' ');
+  return String(role).replace(/_/g, ' ').trim();
+}
+
+/** Title-style: each word’s first letter capital (e.g. `sriharsh` → `Sriharsh`, `org manager` → `Org Manager`). */
+function capitalizeWords(text: string): string {
+  const t = String(text).trim();
+  if (!t) return t;
+  return t
+    .split(/\s+/)
+    .map((part) =>
+      part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part
+    )
+    .join(' ');
+}
+
+function formatRoleForDisplay(role: string): string {
+  return capitalizeWords(humanizeRoleLabel(role));
 }
 
 function roleFilterLabel(r: AdminUserRoleFilter): string {
-  return humanizeRoleLabel(r);
+  return capitalizeWords(humanizeRoleLabel(r));
 }
 
 function formatINR(n: number | undefined): string {
@@ -78,7 +110,16 @@ const STAT_DEFS: { key: keyof AdminDashboardStats; label: string; format: 'int' 
     format: 'inr',
   },
   { key: 'prizePoolDistributed', label: 'Prize pool paid (INR)', format: 'inr' },
-  { key: 'platformProfit', label: 'Platform profit (INR)', format: 'inr' },
+  {
+    key: 'platformProfit',
+    label: 'Tournament fee profit — platform + caster (INR)',
+    format: 'inr',
+  },
+  {
+    key: 'walletNetFlowINR',
+    label: 'Wallet net flow — user top-ups minus prizes (INR)',
+    format: 'inr',
+  },
   { key: 'platformFeeCollected', label: 'Platform fees (INR)', format: 'inr' },
   { key: 'casterFeeCollected', label: 'Caster fees (INR)', format: 'inr' },
   {
@@ -147,7 +188,9 @@ function UserRow({
   w: (n: number) => number;
   isLast?: boolean;
 }) {
-  const title = row.displayName || row.fullName || row.name || row.email;
+  const rawTitle = row.displayName || row.fullName || row.name || row.email;
+  const title =
+    rawTitle === row.email ? rawTitle : capitalizeWords(rawTitle);
   return (
     <View
       style={[
@@ -170,12 +213,12 @@ function UserRow({
       <View style={{ alignItems: 'flex-end', marginLeft: w(8), maxWidth: '40%' }}>
         {row.role ? (
           <Text style={{ color: colors.tint, fontSize: w(12), fontWeight: '600' }} numberOfLines={1}>
-            {humanizeRoleLabel(String(row.role))}
+            {formatRoleForDisplay(String(row.role))}
           </Text>
         ) : null}
         {row.status ? (
           <Text style={{ color: colors.tabIconDefault, fontSize: w(11), marginTop: w(4) }} numberOfLines={1}>
-            {row.status}
+            {capitalizeWords(String(row.status))}
           </Text>
         ) : null}
       </View>
@@ -206,6 +249,9 @@ export default function AdminScreen() {
   const [usersError, setUsersError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [financePeriod, setFinancePeriod] = useState<AdminFinancePeriod>('daily');
+  const [financeLoading, setFinanceLoading] = useState(false);
+
   const loadStats = useCallback(async () => {
     setStatsError(null);
     setStatsLoading(true);
@@ -220,6 +266,23 @@ export default function AdminScreen() {
       setStatsLoading(false);
     }
   }, []);
+
+  const loadFinanceSeries = useCallback(async () => {
+    setFinanceLoading(true);
+    try {
+      return await fetchAdminFinancialSeries(financePeriod);
+    } catch {
+      return { labels: [], totalIncome: [], netProfit: [] };
+    } finally {
+      setFinanceLoading(false);
+    }
+  }, [financePeriod]);
+
+  const [financeSeries, setFinanceSeries] = useState<AdminFinancialSeries>({
+    labels: [],
+    totalIncome: [],
+    netProfit: [],
+  });
 
   const loadUsers = useCallback(async () => {
     setUsersError(null);
@@ -248,6 +311,19 @@ export default function AdminScreen() {
     loadStats();
   }, [isAuthenticated, user, loadStats]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !isAdminUser(user)) return;
+    if (section !== 'overview') return;
+    let cancelled = false;
+    void (async () => {
+      const s = await loadFinanceSeries();
+      if (!cancelled) setFinanceSeries(s);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user, section, loadFinanceSeries]);
+
   /** Web: SSE `/admin/dashboard/stream`. Native: poll stats every 45s while on Dashboard tab. */
   useEffect(() => {
     if (!isAuthenticated || !isAdminUser(user)) return;
@@ -258,8 +334,15 @@ export default function AdminScreen() {
     const token = getToken();
 
     const applySseData = (raw: string) => {
-      const next = parseAdminDashboardStreamPayload(raw);
-      if (next) setStats(next);
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        const next = parseAdminDashboardStreamPayload(parsed);
+        if (next) setStats(next);
+        const fs = normalizeFinancialSeries(parsed);
+        if (adminFinancialChartHasData(fs)) setFinanceSeries(fs);
+      } catch {
+        /* invalid frame */
+      }
     };
 
     if (Platform.OS === 'web' && typeof EventSource !== 'undefined' && token) {
@@ -294,12 +377,15 @@ export default function AdminScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      if (section === 'overview') await loadStats();
-      else await loadUsers();
+      if (section === 'overview') {
+        await loadStats();
+        const s = await loadFinanceSeries();
+        setFinanceSeries(s);
+      } else await loadUsers();
     } finally {
       setRefreshing(false);
     }
-  }, [section, loadStats, loadUsers]);
+  }, [section, loadStats, loadUsers, loadFinanceSeries]);
 
   if (authLoading) {
     return (
@@ -395,6 +481,116 @@ export default function AdminScreen() {
                     );
                   })}
                 </Card>
+
+                <Card style={{ marginBottom: h(16) }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: h(10),
+                      flexWrap: 'wrap',
+                      gap: h(8),
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontSize: w(16), fontWeight: '700' }}>
+                      Financial analytics
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: w(6) }}>
+                      {FINANCE_PERIODS.map((p) => {
+                        const active = financePeriod === p.id;
+                        return (
+                          <Pressable
+                            key={p.id}
+                            onPress={() => setFinancePeriod(p.id)}
+                            style={({ pressed }) => ({
+                              paddingVertical: w(6),
+                              paddingHorizontal: w(12),
+                              borderRadius: w(10),
+                              borderWidth: 1,
+                              borderColor: active ? colors.tint : colors.border,
+                              backgroundColor: active ? colors.tint + '22' : colors.cardBg,
+                              opacity: pressed ? 0.85 : 1,
+                            })}
+                          >
+                            <Text
+                              style={{
+                                fontSize: w(12),
+                                fontWeight: '600',
+                                color: active ? colors.tint : colors.tabIconDefault,
+                              }}
+                            >
+                              {p.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                  <Text
+                    style={{
+                      color: colors.tabIconDefault,
+                      fontSize: w(11),
+                      marginBottom: h(10),
+                    }}
+                  >
+                    From admin analytics API (or dashboard stats with period). Violet = total income, amber = net
+                    profit — matches app theme, not a 1:1 copy of third-party UIs.
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      gap: w(16),
+                      marginBottom: h(8),
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View
+                        style={{
+                          width: w(10),
+                          height: w(10),
+                          borderRadius: w(2),
+                          backgroundColor: colors.tint,
+                          marginRight: w(6),
+                        }}
+                      />
+                      <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>Total income</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View
+                        style={{
+                          width: w(10),
+                          height: w(10),
+                          borderRadius: w(2),
+                          backgroundColor: colors.accent,
+                          marginRight: w(6),
+                        }}
+                      />
+                      <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>Net profit</Text>
+                    </View>
+                  </View>
+                  {financeLoading ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: h(8), gap: w(8) }}>
+                      <ActivityIndicator size="small" color={colors.tint} />
+                      <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>
+                        Updating {financePeriod}…
+                      </Text>
+                    </View>
+                  ) : null}
+                  <AdminFinancialChart
+                    period={financePeriod}
+                    labels={financeSeries.labels}
+                    income={financeSeries.totalIncome}
+                    profit={financeSeries.netProfit}
+                    incomeColor={colors.tint}
+                    profitColor={colors.accent}
+                    gridColor={colors.border + '99'}
+                    axisLabelColor={colors.tabIconDefault}
+                    height={h(220)}
+                  />
+                </Card>
+
                 <Card style={{ marginBottom: h(16) }}>
                   <Text style={{ color: colors.text, fontSize: w(16), fontWeight: '700', marginBottom: w(8) }}>
                     Lobbies (all time)
