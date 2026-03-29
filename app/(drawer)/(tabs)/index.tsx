@@ -11,6 +11,7 @@ import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
+import { isAdminUser } from '@/utils/adminUser';
 import { userHasSelectedGames } from '@/utils/gameSelection';
 import {
   fetchGameDashboardData,
@@ -41,7 +42,10 @@ export default function NewsScreen() {
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [isSubmittingSelection, setIsSubmittingSelection] = useState(false);
   const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
-  const requiresGameSelection = isAuthenticated && !userHasSelectedGames(confirmedSelectedGames);
+  const requiresGameSelection =
+    isAuthenticated &&
+    !isAdminUser(user) &&
+    !userHasSelectedGames(confirmedSelectedGames);
 
   function slugFromGameLabel(name: string): string {
     return String(name).trim().toLowerCase().replace(/\s+/g, '-');
@@ -174,7 +178,7 @@ export default function NewsScreen() {
   );
 
   useEffect(() => {
-    if (!isAuthenticated || requiresGameSelection) {
+    if (!isAuthenticated || requiresGameSelection || isAdminUser(user)) {
       setDashboardItems([]);
       return;
     }
@@ -190,7 +194,7 @@ export default function NewsScreen() {
       .finally(() => {
         setIsDashboardLoading(false);
       });
-  }, [isAuthenticated, requiresGameSelection, confirmedSelectedIds.join('|')]);
+  }, [isAuthenticated, requiresGameSelection, user, confirmedSelectedIds.join('|')]);
 
   const handleSaveSelectedGames = async () => {
     try {
@@ -422,7 +426,7 @@ export default function NewsScreen() {
             </View>
           )}
 
-          {isAuthenticated && gamesFromProfile.length > 0 && (
+          {isAuthenticated && !isAdminUser(user) && gamesFromProfile.length > 0 && (
             <View style={styles.newsSection}>
               <Text
                 style={{

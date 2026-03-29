@@ -162,3 +162,11 @@ export function getBanCheckOptionsForFollowedGames(
 
   return out;
 }
+
+/** Full antihack catalog — admins are not limited to followed/selected games. */
+export function getAllBanCheckSupportedOptions(): BanCheckOption[] {
+  return BAN_CHECK_SUPPORTED.map((def) => ({
+    apiGame: def.apiGame,
+    label: def.defaultLabel,
+  }));
+}

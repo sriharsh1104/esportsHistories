@@ -63,6 +63,9 @@ export const ROUTES = {
   GAME: '/(drawer)/(tabs)/game',
   GAME_SLUG: (slug: string) => `/(drawer)/(tabs)/game/${slug}` as const,
 
+  /** Admin console — stats + user management (role `admin` only). */
+  ADMIN: '/(drawer)/admin',
+
   // Drawer
   PROFILE: '/(drawer)/(tabs)/profile',
   WALLET: '/(drawer)/(tabs)/wallet',

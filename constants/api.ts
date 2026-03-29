@@ -91,6 +91,12 @@ export const API_ENDPOINTS = {
     CASHFREE_ORDER: "/payment/cashfree/order",
     CASHFREE_VERIFY: "/payment/cashfree/verify",
   },
+  /** Admin JWT — dashboard metrics, user listing, etc. */
+  ADMIN: {
+    DASHBOARD_STATS: '/admin/dashboard/stats',
+    DASHBOARD_STREAM: '/admin/dashboard/stream',
+    USERS: '/admin/users',
+  },
   TOURNAMENT: {
     /**
      * GET — tournaments list (Swagger: `/api/tournament/list`).

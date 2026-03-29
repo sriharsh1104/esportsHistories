@@ -2,6 +2,7 @@ import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
 import { useAuth } from "@/context/AuthContext";
+import { isAdminUser } from "@/utils/adminUser";
 import { userHasSelectedGames } from "@/utils/gameSelection";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { useWallet } from "@/context/WalletContext";
@@ -19,14 +20,15 @@ import {
     Text,
     View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getProfileImageUrl } from "@/utils/profileImage";
 
-const MENU_ITEMS = [
-  { icon: "user" as const, label: "Profile", route: ROUTES.PROFILE },
+const MENU_ITEMS_BASE = [
+  { icon: "home" as const, label: "Dashboard", routeUser: ROUTES.HOME, routeAdmin: ROUTES.ADMIN },
   { icon: "credit-card" as const, label: "Wallet", route: ROUTES.WALLET },
   { icon: "cog" as const, label: "Settings", route: ROUTES.SETTINGS },
   { icon: "shield" as const, label: "Ban Check", route: ROUTES.BAN_CHECK },
-];
+] as const;
 
 function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection: boolean }) {
   const scheme = useColorScheme() ?? "light";
@@ -34,6 +36,7 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
   const colors = Colors[scheme];
   const { user, isAuthenticated } = useAuth();
   const { balance, isLoading } = useWallet();
+  const insets = useSafeAreaInsets();
   const avatarUri = useMemo(
     () => getProfileImageUrl(user?.profileImage ?? user?.avatarUrl),
     [user?.profileImage, user?.avatarUrl]
@@ -49,15 +52,10 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <Pressable
-        onPress={() => {
-          if (isAuthenticated) {
-            nav(ROUTES.PROFILE);
-          }
-        }}
+      <View
         style={{
-          padding: w(20),
-          paddingTop: h(48),
+          paddingHorizontal: w(20),
+          paddingTop: Math.max(insets.top, h(12)),
           paddingBottom: h(16),
           backgroundColor: colors.tint + "15",
           borderBottomWidth: 1,
@@ -116,36 +114,29 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
               )}
             </View>
           </View>
-          {!isAuthenticated && (
-            <FontAwesome
-              name="chevron-right"
-              size={w(14)}
-              color={colors.tabIconDefault}
-            />
-          )}
-          {isAuthenticated && (
-            <FontAwesome
-              name="chevron-right"
-              size={w(14)}
-              color={colors.tabIconDefault}
-            />
-          )}
         </View>
-      </Pressable>
+      </View>
 
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: h(8), paddingBottom: h(24) }}
       >
-        {MENU_ITEMS.filter((item) => {
+        {MENU_ITEMS_BASE.filter((item) => {
           if (!isAuthenticated) return false;
           if (props.isLockedForGameSelection) return false;
           return true;
-        }).map((item) => (
+        }).map((item) => {
+          const route =
+            "route" in item
+              ? item.route
+              : isAdminUser(user)
+                ? item.routeAdmin
+                : item.routeUser;
+          return (
           <Pressable
             key={item.label}
-            onPress={() => nav(item.route)}
+            onPress={() => nav(route)}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
@@ -176,7 +167,8 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
               color={colors.tabIconDefault}
             />
           </Pressable>
-        ))}
+        );
+        })}
       </ScrollView>
     </View>
   );
@@ -187,7 +179,8 @@ export default function DrawerLayout() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
-  const isLockedForGameSelection = !userHasSelectedGames(confirmedSelectedGames);
+  const isLockedForGameSelection =
+    !isAdminUser(user) && !userHasSelectedGames(confirmedSelectedGames);
   const isOnHomeTab = useMemo(() => {
     const [root, tabs, leaf] = segments;
     return root === "(drawer)" && tabs === "(tabs)" && (!leaf || leaf === "index");
@@ -230,7 +223,7 @@ export default function DrawerLayout() {
     return <Redirect href={ROUTES.LOGIN} />;
   }
 
-  if (!user || !isProfileComplete(user)) {
+  if (!user || (!isAdminUser(user) && !isProfileComplete(user))) {
     return <Redirect href={ROUTES.EDIT_PROFILE_SIGNUP} />;
   }
 
@@ -270,6 +263,18 @@ export default function DrawerLayout() {
           swipeEnabled: !isLockedForGameSelection,
           drawerIcon: ({ color }) => (
             <FontAwesome name="gamepad" size={22} color={color} />
+          ),
+        }}
+      />
+      <Drawer.Screen
+        name="admin"
+        options={{
+          drawerItemStyle: isAdminUser(user) ? undefined : { display: "none" },
+          drawerLabel: "Admin",
+          title: "Admin",
+          swipeEnabled: !isLockedForGameSelection,
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="sliders" size={22} color={color} />
           ),
         }}
       />

@@ -1,11 +1,12 @@
 import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
+import { isAdminUser } from '@/utils/adminUser';
 import { Redirect, Stack, useSegments } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 
 export default function AuthLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const segments = useSegments();
 
   if (isLoading) {
@@ -19,7 +20,7 @@ export default function AuthLayout() {
 
   const isChangePassword = segments.includes('change-password');
   if (isAuthenticated && !isChangePassword) {
-    return <Redirect href={ROUTES.PROFILE} />;
+    return <Redirect href={isAdminUser(user) ? ROUTES.ADMIN : ROUTES.HOME} />;
   }
 
   if (!isAuthenticated && isChangePassword) {

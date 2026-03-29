@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
+import { isAdminUser } from '@/utils/adminUser';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -56,12 +57,14 @@ export default function VerifyOtpScreen() {
     dispatch(showLoader());
     try {
       const u = await verifyOtp(email!, otp);
-      if (u.onboardingStep === 'profile') {
+      if (isAdminUser(u)) {
+        router.replace(ROUTES.ADMIN);
+      } else if (u.onboardingStep === 'profile') {
         router.replace(ROUTES.EDIT_PROFILE_SIGNUP);
       } else if (u.onboardingStep === 'games') {
         router.replace(ROUTES.SELECT_GAMES_ONBOARDING);
       } else {
-        router.replace(ROUTES.PROFILE);
+        router.replace(ROUTES.HOME);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Verification failed');

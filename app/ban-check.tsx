@@ -8,7 +8,11 @@ import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { api } from '@/services/api.service';
-import { getBanCheckOptionsForFollowedGames } from '@/utils/banCheckFollowedGames';
+import { isAdminUser } from '@/utils/adminUser';
+import {
+  getAllBanCheckSupportedOptions,
+  getBanCheckOptionsForFollowedGames,
+} from '@/utils/banCheckFollowedGames';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router, Stack } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -24,11 +28,10 @@ import {
 
 export default function BanCheckScreen() {
   const { user, isAuthenticated } = useAuth();
-  const gamesForBanCheck = useMemo(
-    () =>
-      getBanCheckOptionsForFollowedGames(user?.selectedGames, user?.gameProfiles),
-    [user?.selectedGames, user?.gameProfiles]
-  );
+  const gamesForBanCheck = useMemo(() => {
+    if (isAdminUser(user)) return getAllBanCheckSupportedOptions();
+    return getBanCheckOptionsForFollowedGames(user?.selectedGames, user?.gameProfiles);
+  }, [user]);
 
   const [selectedGame, setSelectedGame] = useState<string>(
     () => gamesForBanCheck[0]?.apiGame ?? 'freefire'
@@ -60,7 +63,9 @@ export default function BanCheckScreen() {
     if (gamesForBanCheck.length === 0) {
       Alert.alert(
         'No games for ban check',
-        'Follow a game in your list that supports ban check (e.g. Free Fire, BGMI), then try again.'
+        isAdminUser(user)
+          ? 'No supported titles are configured for ban check.'
+          : 'Follow a game in your list that supports ban check (e.g. Free Fire, BGMI), then try again.'
       );
       return;
     }
@@ -122,14 +127,18 @@ export default function BanCheckScreen() {
                   marginBottom: h(12),
                 }}
               >
-                {isAuthenticated
+                {isAdminUser(user)
+                  ? 'Something went wrong loading supported games. Try again later.'
+                  : isAuthenticated
                   ? 'Only games you follow — and that support ban check — appear here. Add them under your game list first.'
                   : 'Sign in and follow your games; this list will match what you follow.'}
               </Text>
               <Button
-                title={isAuthenticated ? 'Choose games' : 'Log in'}
+                title={isAdminUser(user) ? 'Go back' : isAuthenticated ? 'Choose games' : 'Log in'}
                 onPress={() =>
-                  router.push(isAuthenticated ? ROUTES.SELECT_GAMES : ROUTES.LOGIN)
+                  isAdminUser(user)
+                    ? router.back()
+                    : router.push(isAuthenticated ? ROUTES.SELECT_GAMES : ROUTES.LOGIN)
                 }
                 fullWidth
               />
@@ -272,7 +281,7 @@ export default function BanCheckScreen() {
               borderWidth: 1,
               borderColor: colors.border,
               overflow: 'hidden',
-              maxHeight: h(360),
+              maxHeight: isAdminUser(user) ? h(520) : h(360),
               alignSelf: 'center',
               width: w(320),
               maxWidth: '100%',
@@ -289,7 +298,7 @@ export default function BanCheckScreen() {
                 borderBottomColor: colors.border,
               }}
             >
-              Followed games — ban check
+              {isAdminUser(user) ? 'All supported games' : 'Followed games — ban check'}
             </Text>
             <ScrollView keyboardShouldPersistTaps="handled">
               {gamesForBanCheck.map((g, index) => (

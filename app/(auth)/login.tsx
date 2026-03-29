@@ -8,6 +8,7 @@ import { useResponsive } from '@/context/ResponsiveContext';
 import { useAppDispatch } from '@/store/hooks';
 import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import type { UserBio } from '@/types/auth';
+import { isAdminUser } from '@/utils/adminUser';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -88,6 +89,10 @@ export default function LoginScreen() {
       }
 
       const user = await refreshUser().catch(() => res.user);
+      if (isAdminUser(user)) {
+        router.replace(ROUTES.ADMIN);
+        return;
+      }
       const complete = isProfileComplete(user);
 
       if (!complete) {
