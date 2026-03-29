@@ -1,4 +1,4 @@
-import { AdminFinancialChart } from '@/components/admin';
+import { AdminFinancialChart, AdminUserBlockActionBar } from '@/components/admin';
 import { Button, Card, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -7,12 +7,14 @@ import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import {
   adminFinancialChartHasData,
+  blockAdminUsers,
   buildAdminDashboardStreamUrl,
   fetchAdminDashboardStats,
   fetchAdminFinancialSeries,
   fetchAdminUsers,
   normalizeFinancialSeries,
   parseAdminDashboardStreamPayload,
+  unblockAdminUsers,
 } from '@/services/admin.service';
 import { ApiError } from '@/services/api.service';
 import type {
@@ -23,8 +25,9 @@ import type {
   AdminUserRow,
 } from '@/types/admin';
 import { isAdminUser } from '@/utils/adminUser';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Redirect } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -71,6 +74,15 @@ function formatRoleForDisplay(role: string): string {
 
 function roleFilterLabel(r: AdminUserRoleFilter): string {
   return capitalizeWords(humanizeRoleLabel(r));
+}
+
+/** Admin role rows cannot be bulk-blocked in this UI. */
+function isAdminRoleForBulkBlock(role?: string): boolean {
+  const r = String(role ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]/g, '_');
+  return r === 'admin';
 }
 
 function formatINR(n: number | undefined): string {
@@ -182,11 +194,20 @@ function UserRow({
   colors,
   w,
   isLast,
+  selectable,
+  selected,
+  onToggleSelect,
+  reserveSelectSlot,
 }: {
   row: AdminUserRow;
   colors: (typeof Colors)['light'];
   w: (n: number) => number;
   isLast?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  /** When bulk-select is shown on the screen but this row isn’t selectable, keep column alignment. */
+  reserveSelectSlot?: boolean;
 }) {
   const rawTitle = row.displayName || row.fullName || row.name || row.email;
   const title =
@@ -202,6 +223,28 @@ function UserRow({
         },
       ]}
     >
+      {selectable && onToggleSelect ? (
+        <Pressable
+          onPress={onToggleSelect}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: !!selected }}
+          hitSlop={8}
+          style={{ marginRight: w(10), paddingTop: w(2) }}
+        >
+          <FontAwesome
+            name={selected ? 'check-square' : 'square-o'}
+            size={w(22)}
+            color={selected ? colors.tint : colors.tabIconDefault}
+          />
+        </Pressable>
+      ) : reserveSelectSlot ? (
+        <View
+          style={{ width: w(22), marginRight: w(10), paddingTop: w(2), alignItems: 'center' }}
+          accessibilityElementsHidden
+        >
+          <FontAwesome name="lock" size={w(16)} color={colors.tabIconDefault + '99'} />
+        </View>
+      ) : null}
       <View style={{ flex: 1 }}>
         <Text style={{ color: colors.text, fontSize: w(15), fontWeight: '600' }} numberOfLines={1}>
           {title}
@@ -209,6 +252,14 @@ function UserRow({
         <Text style={{ color: colors.tabIconDefault, fontSize: w(13), marginTop: w(4) }} numberOfLines={1}>
           {row.email}
         </Text>
+        {row.isBlocked ? (
+          <Text
+            style={{ color: '#c62828', fontSize: w(11), marginTop: w(4), fontWeight: '600' }}
+            numberOfLines={1}
+          >
+            Blocked — cannot log in
+          </Text>
+        ) : null}
       </View>
       <View style={{ alignItems: 'flex-end', marginLeft: w(8), maxWidth: '40%' }}>
         {row.role ? (
@@ -248,6 +299,11 @@ export default function AdminScreen() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(() => new Set());
+  const [userBlockPending, setUserBlockPending] = useState<'block' | 'unblock' | null>(null);
+
+  const selectedCount = selectedUserIds.size;
+  const selectedIdsList = useMemo(() => [...selectedUserIds], [selectedUserIds]);
 
   const [financePeriod, setFinancePeriod] = useState<AdminFinancePeriod>('daily');
   const [financeLoading, setFinanceLoading] = useState(false);
@@ -373,6 +429,92 @@ export default function AdminScreen() {
     if (!isAuthenticated || !isAdminUser(user)) return;
     loadUsers();
   }, [section, isAuthenticated, user, loadUsers]);
+
+  useEffect(() => {
+    setSelectedUserIds(new Set());
+  }, [page, roleFilter, searchApplied]);
+
+  useEffect(() => {
+    setSelectedUserIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        const row = userRows.find((r) => r.id === id);
+        if (row && isAdminRoleForBulkBlock(row.role)) {
+          changed = true;
+          continue;
+        }
+        next.add(id);
+      }
+      return changed ? next : prev;
+    });
+  }, [userRows]);
+
+  const toggleSelectUser = useCallback((id: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const runBulkBlockUnblock = useCallback(
+    async (mode: 'block' | 'unblock') => {
+      const selfId = user?.id;
+      const idsBase = selectedIdsList.filter((id) => id !== selfId);
+      const ids =
+        mode === 'block'
+          ? idsBase.filter((id) => {
+              const row = userRows.find((r) => r.id === id);
+              return !row || !isAdminRoleForBulkBlock(row.role);
+            })
+          : idsBase;
+      if (ids.length === 0) {
+        if (selectedIdsList.length === 0) {
+          Toast.show({ type: 'info', text1: 'Select one or more users' });
+          return;
+        }
+        if (idsBase.length === 0) {
+          Toast.show({ type: 'info', text1: 'Cannot include your own account in this action' });
+          return;
+        }
+        if (
+          mode === 'block' &&
+          idsBase.every((id) => {
+            const row = userRows.find((r) => r.id === id);
+            return row != null && isAdminRoleForBulkBlock(row.role);
+          })
+        ) {
+          Toast.show({ type: 'info', text1: 'Admin accounts cannot be blocked here' });
+          return;
+        }
+        Toast.show({
+          type: 'info',
+          text1: mode === 'block' ? 'No eligible users to block' : 'No eligible users to unblock',
+        });
+        return;
+      }
+      setUserBlockPending(mode);
+      try {
+        if (mode === 'block') await blockAdminUsers(ids);
+        else await unblockAdminUsers(ids);
+        Toast.show({
+          type: 'success',
+          text1: mode === 'block' ? 'Selected users blocked' : 'Selected users unblocked',
+        });
+        setSelectedUserIds(new Set());
+        await loadUsers();
+      } catch (e) {
+        const msg =
+          e instanceof ApiError ? e.message : mode === 'block' ? 'Block request failed' : 'Unblock request failed';
+        Toast.show({ type: 'error', text1: msg });
+      } finally {
+        setUserBlockPending(null);
+      }
+    },
+    [selectedIdsList, user?.id, userRows, loadUsers]
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -718,6 +860,13 @@ export default function AdminScreen() {
               style={{ marginTop: h(12) }}
             />
 
+            <AdminUserBlockActionBar
+              selectedCount={selectedCount}
+              pendingAction={userBlockPending}
+              onBlock={() => void runBulkBlockUnblock('block')}
+              onUnblock={() => void runBulkBlockUnblock('unblock')}
+            />
+
             <Card style={{ marginTop: h(16) }} padded>
               {usersLoading ? (
                 <ActivityIndicator color={colors.tint} style={{ marginVertical: h(16) }} />
@@ -726,15 +875,24 @@ export default function AdminScreen() {
               ) : userRows.length === 0 ? (
                 <Text style={{ color: colors.tabIconDefault }}>No users for this query.</Text>
               ) : (
-                userRows.map((item, i) => (
-                  <UserRow
-                    key={item.id}
-                    row={item}
-                    colors={colors}
-                    w={w}
-                    isLast={i === userRows.length - 1}
-                  />
-                ))
+                userRows.map((item, i) => {
+                  const canBulkSelect = !isAdminRoleForBulkBlock(item.role);
+                  return (
+                    <UserRow
+                      key={item.id}
+                      row={item}
+                      colors={colors}
+                      w={w}
+                      isLast={i === userRows.length - 1}
+                      selectable={canBulkSelect}
+                      reserveSelectSlot={!canBulkSelect}
+                      selected={canBulkSelect && selectedUserIds.has(item.id)}
+                      onToggleSelect={
+                        canBulkSelect ? () => toggleSelectUser(item.id) : undefined
+                      }
+                    />
+                  );
+                })
               )}
             </Card>
 

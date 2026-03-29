@@ -60,6 +60,8 @@ export type AdminUserRow = {
   role?: string;
   status?: string;
   isVerified?: boolean;
+  /** Account login block (admin list / block APIs). */
+  isBlocked?: boolean;
 };
 
 export type AdminUsersPage = {

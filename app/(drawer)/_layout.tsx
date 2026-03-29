@@ -182,8 +182,11 @@ export default function DrawerLayout() {
   const isLockedForGameSelection =
     !isAdminUser(user) && !userHasSelectedGames(confirmedSelectedGames);
   const isOnHomeTab = useMemo(() => {
-    const [root, tabs, leaf] = segments;
-    return root === "(drawer)" && tabs === "(tabs)" && (!leaf || leaf === "index");
+    const [root, tabs] = segments;
+    if (root !== "(drawer)" || tabs !== "(tabs)") return false;
+    /** `useSegments` typings omit `index` from the leaf union; treat as runtime string. */
+    const leaf = segments[2] as string | undefined;
+    return leaf == null || leaf === "index";
   }, [segments]);
 
   function parseBioGenderAge(bio?: UserBio | string): UserBio {

@@ -98,6 +98,10 @@ export const API_ENDPOINTS = {
     /** GET — financial time-series (`period`: daily | weekly | monthly). */
     ANALYTICS: '/admin/analytics',
     USERS: '/admin/users',
+    /** POST `{ userIds: string[] }` — set isBlocked true. */
+    USERS_BLOCK: '/admin/users/block',
+    /** POST `{ userIds: string[] }` — set isBlocked false. */
+    USERS_UNBLOCK: '/admin/users/unblock',
   },
   TOURNAMENT: {
     /**

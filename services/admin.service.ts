@@ -68,6 +68,10 @@ function normalizeUserRow(raw: unknown): AdminUserRow | null {
       typeof row.isVerified === 'boolean'
         ? row.isVerified
         : row.verified === true,
+    isBlocked:
+      typeof row.isBlocked === 'boolean'
+        ? row.isBlocked
+        : row.blocked === true,
   };
 }
 
@@ -450,4 +454,24 @@ export async function fetchAdminUsers(params: FetchAdminUsersParams): Promise<Ad
     toast: false,
   });
   return normalizeUsersPage(raw, page, limit);
+}
+
+export async function blockAdminUsers(userIds: string[]): Promise<void> {
+  const ids = [...new Set(userIds.map((x) => String(x).trim()).filter(Boolean))];
+  if (ids.length === 0) return;
+  await request<unknown>(API_ENDPOINTS.ADMIN.USERS_BLOCK, {
+    method: 'POST',
+    body: { userIds: ids },
+    toast: false,
+  });
+}
+
+export async function unblockAdminUsers(userIds: string[]): Promise<void> {
+  const ids = [...new Set(userIds.map((x) => String(x).trim()).filter(Boolean))];
+  if (ids.length === 0) return;
+  await request<unknown>(API_ENDPOINTS.ADMIN.USERS_UNBLOCK, {
+    method: 'POST',
+    body: { userIds: ids },
+    toast: false,
+  });
 }
