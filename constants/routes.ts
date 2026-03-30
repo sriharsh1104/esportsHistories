@@ -65,6 +65,8 @@ export const ROUTES = {
 
   /** Admin console — stats + user management (role `admin` only). */
   ADMIN: '/(drawer)/admin',
+  /** Admin — manual host / org manager signup forms. */
+  ADMIN_CREATE_ACCOUNTS: '/(drawer)/admin-create-accounts',
 
   // Drawer
   PROFILE: '/(drawer)/(tabs)/profile',

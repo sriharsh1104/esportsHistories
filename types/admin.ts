@@ -76,6 +76,24 @@ export type AdminUserRoleFilter = 'ALL' | 'ADMIN' | 'HOST' | 'USER' | 'ORG_MANAG
 
 export type AdminFinancePeriod = 'daily' | 'weekly' | 'monthly';
 
+export type AdminOrganization = {
+  id: string;
+  name: string;
+  slug: string;
+  managerEmail?: string;
+  managerName?: string;
+  managerId?: string;
+  isBlocked?: boolean;
+};
+
+export type AdminOrganizationsPage = {
+  items: AdminOrganization[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
 /** Normalized points for the admin revenue / profit chart. */
 export type AdminFinancialSeries = {
   labels: string[];

@@ -4,6 +4,8 @@ import type {
   AdminDashboardStats,
   AdminFinancePeriod,
   AdminFinancialSeries,
+  AdminOrganization,
+  AdminOrganizationsPage,
   AdminUserRow,
   AdminUsersPage,
   AdminUserRoleFilter,
@@ -472,6 +474,149 @@ export async function unblockAdminUsers(userIds: string[]): Promise<void> {
   await request<unknown>(API_ENDPOINTS.ADMIN.USERS_UNBLOCK, {
     method: 'POST',
     body: { userIds: ids },
+    toast: false,
+  });
+}
+
+/** Body for admin manual host / org manager creation (matches `/admin/hosts/create`). */
+export type AdminManualAccountCreateBody = {
+  email: string;
+  name: string;
+  password: string;
+};
+
+export async function createAdminHost(body: AdminManualAccountCreateBody): Promise<unknown> {
+  return request<unknown>(API_ENDPOINTS.ADMIN.HOSTS_CREATE, {
+    method: 'POST',
+    body,
+    toast: false,
+  });
+}
+
+export async function createAdminOrgManager(body: AdminManualAccountCreateBody): Promise<unknown> {
+  return request<unknown>(API_ENDPOINTS.ADMIN.ORG_MANAGERS_CREATE, {
+    method: 'POST',
+    body,
+    toast: false,
+  });
+}
+
+export type AdminCreateOrgBody = {
+  name: string;
+  slug: string;
+  manager: {
+    email: string;
+    name: string;
+    password: string;
+  };
+};
+
+export async function createAdminOrganization(body: AdminCreateOrgBody): Promise<unknown> {
+  return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS, {
+    method: 'POST',
+    body,
+    toast: false,
+  });
+}
+
+export type FetchAdminOrgsParams = {
+  page?: number;
+  limit?: number;
+  search?: string;
+};
+
+function normalizeOrgRow(raw: unknown): AdminOrganization | null {
+  const row = asRecord(raw);
+  if (!row) return null;
+  const id = strId(row._id) || strId(row.id) || strId(row.orgId) || '';
+  const name = row.name != null ? String(row.name).trim() : '';
+  if (!id || !name) return null;
+  const manager = asRecord(row.manager);
+  return {
+    id,
+    name,
+    slug: row.slug != null ? String(row.slug).trim() : '',
+    managerEmail: manager?.email != null ? String(manager.email) : undefined,
+    managerName: manager?.name != null ? String(manager.name) : undefined,
+    managerId: manager?._id != null ? String(manager._id) : manager?.id != null ? String(manager.id) : undefined,
+    isBlocked:
+      typeof row.isBlocked === 'boolean'
+        ? row.isBlocked
+        : row.blocked === true,
+  };
+}
+
+function normalizeOrgsPage(raw: unknown, page: number, limit: number): AdminOrganizationsPage {
+  const root = asRecord(raw);
+  const data = root?.data != null ? asRecord(root.data) : root;
+  const d = data ?? {};
+  const listRaw: unknown =
+    d.organizations ??
+    d.items ??
+    d.data ??
+    (Array.isArray(d.results) ? d.results : undefined) ??
+    root?.organizations;
+  const list = Array.isArray(listRaw) ? listRaw : [];
+  const items = list
+    .map((r) => normalizeOrgRow(r))
+    .filter((x): x is AdminOrganization => x != null);
+
+  const total =
+    num(d.total) ?? num(d.totalCount) ?? num(root?.total) ?? items.length;
+  const totalPagesRaw = num(d.totalPages) ?? num(d.pages);
+  const totalPages =
+    totalPagesRaw ?? (limit > 0 ? Math.max(1, Math.ceil(total / limit)) : 1);
+
+  return {
+    items,
+    total,
+    page: num(d.page) ?? num(d.currentPage) ?? page,
+    limit: num(d.limit) ?? num(d.pageSize) ?? limit,
+    totalPages,
+  };
+}
+
+export async function fetchAdminOrganizations(params: FetchAdminOrgsParams): Promise<AdminOrganizationsPage> {
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 20;
+  const query: Record<string, string | number | undefined> = { page, limit };
+  const q = params.search?.trim();
+  if (q) query.search = q;
+
+  const raw = await request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS, {
+    params: query,
+    toast: false,
+  });
+  return normalizeOrgsPage(raw, page, limit);
+}
+
+export type AdminUpdateOrgManagerBody = {
+  email: string;
+  name: string;
+  password: string;
+};
+
+export async function updateAdminOrgManager(
+  orgId: string,
+  body: AdminUpdateOrgManagerBody
+): Promise<unknown> {
+  return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS_UPDATE_MANAGER(orgId), {
+    method: 'PATCH',
+    body,
+    toast: false,
+  });
+}
+
+export async function blockAdminOrganization(orgId: string): Promise<unknown> {
+  return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS_BLOCK(orgId), {
+    method: 'PATCH',
+    toast: false,
+  });
+}
+
+export async function unblockAdminOrganization(orgId: string): Promise<unknown> {
+  return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS_UNBLOCK(orgId), {
+    method: 'PATCH',
     toast: false,
   });
 }

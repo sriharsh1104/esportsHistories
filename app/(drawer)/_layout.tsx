@@ -2,35 +2,49 @@ import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
 import { useAuth } from "@/context/AuthContext";
-import { isAdminUser } from "@/utils/adminUser";
-import { userHasSelectedGames } from "@/utils/gameSelection";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { useWallet } from "@/context/WalletContext";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
 import type { UserBio } from "@/types/auth";
+import { isAdminUser } from "@/utils/adminUser";
+import { userHasSelectedGames } from "@/utils/gameSelection";
+import { getProfileImageUrl } from "@/utils/profileImage";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { DrawerActions } from "@react-navigation/native";
 import { Redirect, router, useSegments } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import React, { useMemo } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Pressable,
-    ScrollView,
-    Text,
-    View,
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getProfileImageUrl } from "@/utils/profileImage";
 
 const MENU_ITEMS_BASE = [
-  { icon: "home" as const, label: "Dashboard", routeUser: ROUTES.HOME, routeAdmin: ROUTES.ADMIN },
+  {
+    icon: "home" as const,
+    label: "Dashboard",
+    routeUser: ROUTES.HOME,
+    routeAdmin: ROUTES.ADMIN,
+  },
+  {
+    icon: "user-plus" as const,
+    label: "Create accounts",
+    route: ROUTES.ADMIN_CREATE_ACCOUNTS,
+    adminOnly: true as const,
+  },
   { icon: "credit-card" as const, label: "Wallet", route: ROUTES.WALLET },
   { icon: "cog" as const, label: "Settings", route: ROUTES.SETTINGS },
   { icon: "shield" as const, label: "Ban Check", route: ROUTES.BAN_CHECK },
 ] as const;
 
-function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection: boolean }) {
+function CustomDrawerContent(props: {
+  navigation?: any;
+  isLockedForGameSelection: boolean;
+}) {
   const scheme = useColorScheme() ?? "light";
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -39,7 +53,7 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
   const insets = useSafeAreaInsets();
   const avatarUri = useMemo(
     () => getProfileImageUrl(user?.profileImage ?? user?.avatarUrl),
-    [user?.profileImage, user?.avatarUrl]
+    [user?.profileImage, user?.avatarUrl],
   );
 
   const closeDrawer = () =>
@@ -81,8 +95,12 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
                 resizeMode="cover"
               />
             ) : (
-              <Text style={{ fontSize: w(24), fontWeight: "700", color: "#fff" }}>
-                {isAuthenticated && user ? user.displayName.charAt(0).toUpperCase() : "?"}
+              <Text
+                style={{ fontSize: w(24), fontWeight: "700", color: "#fff" }}
+              >
+                {isAuthenticated && user
+                  ? user.displayName.charAt(0).toUpperCase()
+                  : "?"}
               </Text>
             )}
           </View>
@@ -93,7 +111,13 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
             >
               {isAuthenticated && user ? user.fullName || user.displayName : ""}
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", marginTop: h(6) }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginTop: h(6),
+              }}
+            >
               <FontAwesome name="star" size={w(14)} color={colors.accent} />
               {isLoading ? (
                 <ActivityIndicator
@@ -125,6 +149,8 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
         {MENU_ITEMS_BASE.filter((item) => {
           if (!isAuthenticated) return false;
           if (props.isLockedForGameSelection) return false;
+          if ("adminOnly" in item && item.adminOnly && !isAdminUser(user))
+            return false;
           return true;
         }).map((item) => {
           const route =
@@ -134,40 +160,40 @@ function CustomDrawerContent(props: { navigation?: any; isLockedForGameSelection
                 ? item.routeAdmin
                 : item.routeUser;
           return (
-          <Pressable
-            key={item.label}
-            onPress={() => nav(route)}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              paddingVertical: h(14),
-              paddingHorizontal: w(20),
-              backgroundColor: pressed ? colors.border + "40" : "transparent",
-            })}
-          >
-            <FontAwesome
-              name={item.icon}
-              size={w(20)}
-              color={colors.tint}
-              style={{ width: w(28), textAlign: "center" }}
-            />
-            <Text
-              style={{
-                fontSize: w(15),
-                fontWeight: "500",
-                color: colors.text,
-                flex: 1,
-              }}
+            <Pressable
+              key={item.label}
+              onPress={() => nav(route)}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: h(14),
+                paddingHorizontal: w(20),
+                backgroundColor: pressed ? colors.border + "40" : "transparent",
+              })}
             >
-              {item.label}
-            </Text>
-            <FontAwesome
-              name="chevron-right"
-              size={w(12)}
-              color={colors.tabIconDefault}
-            />
-          </Pressable>
-        );
+              <FontAwesome
+                name={item.icon}
+                size={w(20)}
+                color={colors.tint}
+                style={{ width: w(28), textAlign: "center" }}
+              />
+              <Text
+                style={{
+                  fontSize: w(15),
+                  fontWeight: "500",
+                  color: colors.text,
+                  flex: 1,
+                }}
+              >
+                {item.label}
+              </Text>
+              <FontAwesome
+                name="chevron-right"
+                size={w(12)}
+                color={colors.tabIconDefault}
+              />
+            </Pressable>
+          );
         })}
       </ScrollView>
     </View>
@@ -178,7 +204,9 @@ export default function DrawerLayout() {
   const colorScheme = useColorScheme();
   const { user, isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
-  const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
+  const confirmedSelectedGames = Array.isArray(user?.selectedGames)
+    ? user.selectedGames
+    : [];
   const isLockedForGameSelection =
     !isAdminUser(user) && !userHasSelectedGames(confirmedSelectedGames);
   const isOnHomeTab = useMemo(() => {
@@ -215,7 +243,7 @@ export default function DrawerLayout() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" />
         <Text style={{ marginTop: 12 }}>Loading...</Text>
       </View>
@@ -279,6 +307,14 @@ export default function DrawerLayout() {
           drawerIcon: ({ color }) => (
             <FontAwesome name="sliders" size={22} color={color} />
           ),
+        }}
+      />
+      <Drawer.Screen
+        name="admin-create-accounts"
+        options={{
+          title: "Create accounts",
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: !isLockedForGameSelection,
         }}
       />
     </Drawer>

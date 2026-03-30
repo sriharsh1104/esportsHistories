@@ -102,6 +102,21 @@ export const API_ENDPOINTS = {
     USERS_BLOCK: '/admin/users/block',
     /** POST `{ userIds: string[] }` — set isBlocked false. */
     USERS_UNBLOCK: '/admin/users/unblock',
+    /** POST `{ email, name, password }` — create verified host (admin only). */
+    HOSTS_CREATE: '/admin/hosts/create',
+    /** POST `{ email, name, password }` — create org manager (admin only; Swagger path may vary). */
+    ORG_MANAGERS_CREATE: '/org-managers/create',
+    /** POST `{ name, slug, manager: { email, name, password } }` — create organization + dedicated manager. */
+    ORGANIZATIONS: '/admin/organizations',
+    /** PATCH `{ email, name, password }` — replace org manager. */
+    ORGANIZATIONS_UPDATE_MANAGER: (orgId: string) =>
+      `/admin/organizations/${encodeURIComponent(orgId)}/manager`,
+    /** PATCH — block an organization. */
+    ORGANIZATIONS_BLOCK: (orgId: string) =>
+      `/admin/organizations/${encodeURIComponent(orgId)}/block`,
+    /** PATCH — unblock an organization. */
+    ORGANIZATIONS_UNBLOCK: (orgId: string) =>
+      `/admin/organizations/${encodeURIComponent(orgId)}/unblock`,
   },
   TOURNAMENT: {
     /**

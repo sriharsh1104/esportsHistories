@@ -1,10 +1,13 @@
-import { AdminFinancialChart, AdminUserBlockActionBar } from '@/components/admin';
-import { Button, Card, Input, Screen } from '@/components/ui';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
-import { ROUTES } from '@/constants/routes';
-import { useAuth } from '@/context/AuthContext';
-import { useResponsive } from '@/context/ResponsiveContext';
+import {
+  AdminFinancialChart,
+  AdminUserBlockActionBar,
+} from "@/components/admin";
+import { Button, Card, Input, Screen } from "@/components/ui";
+import { useColorScheme } from "@/components/useColorScheme";
+import Colors from "@/constants/Colors";
+import { ROUTES } from "@/constants/routes";
+import { useAuth } from "@/context/AuthContext";
+import { useResponsive } from "@/context/ResponsiveContext";
 import {
   adminFinancialChartHasData,
   blockAdminUsers,
@@ -15,19 +18,20 @@ import {
   normalizeFinancialSeries,
   parseAdminDashboardStreamPayload,
   unblockAdminUsers,
-} from '@/services/admin.service';
-import { ApiError } from '@/services/api.service';
+} from "@/services/admin.service";
+import { ApiError } from "@/services/api.service";
+import { getToken } from "@/services/common.service";
 import type {
   AdminDashboardStats,
   AdminFinancePeriod,
   AdminFinancialSeries,
   AdminUserRoleFilter,
   AdminUserRow,
-} from '@/types/admin';
-import { isAdminUser } from '@/utils/adminUser';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Redirect } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+} from "@/types/admin";
+import { isAdminUser } from "@/utils/adminUser";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { Redirect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -37,23 +41,28 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { getToken } from '@/services/common.service';
-import Toast from 'react-native-toast-message';
+} from "react-native";
+import Toast from "react-native-toast-message";
 
-type AdminSection = 'overview' | 'users';
+type AdminSection = "overview" | "users";
 
 const FINANCE_PERIODS: { id: AdminFinancePeriod; label: string }[] = [
-  { id: 'daily', label: 'Daily' },
-  { id: 'weekly', label: 'Weekly' },
-  { id: 'monthly', label: 'Monthly' },
+  { id: "daily", label: "Daily" },
+  { id: "weekly", label: "Weekly" },
+  { id: "monthly", label: "Monthly" },
 ];
 
-const ROLE_FILTERS: AdminUserRoleFilter[] = ['ALL', 'ADMIN', 'HOST', 'USER', 'ORG_MANAGER'];
+const ROLE_FILTERS: AdminUserRoleFilter[] = [
+  "ALL",
+  "ADMIN",
+  "HOST",
+  "USER",
+  "ORG_MANAGER",
+];
 
 /** Underscores → spaces for role strings from API. */
 function humanizeRoleLabel(role: string): string {
-  return String(role).replace(/_/g, ' ').trim();
+  return String(role).replace(/_/g, " ").trim();
 }
 
 /** Title-style: each word’s first letter capital (e.g. `sriharsh` → `Sriharsh`, `org manager` → `Org Manager`). */
@@ -63,9 +72,9 @@ function capitalizeWords(text: string): string {
   return t
     .split(/\s+/)
     .map((part) =>
-      part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part
+      part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part,
     )
-    .join(' ');
+    .join(" ");
 }
 
 function formatRoleForDisplay(role: string): string {
@@ -78,19 +87,19 @@ function roleFilterLabel(r: AdminUserRoleFilter): string {
 
 /** Admin role rows cannot be bulk-blocked in this UI. */
 function isAdminRoleForBulkBlock(role?: string): boolean {
-  const r = String(role ?? '')
+  const r = String(role ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[\s-]/g, '_');
-  return r === 'admin';
+    .replace(/[\s-]/g, "_");
+  return r === "admin";
 }
 
 function formatINR(n: number | undefined): string {
-  if (n == null || Number.isNaN(n)) return '—';
+  if (n == null || Number.isNaN(n)) return "—";
   try {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
       maximumFractionDigits: 0,
     }).format(n);
   } catch {
@@ -99,50 +108,58 @@ function formatINR(n: number | undefined): string {
 }
 
 function formatNum(n: number | undefined): string {
-  if (n == null || Number.isNaN(n)) return '—';
-  return n.toLocaleString('en-IN');
+  if (n == null || Number.isNaN(n)) return "—";
+  return n.toLocaleString("en-IN");
 }
 
 /** Wallet: user self vs admin manual vs sum; host fee credits stay in “Host fees paid”. */
-const STAT_DEFS: { key: keyof AdminDashboardStats; label: string; format: 'int' | 'inr' }[] = [
-  { key: 'totalUsers', label: 'Total users', format: 'int' },
+const STAT_DEFS: {
+  key: keyof AdminDashboardStats;
+  label: string;
+  format: "int" | "inr";
+}[] = [
+  { key: "totalUsers", label: "Total users", format: "int" },
   {
-    key: 'userSelfTopupsINR',
-    label: 'User self top-ups (INR)',
-    format: 'inr',
+    key: "userSelfTopupsINR",
+    label: "User self top-ups (INR)",
+    format: "inr",
   },
   {
-    key: 'adminManualTopupsINR',
-    label: 'Admin manual top-ups (INR)',
-    format: 'inr',
+    key: "adminManualTopupsINR",
+    label: "Admin manual top-ups (INR)",
+    format: "inr",
   },
   {
-    key: 'totalTopupsINR',
-    label: 'Total top-ups — user + admin (INR)',
-    format: 'inr',
-  },
-  { key: 'prizePoolDistributed', label: 'Prize pool paid (INR)', format: 'inr' },
-  {
-    key: 'platformProfit',
-    label: 'Tournament fee profit — platform + caster (INR)',
-    format: 'inr',
+    key: "totalTopupsINR",
+    label: "Total top-ups — user + admin (INR)",
+    format: "inr",
   },
   {
-    key: 'walletNetFlowINR',
-    label: 'Wallet net flow — user top-ups minus prizes (INR)',
-    format: 'inr',
+    key: "prizePoolDistributed",
+    label: "Prize pool paid (INR)",
+    format: "inr",
   },
-  { key: 'platformFeeCollected', label: 'Platform fees (INR)', format: 'inr' },
-  { key: 'casterFeeCollected', label: 'Caster fees (INR)', format: 'inr' },
   {
-    key: 'totalHostFeePaid',
-    label: 'Host fees paid — system credits (INR)',
-    format: 'inr',
+    key: "platformProfit",
+    label: "Tournament fee profit — platform + caster (INR)",
+    format: "inr",
+  },
+  {
+    key: "walletNetFlowINR",
+    label: "Wallet net flow — user top-ups minus prizes (INR)",
+    format: "inr",
+  },
+  { key: "platformFeeCollected", label: "Platform fees (INR)", format: "inr" },
+  { key: "casterFeeCollected", label: "Caster fees (INR)", format: "inr" },
+  {
+    key: "totalHostFeePaid",
+    label: "Host fees paid — system credits (INR)",
+    format: "inr",
   },
 ];
 
 function feesBreakdownHasValues(
-  fee: NonNullable<AdminDashboardStats['feesBreakdown']>
+  fee: NonNullable<AdminDashboardStats["feesBreakdown"]>,
 ): boolean {
   const nums = [
     fee.platformFeeINR,
@@ -168,7 +185,7 @@ function StatRow({
 }: {
   label: string;
   value: string;
-  colors: (typeof Colors)['light'];
+  colors: (typeof Colors)["light"];
   w: (n: number) => number;
   isLast?: boolean;
 }) {
@@ -183,8 +200,12 @@ function StatRow({
         },
       ]}
     >
-      <Text style={{ color: colors.tabIconDefault, fontSize: w(14), flex: 1 }}>{label}</Text>
-      <Text style={{ color: colors.text, fontSize: w(15), fontWeight: '600' }}>{value}</Text>
+      <Text style={{ color: colors.tabIconDefault, fontSize: w(14), flex: 1 }}>
+        {label}
+      </Text>
+      <Text style={{ color: colors.text, fontSize: w(15), fontWeight: "600" }}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -200,7 +221,7 @@ function UserRow({
   reserveSelectSlot,
 }: {
   row: AdminUserRow;
-  colors: (typeof Colors)['light'];
+  colors: (typeof Colors)["light"];
   w: (n: number) => number;
   isLast?: boolean;
   selectable?: boolean;
@@ -210,8 +231,7 @@ function UserRow({
   reserveSelectSlot?: boolean;
 }) {
   const rawTitle = row.displayName || row.fullName || row.name || row.email;
-  const title =
-    rawTitle === row.email ? rawTitle : capitalizeWords(rawTitle);
+  const title = rawTitle === row.email ? rawTitle : capitalizeWords(rawTitle);
   return (
     <View
       style={[
@@ -232,43 +252,79 @@ function UserRow({
           style={{ marginRight: w(10), paddingTop: w(2) }}
         >
           <FontAwesome
-            name={selected ? 'check-square' : 'square-o'}
+            name={selected ? "check-square" : "square-o"}
             size={w(22)}
             color={selected ? colors.tint : colors.tabIconDefault}
           />
         </Pressable>
       ) : reserveSelectSlot ? (
         <View
-          style={{ width: w(22), marginRight: w(10), paddingTop: w(2), alignItems: 'center' }}
+          style={{
+            width: w(22),
+            marginRight: w(10),
+            paddingTop: w(2),
+            alignItems: "center",
+          }}
           accessibilityElementsHidden
         >
-          <FontAwesome name="lock" size={w(16)} color={colors.tabIconDefault + '99'} />
+          <FontAwesome
+            name="lock"
+            size={w(16)}
+            color={colors.tabIconDefault + "99"}
+          />
         </View>
       ) : null}
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontSize: w(15), fontWeight: '600' }} numberOfLines={1}>
+        <Text
+          style={{ color: colors.text, fontSize: w(15), fontWeight: "600" }}
+          numberOfLines={1}
+        >
           {title}
         </Text>
-        <Text style={{ color: colors.tabIconDefault, fontSize: w(13), marginTop: w(4) }} numberOfLines={1}>
+        <Text
+          style={{
+            color: colors.tabIconDefault,
+            fontSize: w(13),
+            marginTop: w(4),
+          }}
+          numberOfLines={1}
+        >
           {row.email}
         </Text>
         {row.isBlocked ? (
           <Text
-            style={{ color: '#c62828', fontSize: w(11), marginTop: w(4), fontWeight: '600' }}
+            style={{
+              color: "#c62828",
+              fontSize: w(11),
+              marginTop: w(4),
+              fontWeight: "600",
+            }}
             numberOfLines={1}
           >
             Blocked — cannot log in
           </Text>
         ) : null}
       </View>
-      <View style={{ alignItems: 'flex-end', marginLeft: w(8), maxWidth: '40%' }}>
+      <View
+        style={{ alignItems: "flex-end", marginLeft: w(8), maxWidth: "40%" }}
+      >
         {row.role ? (
-          <Text style={{ color: colors.tint, fontSize: w(12), fontWeight: '600' }} numberOfLines={1}>
+          <Text
+            style={{ color: colors.tint, fontSize: w(12), fontWeight: "600" }}
+            numberOfLines={1}
+          >
             {formatRoleForDisplay(String(row.role))}
           </Text>
         ) : null}
         {row.status ? (
-          <Text style={{ color: colors.tabIconDefault, fontSize: w(11), marginTop: w(4) }} numberOfLines={1}>
+          <Text
+            style={{
+              color: colors.tabIconDefault,
+              fontSize: w(11),
+              marginTop: w(4),
+            }}
+            numberOfLines={1}
+          >
             {capitalizeWords(String(row.status))}
           </Text>
         ) : null}
@@ -279,18 +335,18 @@ function UserRow({
 
 export default function AdminScreen() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const scheme = useColorScheme() ?? 'light';
+  const scheme = useColorScheme() ?? "light";
   const colors = Colors[scheme];
   const { w, h } = useResponsive();
-  const [section, setSection] = useState<AdminSection>('overview');
+  const [section, setSection] = useState<AdminSection>("overview");
 
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
-  const [roleFilter, setRoleFilter] = useState<AdminUserRoleFilter>('ALL');
-  const [searchInput, setSearchInput] = useState('');
-  const [searchApplied, setSearchApplied] = useState('');
+  const [roleFilter, setRoleFilter] = useState<AdminUserRoleFilter>("ALL");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchApplied, setSearchApplied] = useState("");
   const [page, setPage] = useState(1);
   const limit = 10;
   const [userRows, setUserRows] = useState<AdminUserRow[]>([]);
@@ -299,13 +355,21 @@ export default function AdminScreen() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(() => new Set());
-  const [userBlockPending, setUserBlockPending] = useState<'block' | 'unblock' | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [userBlockPending, setUserBlockPending] = useState<
+    "block" | "unblock" | null
+  >(null);
 
   const selectedCount = selectedUserIds.size;
-  const selectedIdsList = useMemo(() => [...selectedUserIds], [selectedUserIds]);
+  const selectedIdsList = useMemo(
+    () => [...selectedUserIds],
+    [selectedUserIds],
+  );
 
-  const [financePeriod, setFinancePeriod] = useState<AdminFinancePeriod>('daily');
+  const [financePeriod, setFinancePeriod] =
+    useState<AdminFinancePeriod>("daily");
   const [financeLoading, setFinanceLoading] = useState(false);
 
   const loadStats = useCallback(async () => {
@@ -315,9 +379,10 @@ export default function AdminScreen() {
       const s = await fetchAdminDashboardStats();
       setStats(s);
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Failed to load dashboard stats';
+      const msg =
+        e instanceof ApiError ? e.message : "Failed to load dashboard stats";
       setStatsError(msg);
-      Toast.show({ type: 'error', text1: msg });
+      Toast.show({ type: "error", text1: msg });
     } finally {
       setStatsLoading(false);
     }
@@ -354,9 +419,9 @@ export default function AdminScreen() {
       setUserTotal(res.total);
       setUserTotalPages(res.totalPages);
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : 'Failed to load users';
+      const msg = e instanceof ApiError ? e.message : "Failed to load users";
       setUsersError(msg);
-      Toast.show({ type: 'error', text1: msg });
+      Toast.show({ type: "error", text1: msg });
     } finally {
       setUsersLoading(false);
     }
@@ -369,7 +434,7 @@ export default function AdminScreen() {
 
   useEffect(() => {
     if (!isAuthenticated || !isAdminUser(user)) return;
-    if (section !== 'overview') return;
+    if (section !== "overview") return;
     let cancelled = false;
     void (async () => {
       const s = await loadFinanceSeries();
@@ -383,7 +448,7 @@ export default function AdminScreen() {
   /** Web: SSE `/admin/dashboard/stream`. Native: poll stats every 45s while on Dashboard tab. */
   useEffect(() => {
     if (!isAuthenticated || !isAdminUser(user)) return;
-    if (section !== 'overview') return;
+    if (section !== "overview") return;
 
     let es: EventSource | null = null;
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -401,12 +466,16 @@ export default function AdminScreen() {
       }
     };
 
-    if (Platform.OS === 'web' && typeof EventSource !== 'undefined' && token) {
+    if (Platform.OS === "web" && typeof EventSource !== "undefined" && token) {
       try {
         es = new EventSource(buildAdminDashboardStreamUrl(token));
         es.onmessage = (ev) => applySseData(String(ev.data));
-        es.addEventListener('stats', (ev: MessageEvent) => applySseData(String(ev.data)));
-        es.addEventListener('dashboard', (ev: MessageEvent) => applySseData(String(ev.data)));
+        es.addEventListener("stats", (ev: MessageEvent) =>
+          applySseData(String(ev.data)),
+        );
+        es.addEventListener("dashboard", (ev: MessageEvent) =>
+          applySseData(String(ev.data)),
+        );
       } catch {
         es = null;
       }
@@ -414,7 +483,9 @@ export default function AdminScreen() {
 
     if (!es) {
       interval = setInterval(() => {
-        void fetchAdminDashboardStats().then(setStats).catch(() => {});
+        void fetchAdminDashboardStats()
+          .then(setStats)
+          .catch(() => {});
       }, 45000);
     }
 
@@ -425,7 +496,7 @@ export default function AdminScreen() {
   }, [isAuthenticated, user, section]);
 
   useEffect(() => {
-    if (section !== 'users') return;
+    if (section !== "users") return;
     if (!isAuthenticated || !isAdminUser(user)) return;
     loadUsers();
   }, [section, isAuthenticated, user, loadUsers]);
@@ -460,11 +531,11 @@ export default function AdminScreen() {
   }, []);
 
   const runBulkBlockUnblock = useCallback(
-    async (mode: 'block' | 'unblock') => {
+    async (mode: "block" | "unblock") => {
       const selfId = user?.id;
       const idsBase = selectedIdsList.filter((id) => id !== selfId);
       const ids =
-        mode === 'block'
+        mode === "block"
           ? idsBase.filter((id) => {
               const row = userRows.find((r) => r.id === id);
               return !row || !isAdminRoleForBulkBlock(row.role);
@@ -472,54 +543,70 @@ export default function AdminScreen() {
           : idsBase;
       if (ids.length === 0) {
         if (selectedIdsList.length === 0) {
-          Toast.show({ type: 'info', text1: 'Select one or more users' });
+          Toast.show({ type: "info", text1: "Select one or more users" });
           return;
         }
         if (idsBase.length === 0) {
-          Toast.show({ type: 'info', text1: 'Cannot include your own account in this action' });
+          Toast.show({
+            type: "info",
+            text1: "Cannot include your own account in this action",
+          });
           return;
         }
         if (
-          mode === 'block' &&
+          mode === "block" &&
           idsBase.every((id) => {
             const row = userRows.find((r) => r.id === id);
             return row != null && isAdminRoleForBulkBlock(row.role);
           })
         ) {
-          Toast.show({ type: 'info', text1: 'Admin accounts cannot be blocked here' });
+          Toast.show({
+            type: "info",
+            text1: "Admin accounts cannot be blocked here",
+          });
           return;
         }
         Toast.show({
-          type: 'info',
-          text1: mode === 'block' ? 'No eligible users to block' : 'No eligible users to unblock',
+          type: "info",
+          text1:
+            mode === "block"
+              ? "No eligible users to block"
+              : "No eligible users to unblock",
         });
         return;
       }
       setUserBlockPending(mode);
       try {
-        if (mode === 'block') await blockAdminUsers(ids);
+        if (mode === "block") await blockAdminUsers(ids);
         else await unblockAdminUsers(ids);
         Toast.show({
-          type: 'success',
-          text1: mode === 'block' ? 'Selected users blocked' : 'Selected users unblocked',
+          type: "success",
+          text1:
+            mode === "block"
+              ? "Selected users blocked"
+              : "Selected users unblocked",
         });
         setSelectedUserIds(new Set());
         await loadUsers();
       } catch (e) {
         const msg =
-          e instanceof ApiError ? e.message : mode === 'block' ? 'Block request failed' : 'Unblock request failed';
-        Toast.show({ type: 'error', text1: msg });
+          e instanceof ApiError
+            ? e.message
+            : mode === "block"
+              ? "Block request failed"
+              : "Unblock request failed";
+        Toast.show({ type: "error", text1: msg });
       } finally {
         setUserBlockPending(null);
       }
     },
-    [selectedIdsList, user?.id, userRows, loadUsers]
+    [selectedIdsList, user?.id, userRows, loadUsers],
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      if (section === 'overview') {
+      if (section === "overview") {
         await loadStats();
         const s = await loadFinanceSeries();
         setFinanceSeries(s);
@@ -544,56 +631,78 @@ export default function AdminScreen() {
   const fee = stats?.feesBreakdown;
 
   return (
-    <Screen scroll={false} padded style={{ flex: 1, backgroundColor: colors.background }}>
+    <Screen
+      scroll={false}
+      padded
+      style={{ flex: 1, backgroundColor: colors.background }}
+    >
       <ScrollView
         contentContainerStyle={{ paddingBottom: h(32), paddingTop: h(4) }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.tint}
+          />
+        }
       >
-        <View style={[styles.tabs, { borderBottomColor: colors.border, marginBottom: h(16) }]}>
-          {(
-            [
-              { id: 'overview' as const, label: 'Dashboard' },
-              { id: 'users' as const, label: 'Users' },
-            ] as const
-          ).map((t) => {
-            const active = section === t.id;
-            return (
-              <Pressable
-                key={t.id}
-                onPress={() => setSection(t.id)}
-                style={[
-                  styles.tab,
-                  {
-                    paddingVertical: h(12),
-                    paddingHorizontal: w(16),
-                    borderBottomColor: active ? colors.tint : 'transparent',
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    fontSize: w(15),
-                    fontWeight: active ? '600' : '400',
-                    color: active ? colors.text : colors.tabIconDefault,
-                  }}
+        <View
+          style={[
+            styles.tabs,
+            { borderBottomColor: colors.border, marginBottom: h(16) },
+          ]}
+        >
+          {([{ id: "overview" as const, label: "Dashboard" }] as const).map(
+            (t) => {
+              const active = section === t.id;
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => setSection(t.id)}
+                  style={[
+                    styles.tab,
+                    {
+                      paddingVertical: h(12),
+                      paddingHorizontal: w(16),
+                      borderBottomColor: active ? colors.tint : "transparent",
+                    },
+                  ]}
                 >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={{
+                      fontSize: w(15),
+                      fontWeight: active ? "600" : "400",
+                      color: active ? colors.text : colors.tabIconDefault,
+                    }}
+                  >
+                    {t.label}
+                  </Text>
+                </Pressable>
+              );
+            },
+          )}
         </View>
 
-        {section === 'overview' && (
+        {section === "overview" && (
           <View>
             {statsLoading ? (
-              <ActivityIndicator color={colors.tint} style={{ marginVertical: h(24) }} />
+              <ActivityIndicator
+                color={colors.tint}
+                style={{ marginVertical: h(24) }}
+              />
             ) : statsError ? (
               <Text style={{ color: colors.accent }}>{statsError}</Text>
             ) : (
               <>
                 <Card style={{ marginBottom: h(16) }}>
-                  <Text style={{ color: colors.text, fontSize: w(16), fontWeight: '700', marginBottom: w(8) }}>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: w(16),
+                      fontWeight: "700",
+                      marginBottom: w(8),
+                    }}
+                  >
                     Summary
                   </Text>
                   <Text
@@ -604,13 +713,15 @@ export default function AdminScreen() {
                       marginBottom: w(12),
                     }}
                   >
-                    User self top-ups = wallet top-up rows (success, addedBy user). Admin manual = addedBy admin.
-                    Total top-ups = both; system / host-fee lines are excluded from that sum and appear under host
-                    fees.
+                    User self top-ups = wallet top-up rows (success, addedBy
+                    user). Admin manual = addedBy admin. Total top-ups = both;
+                    system / host-fee lines are excluded from that sum and
+                    appear under host fees.
                   </Text>
                   {STAT_DEFS.map((def, i) => {
                     const v = stats?.[def.key] as number | undefined;
-                    const text = def.format === 'inr' ? formatINR(v) : formatNum(v);
+                    const text =
+                      def.format === "inr" ? formatINR(v) : formatNum(v);
                     return (
                       <StatRow
                         key={String(def.key)}
@@ -627,18 +738,30 @@ export default function AdminScreen() {
                 <Card style={{ marginBottom: h(16) }}>
                   <View
                     style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                       marginBottom: h(10),
-                      flexWrap: 'wrap',
+                      flexWrap: "wrap",
                       gap: h(8),
                     }}
                   >
-                    <Text style={{ color: colors.text, fontSize: w(16), fontWeight: '700' }}>
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontSize: w(16),
+                        fontWeight: "700",
+                      }}
+                    >
                       Financial analytics
                     </Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: w(6) }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: w(6),
+                      }}
+                    >
                       {FINANCE_PERIODS.map((p) => {
                         const active = financePeriod === p.id;
                         return (
@@ -651,15 +774,19 @@ export default function AdminScreen() {
                               borderRadius: w(10),
                               borderWidth: 1,
                               borderColor: active ? colors.tint : colors.border,
-                              backgroundColor: active ? colors.tint + '22' : colors.cardBg,
+                              backgroundColor: active
+                                ? colors.tint + "22"
+                                : colors.cardBg,
                               opacity: pressed ? 0.85 : 1,
                             })}
                           >
                             <Text
                               style={{
                                 fontSize: w(12),
-                                fontWeight: '600',
-                                color: active ? colors.tint : colors.tabIconDefault,
+                                fontWeight: "600",
+                                color: active
+                                  ? colors.tint
+                                  : colors.tabIconDefault,
                               }}
                             >
                               {p.label}
@@ -676,18 +803,21 @@ export default function AdminScreen() {
                       marginBottom: h(10),
                     }}
                   >
-                    From admin analytics API (or dashboard stats with period). Violet = total income, amber = net
-                    profit — matches app theme, not a 1:1 copy of third-party UIs.
+                    From admin analytics API (or dashboard stats with period).
+                    Violet = total income, amber = net profit — matches app
+                    theme, not a 1:1 copy of third-party UIs.
                   </Text>
                   <View
                     style={{
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
+                      flexDirection: "row",
+                      flexWrap: "wrap",
                       gap: w(16),
                       marginBottom: h(8),
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
                       <View
                         style={{
                           width: w(10),
@@ -697,9 +827,18 @@ export default function AdminScreen() {
                           marginRight: w(6),
                         }}
                       />
-                      <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>Total income</Text>
+                      <Text
+                        style={{
+                          color: colors.tabIconDefault,
+                          fontSize: w(12),
+                        }}
+                      >
+                        Total income
+                      </Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
                       <View
                         style={{
                           width: w(10),
@@ -709,13 +848,32 @@ export default function AdminScreen() {
                           marginRight: w(6),
                         }}
                       />
-                      <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>Net profit</Text>
+                      <Text
+                        style={{
+                          color: colors.tabIconDefault,
+                          fontSize: w(12),
+                        }}
+                      >
+                        Net profit
+                      </Text>
                     </View>
                   </View>
                   {financeLoading ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: h(8), gap: w(8) }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginBottom: h(8),
+                        gap: w(8),
+                      }}
+                    >
                       <ActivityIndicator size="small" color={colors.tint} />
-                      <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>
+                      <Text
+                        style={{
+                          color: colors.tabIconDefault,
+                          fontSize: w(12),
+                        }}
+                      >
                         Updating {financePeriod}…
                       </Text>
                     </View>
@@ -727,14 +885,21 @@ export default function AdminScreen() {
                     profit={financeSeries.netProfit}
                     incomeColor={colors.tint}
                     profitColor={colors.accent}
-                    gridColor={colors.border + '99'}
+                    gridColor={colors.border + "99"}
                     axisLabelColor={colors.tabIconDefault}
                     height={h(220)}
                   />
                 </Card>
 
                 <Card style={{ marginBottom: h(16) }}>
-                  <Text style={{ color: colors.text, fontSize: w(16), fontWeight: '700', marginBottom: w(8) }}>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: w(16),
+                      fontWeight: "700",
+                      marginBottom: w(8),
+                    }}
+                  >
                     Lobbies (all time)
                   </Text>
                   <Text
@@ -744,19 +909,20 @@ export default function AdminScreen() {
                       marginBottom: w(12),
                     }}
                   >
-                    Tournament collection: created, finished (completed / result_published), cancelled, running —
-                    running matches active lobby count.
+                    Tournament collection: created, finished (completed /
+                    result_published), cancelled, running — running matches
+                    active lobby count.
                   </Text>
                   {(
                     [
-                      ['Total created', stats?.lobbyStats?.totalCreated],
+                      ["Total created", stats?.lobbyStats?.totalCreated],
                       [
-                        'Finished (completed or result published)',
+                        "Finished (completed or result published)",
                         stats?.lobbyStats?.finishedSuccessful,
                       ],
-                      ['Cancelled', stats?.lobbyStats?.cancelled],
+                      ["Cancelled", stats?.lobbyStats?.cancelled],
                       [
-                        'Running now',
+                        "Running now",
                         stats?.lobbyStats?.running ?? stats?.activeLobbyCount,
                       ],
                     ] as [string, number | undefined][]
@@ -773,16 +939,26 @@ export default function AdminScreen() {
                 </Card>
                 {fee && feesBreakdownHasValues(fee) ? (
                   <Card>
-                    <Text style={{ color: colors.text, fontSize: w(16), fontWeight: '700', marginBottom: w(8) }}>
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontSize: w(16),
+                        fontWeight: "700",
+                        marginBottom: w(8),
+                      }}
+                    >
                       Fees breakdown (INR, all time)
                     </Text>
                     {(
                       [
-                        ['Platform', fee.platformFeeINR ?? fee.platformFeeGC],
-                        ['Caster', fee.casterFeeINR ?? fee.casterFeeGC],
-                        ['Host', fee.hostFeeINR ?? fee.hostFeeGC],
-                        ['Total fees', fee.totalFeesINR ?? fee.totalFeesGC],
-                        ['Winners paid', fee.winnerPoolPaidINR ?? fee.winnerPoolPaidGC],
+                        ["Platform", fee.platformFeeINR ?? fee.platformFeeGC],
+                        ["Caster", fee.casterFeeINR ?? fee.casterFeeGC],
+                        ["Host", fee.hostFeeINR ?? fee.hostFeeGC],
+                        ["Total fees", fee.totalFeesINR ?? fee.totalFeesGC],
+                        [
+                          "Winners paid",
+                          fee.winnerPoolPaidINR ?? fee.winnerPoolPaidGC,
+                        ],
                       ] as [string, number | undefined][]
                     ).map(([label, val], i, arr) => (
                       <StatRow
@@ -801,13 +977,27 @@ export default function AdminScreen() {
           </View>
         )}
 
-        {section === 'users' && (
+        {section === "users" && (
           <View>
-            <Text style={{ color: colors.tabIconDefault, fontSize: w(14), marginBottom: h(8) }}>
-              Total users (reported): {userTotal.toLocaleString('en-IN')}
+            <Text
+              style={{
+                color: colors.tabIconDefault,
+                fontSize: w(14),
+                marginBottom: h(8),
+              }}
+            >
+              Total users (reported): {userTotal.toLocaleString("en-IN")}
             </Text>
 
-            <Text style={{ color: colors.tabIconDefault, fontSize: w(12), marginBottom: h(6) }}>Role</Text>
+            <Text
+              style={{
+                color: colors.tabIconDefault,
+                fontSize: w(12),
+                marginBottom: h(6),
+              }}
+            >
+              Role
+            </Text>
             <View style={[styles.roleRow, { gap: w(8), marginBottom: h(12) }]}>
               {ROLE_FILTERS.map((r) => {
                 const active = roleFilter === r;
@@ -831,8 +1021,8 @@ export default function AdminScreen() {
                     <Text
                       style={{
                         fontSize: w(12),
-                        fontWeight: '600',
-                        color: active ? '#fff' : colors.text,
+                        fontWeight: "600",
+                        color: active ? "#fff" : colors.text,
                       }}
                     >
                       {roleFilterLabel(r)}
@@ -863,17 +1053,22 @@ export default function AdminScreen() {
             <AdminUserBlockActionBar
               selectedCount={selectedCount}
               pendingAction={userBlockPending}
-              onBlock={() => void runBulkBlockUnblock('block')}
-              onUnblock={() => void runBulkBlockUnblock('unblock')}
+              onBlock={() => void runBulkBlockUnblock("block")}
+              onUnblock={() => void runBulkBlockUnblock("unblock")}
             />
 
             <Card style={{ marginTop: h(16) }} padded>
               {usersLoading ? (
-                <ActivityIndicator color={colors.tint} style={{ marginVertical: h(16) }} />
+                <ActivityIndicator
+                  color={colors.tint}
+                  style={{ marginVertical: h(16) }}
+                />
               ) : usersError ? (
                 <Text style={{ color: colors.accent }}>{usersError}</Text>
               ) : userRows.length === 0 ? (
-                <Text style={{ color: colors.tabIconDefault }}>No users for this query.</Text>
+                <Text style={{ color: colors.tabIconDefault }}>
+                  No users for this query.
+                </Text>
               ) : (
                 userRows.map((item, i) => {
                   const canBulkSelect = !isAdminRoleForBulkBlock(item.role);
@@ -888,7 +1083,9 @@ export default function AdminScreen() {
                       reserveSelectSlot={!canBulkSelect}
                       selected={canBulkSelect && selectedUserIds.has(item.id)}
                       onToggleSelect={
-                        canBulkSelect ? () => toggleSelectUser(item.id) : undefined
+                        canBulkSelect
+                          ? () => toggleSelectUser(item.id)
+                          : undefined
                       }
                     />
                   );
@@ -911,7 +1108,9 @@ export default function AdminScreen() {
                   title="Next"
                   variant="outline"
                   disabled={page >= userTotalPages}
-                  onPress={() => setPage((p) => Math.min(userTotalPages, p + 1))}
+                  onPress={() =>
+                    setPage((p) => Math.min(userTotalPages, p + 1))
+                  }
                 />
               </View>
             )}
@@ -923,18 +1122,23 @@ export default function AdminScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabs: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  tabs: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },
   tab: { borderBottomWidth: 2, marginRight: 8 },
   statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  roleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  roleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
   userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
-  pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' },
+  pager: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
 });
