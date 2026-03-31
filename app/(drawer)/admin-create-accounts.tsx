@@ -1,4 +1,3 @@
-import { AdminUserBlockActionBar } from "@/components/admin";
 import { Button, Card, Input, Screen } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
@@ -27,7 +26,7 @@ import type {
 } from "@/types/admin";
 import { isAdminUser } from "@/utils/adminUser";
 import { Redirect } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -92,120 +91,98 @@ function UserRow({
   colors,
   w,
   isLast,
-  selectable,
-  selected,
-  onToggleSelect,
-  reserveSelectSlot,
+  checked,
+  checkable,
+  onToggle,
 }: {
   row: AdminUserRow;
   colors: (typeof Colors)["light"];
   w: (n: number) => number;
   isLast?: boolean;
-  selectable?: boolean;
-  selected?: boolean;
-  onToggleSelect?: () => void;
-  reserveSelectSlot?: boolean;
+  checked?: boolean;
+  checkable?: boolean;
+  onToggle?: () => void;
 }) {
   const rawTitle = row.displayName || row.fullName || row.name || row.email;
   const title = rawTitle === row.email ? rawTitle : capitalizeWords(rawTitle);
   return (
-    <View
+    <Pressable
+      onPress={checkable ? onToggle : undefined}
+      accessibilityRole={checkable ? "button" : "none"}
       style={[
         styles.userRow,
         {
           paddingVertical: w(12),
+          paddingHorizontal: w(6),
           borderBottomColor: colors.border,
           borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+          backgroundColor: row.isBlocked
+            ? "rgba(198,40,40,0.07)"
+            : "transparent",
+          borderRadius: 4,
         },
       ]}
     >
-      {selectable && onToggleSelect ? (
-        <View style={{ marginRight: w(10), paddingTop: w(2) }}>
-          {/* Simple square indicator, reuse existing UI tokens */}
-          <View
-            accessibilityRole="button"
-            accessibilityState={{ selected: !!selected }}
-            style={{
-              width: w(20),
-              height: w(20),
-              borderRadius: 3,
-              borderWidth: 1,
-              borderColor: selected ? colors.tint : colors.border,
-              backgroundColor: selected ? colors.tint : "transparent",
-            }}
-            // eslint-disable-next-line react/jsx-no-bind
-            onStartShouldSetResponder={() => {
-              onToggleSelect();
-              return true;
-            }}
-          />
-        </View>
-      ) : reserveSelectSlot ? (
+      {/* Checkbox */}
+      {checkable ? (
         <View
           style={{
-            width: w(22),
+            width: w(20),
+            height: w(20),
+            borderRadius: 3,
+            borderWidth: 1,
+            borderColor: checked ? colors.tint : colors.border,
+            backgroundColor: checked ? colors.tint : "transparent",
             marginRight: w(10),
-            paddingTop: w(2),
-            alignItems: "center",
+            flexShrink: 0,
           }}
         />
-      ) : null}
+      ) : (
+        <View style={{ width: w(20), marginRight: w(10), flexShrink: 0 }} />
+      )}
+
+      {/* Info */}
       <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: w(6) }}>
+          <Text
+            style={{ color: colors.text, fontSize: w(14), fontWeight: "600", flex: 1 }}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          {row.role ? (
+            <Text
+              style={{ color: colors.tint, fontSize: w(11), fontWeight: "600" }}
+              numberOfLines={1}
+            >
+              {capitalizeWords(humanizeRoleLabel(String(row.role)))}
+            </Text>
+          ) : null}
+        </View>
         <Text
-          style={{ color: colors.text, fontSize: w(15), fontWeight: "600" }}
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
-        <Text
-          style={{
-            color: colors.tabIconDefault,
-            fontSize: w(13),
-            marginTop: w(4),
-          }}
+          style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: w(3) }}
           numberOfLines={1}
         >
           {row.email}
         </Text>
         {row.isBlocked ? (
-          <Text
+          <View
             style={{
-              color: "#c62828",
-              fontSize: w(11),
+              alignSelf: "flex-start",
               marginTop: w(4),
-              fontWeight: "600",
+              backgroundColor: "rgba(198,40,40,0.15)",
+              paddingHorizontal: w(6),
+              paddingVertical: w(2),
+              borderRadius: 3,
             }}
-            numberOfLines={1}
           >
-            Blocked — cannot log in
-          </Text>
+            <Text style={{ color: "#ef5350", fontSize: w(10), fontWeight: "700" }}>
+              BLOCKED
+            </Text>
+          </View>
         ) : null}
       </View>
-      <View
-        style={{ alignItems: "flex-end", marginLeft: w(8), maxWidth: "40%" }}
-      >
-        {row.role ? (
-          <Text
-            style={{ color: colors.tint, fontSize: w(12), fontWeight: "600" }}
-            numberOfLines={1}
-          >
-            {capitalizeWords(humanizeRoleLabel(String(row.role)))}
-          </Text>
-        ) : null}
-        {row.status ? (
-          <Text
-            style={{
-              color: colors.tabIconDefault,
-              fontSize: w(11),
-              marginTop: w(4),
-            }}
-            numberOfLines={1}
-          >
-            {capitalizeWords(String(row.status))}
-          </Text>
-        ) : null}
-      </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -288,33 +265,50 @@ function OrgRow({
   colors,
   w,
   isLast,
-  selected,
-  onPress,
+  checked,
+  onToggle,
 }: {
   org: AdminOrganization;
   colors: (typeof Colors)["light"];
   w: (n: number) => number;
   isLast?: boolean;
-  selected?: boolean;
-  onPress: () => void;
+  checked?: boolean;
+  onToggle: () => void;
 }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={onToggle}
       style={[
         styles.userRow,
         {
           paddingVertical: w(12),
+          paddingHorizontal: w(6),
           borderBottomColor: colors.border,
           borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-          backgroundColor: selected ? colors.tint + "15" : "transparent",
-          paddingHorizontal: w(8),
+          backgroundColor: org.isBlocked
+            ? "rgba(198,40,40,0.07)"
+            : "transparent",
           borderRadius: 4,
         },
       ]}
       accessibilityRole="button"
-      accessibilityState={{ selected: !!selected }}
+      accessibilityState={{ checked: !!checked }}
     >
+      {/* Checkbox */}
+      <View
+        style={{
+          width: w(20),
+          height: w(20),
+          borderRadius: 3,
+          borderWidth: 1,
+          borderColor: checked ? colors.tint : colors.border,
+          backgroundColor: checked ? colors.tint : "transparent",
+          marginRight: w(10),
+          flexShrink: 0,
+        }}
+      />
+
+      {/* Info */}
       <View style={{ flex: 1 }}>
         <Text
           style={{ color: colors.text, fontSize: w(14), fontWeight: "600" }}
@@ -324,40 +318,29 @@ function OrgRow({
         </Text>
         {org.managerEmail ? (
           <Text
-            style={{
-              color: colors.tabIconDefault,
-              fontSize: w(12),
-              marginTop: w(3),
-            }}
+            style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: w(3) }}
             numberOfLines={1}
           >
             {org.managerEmail}
           </Text>
         ) : null}
         {org.isBlocked ? (
-          <Text
+          <View
             style={{
-              color: "#c62828",
-              fontSize: w(11),
-              marginTop: w(3),
-              fontWeight: "600",
+              alignSelf: "flex-start",
+              marginTop: w(4),
+              backgroundColor: "rgba(198,40,40,0.15)",
+              paddingHorizontal: w(6),
+              paddingVertical: w(2),
+              borderRadius: 3,
             }}
           >
-            Blocked
-          </Text>
+            <Text style={{ color: "#ef5350", fontSize: w(10), fontWeight: "700" }}>
+              BLOCKED
+            </Text>
+          </View>
         ) : null}
       </View>
-      {selected ? (
-        <View
-          style={{
-            width: w(8),
-            height: w(8),
-            borderRadius: w(4),
-            backgroundColor: colors.tint,
-            marginLeft: w(8),
-          }}
-        />
-      ) : null}
     </Pressable>
   );
 }
@@ -384,12 +367,21 @@ function OrgManagementSection({
   const [orgsLoading, setOrgsLoading] = useState(false);
   const [orgsError, setOrgsError] = useState<string | null>(null);
 
-  const [selectedOrg, setSelectedOrg] = useState<AdminOrganization | null>(null);
-  const [activePanel, setActivePanel] = useState<"manager" | "block" | null>(null);
+  // Bulk selection
+  const [selectedOrgIds, setSelectedOrgIds] = useState<Set<string>>(() => new Set());
+  const [bulkBlockPending, setBulkBlockPending] = useState<"block" | "unblock" | null>(null);
+
+  // Update manager (single org, shown when exactly 1 checked)
   const [updateManagerForm, setUpdateManagerForm] =
     useState<AdminUpdateOrgManagerBody>(() => emptyUpdateManagerForm());
   const [updateManagerSubmitting, setUpdateManagerSubmitting] = useState(false);
-  const [blockPending, setBlockPending] = useState(false);
+  const [showUpdateManager, setShowUpdateManager] = useState(false);
+
+  const selectedCount = selectedOrgIds.size;
+  const singleSelectedOrg =
+    selectedCount === 1
+      ? orgRows.find((o) => selectedOrgIds.has(o.id)) ?? null
+      : null;
 
   const loadOrgs = useCallback(async () => {
     setOrgsError(null);
@@ -414,9 +406,19 @@ function OrgManagementSection({
   }, [loadOrgs]);
 
   useEffect(() => {
-    setSelectedOrg(null);
-    setActivePanel(null);
+    setSelectedOrgIds(new Set());
+    setShowUpdateManager(false);
   }, [orgPage]);
+
+  const toggleOrgCheck = useCallback((id: string) => {
+    setSelectedOrgIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setShowUpdateManager(false);
+  }, []);
 
   const submitCreateOrg = useCallback(async () => {
     const name = createOrgForm.name.trim();
@@ -449,8 +451,43 @@ function OrgManagementSection({
     }
   }, [createOrgForm, loadOrgs]);
 
+  const submitBulkBlockUnblock = useCallback(
+    async (mode: "block" | "unblock") => {
+      const ids = [...selectedOrgIds];
+      if (ids.length === 0) {
+        Toast.show({ type: "info", text1: "Select at least one organization" });
+        return;
+      }
+      setBulkBlockPending(mode);
+      try {
+        await Promise.all(
+          ids.map((id) =>
+            mode === "block"
+              ? blockAdminOrganization(id)
+              : unblockAdminOrganization(id),
+          ),
+        );
+        Toast.show({
+          type: "success",
+          text1:
+            mode === "block"
+              ? `${ids.length} org(s) blocked`
+              : `${ids.length} org(s) unblocked`,
+        });
+        setSelectedOrgIds(new Set());
+        await loadOrgs();
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : "Action failed";
+        Toast.show({ type: "error", text1: msg });
+      } finally {
+        setBulkBlockPending(null);
+      }
+    },
+    [selectedOrgIds, loadOrgs],
+  );
+
   const submitUpdateManager = useCallback(async () => {
-    if (!selectedOrg) return;
+    if (!singleSelectedOrg) return;
     const email = updateManagerForm.email.trim();
     const name = updateManagerForm.name.trim();
     const password = updateManagerForm.password;
@@ -460,11 +497,11 @@ function OrgManagementSection({
     }
     setUpdateManagerSubmitting(true);
     try {
-      await updateAdminOrgManager(selectedOrg.id, { email, name, password });
-      Toast.show({ type: "success", text1: `Manager updated for "${selectedOrg.name}"` });
+      await updateAdminOrgManager(singleSelectedOrg.id, { email, name, password });
+      Toast.show({ type: "success", text1: `Manager updated for "${singleSelectedOrg.name}"` });
       setUpdateManagerForm(emptyUpdateManagerForm());
-      setSelectedOrg(null);
-      setActivePanel(null);
+      setSelectedOrgIds(new Set());
+      setShowUpdateManager(false);
       await loadOrgs();
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Could not update manager";
@@ -472,46 +509,7 @@ function OrgManagementSection({
     } finally {
       setUpdateManagerSubmitting(false);
     }
-  }, [selectedOrg, updateManagerForm, loadOrgs]);
-
-  const submitBlockUnblock = useCallback(
-    async (mode: "block" | "unblock") => {
-      if (!selectedOrg) return;
-      setBlockPending(true);
-      try {
-        if (mode === "block") await blockAdminOrganization(selectedOrg.id);
-        else await unblockAdminOrganization(selectedOrg.id);
-        Toast.show({
-          type: "success",
-          text1:
-            mode === "block"
-              ? `"${selectedOrg.name}" blocked`
-              : `"${selectedOrg.name}" unblocked`,
-        });
-        setSelectedOrg(null);
-        setActivePanel(null);
-        await loadOrgs();
-      } catch (e) {
-        const msg = e instanceof ApiError ? e.message : "Action failed";
-        Toast.show({ type: "error", text1: msg });
-      } finally {
-        setBlockPending(false);
-      }
-    },
-    [selectedOrg, loadOrgs],
-  );
-
-  const handleSelectOrg = useCallback((org: AdminOrganization) => {
-    setSelectedOrg((prev) => {
-      if (prev?.id === org.id) {
-        setActivePanel(null);
-        return null;
-      }
-      setActivePanel(null);
-      setUpdateManagerForm(emptyUpdateManagerForm());
-      return org;
-    });
-  }, []);
+  }, [singleSelectedOrg, updateManagerForm, loadOrgs]);
 
   return (
     <View style={{ marginTop: h(24) }}>
@@ -620,6 +618,40 @@ function OrgManagementSection({
         ) : null}
       </View>
 
+      {/* Bulk action bar */}
+      <View
+        style={{
+          flexDirection: "row",
+          gap: w(8),
+          marginBottom: h(10),
+          alignItems: "center",
+        }}
+      >
+        <Text
+          style={{
+            color: selectedCount > 0 ? colors.text : colors.tabIconDefault,
+            fontSize: w(12),
+            flex: 1,
+          }}
+        >
+          {selectedCount > 0
+            ? `${selectedCount} selected`
+            : "Select orgs to block / unblock"}
+        </Text>
+        <Button
+          title={bulkBlockPending === "block" ? "Blocking…" : "Block"}
+          variant="outline"
+          disabled={selectedCount === 0 || bulkBlockPending !== null}
+          onPress={() => void submitBulkBlockUnblock("block")}
+        />
+        <Button
+          title={bulkBlockPending === "unblock" ? "Unblocking…" : "Unblock"}
+          variant="outline"
+          disabled={selectedCount === 0 || bulkBlockPending !== null}
+          onPress={() => void submitBulkBlockUnblock("unblock")}
+        />
+      </View>
+
       <Card padded>
         {orgsLoading ? (
           <ActivityIndicator color={colors.tint} style={{ marginVertical: h(16) }} />
@@ -635,8 +667,8 @@ function OrgManagementSection({
               colors={colors}
               w={w}
               isLast={i === orgRows.length - 1}
-              selected={selectedOrg?.id === org.id}
-              onPress={() => handleSelectOrg(org)}
+              checked={selectedOrgIds.has(org.id)}
+              onToggle={() => toggleOrgCheck(org.id)}
             />
           ))
         )}
@@ -662,59 +694,61 @@ function OrgManagementSection({
         </View>
       )}
 
-      {/* ── 3 & 4. Actions panel — shown when an org is selected ── */}
-      {selectedOrg ? (
+      {/* ── 3. Update Manager — only when exactly 1 org is checked ── */}
+      {singleSelectedOrg ? (
         <Card style={{ marginTop: h(16) }}>
-          {/* Selected org label */}
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: h(14),
+              marginBottom: h(12),
             }}
           >
             <View style={{ flex: 1 }}>
               <Text
-                style={{ color: colors.tabIconDefault, fontSize: w(11), fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 }}
+                style={{
+                  color: colors.tabIconDefault,
+                  fontSize: w(11),
+                  fontWeight: "600",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                }}
               >
-                Selected
+                Update Manager
               </Text>
               <Text
                 style={{ color: colors.text, fontSize: w(14), fontWeight: "700", marginTop: h(2) }}
                 numberOfLines={1}
               >
-                {selectedOrg.name}
+                {singleSelectedOrg.name}
               </Text>
             </View>
             <Pressable
-              onPress={() => { setSelectedOrg(null); setActivePanel(null); }}
-              style={{ paddingHorizontal: w(8), paddingVertical: w(4) }}
+              onPress={() => setShowUpdateManager((v) => !v)}
+              style={{
+                paddingHorizontal: w(10),
+                paddingVertical: w(6),
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: showUpdateManager ? colors.tint : colors.border,
+                backgroundColor: showUpdateManager ? colors.tint + "18" : "transparent",
+              }}
               accessibilityRole="button"
-              accessibilityLabel="Deselect organization"
             >
-              <Text style={{ color: colors.tabIconDefault, fontSize: w(13) }}>✕</Text>
+              <Text
+                style={{
+                  color: showUpdateManager ? colors.tint : colors.tabIconDefault,
+                  fontSize: w(12),
+                  fontWeight: "600",
+                }}
+              >
+                {showUpdateManager ? "Hide" : "Edit"}
+              </Text>
             </Pressable>
           </View>
 
-          {/* Action tabs */}
-          <View style={{ flexDirection: "row", gap: w(8), marginBottom: h(14) }}>
-            <Button
-              title="Update Manager"
-              variant={activePanel === "manager" ? "primary" : "outline"}
-              onPress={() => setActivePanel((p) => (p === "manager" ? null : "manager"))}
-              style={{ flex: 1 }}
-            />
-            <Button
-              title={selectedOrg.isBlocked ? "Unblock" : "Block"}
-              variant={activePanel === "block" ? "primary" : "outline"}
-              onPress={() => setActivePanel((p) => (p === "block" ? null : "block"))}
-              style={{ flex: 1 }}
-            />
-          </View>
-
-          {/* Update Manager form */}
-          {activePanel === "manager" ? (
+          {showUpdateManager ? (
             <View>
               <Input
                 label="New Manager Email"
@@ -739,38 +773,6 @@ function OrgManagementSection({
                 title={updateManagerSubmitting ? "Updating…" : "Confirm Update"}
                 onPress={() => void submitUpdateManager()}
                 disabled={updateManagerSubmitting}
-                fullWidth
-              />
-            </View>
-          ) : null}
-
-          {/* Block / Unblock confirm */}
-          {activePanel === "block" ? (
-            <View>
-              <Text
-                style={{
-                  color: colors.tabIconDefault,
-                  fontSize: w(13),
-                  lineHeight: w(19),
-                  marginBottom: h(14),
-                }}
-              >
-                {selectedOrg.isBlocked
-                  ? `Unblock "${selectedOrg.name}"? The organization will be restored.`
-                  : `Block "${selectedOrg.name}"? This will restrict the organization's access.`}
-              </Text>
-              <Button
-                title={
-                  blockPending
-                    ? "Please wait…"
-                    : selectedOrg.isBlocked
-                      ? "Confirm Unblock"
-                      : "Confirm Block"
-                }
-                onPress={() =>
-                  void submitBlockUnblock(selectedOrg.isBlocked ? "unblock" : "block")
-                }
-                disabled={blockPending}
                 fullWidth
               />
             </View>
@@ -800,18 +802,8 @@ export default function AdminCreateAccountsScreen() {
   const [userTotalPages, setUserTotalPages] = useState(1);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [userBlockPending, setUserBlockPending] = useState<
-    "block" | "unblock" | null
-  >(null);
-
-  const selectedCount = selectedUserIds.size;
-  const selectedIdsList = useMemo(
-    () => [...selectedUserIds],
-    [selectedUserIds],
-  );
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(() => new Set());
+  const [userBulkPending, setUserBulkPending] = useState<"block" | "unblock" | null>(null);
 
   const loadUsers = useCallback(async () => {
     setUsersError(null);
@@ -866,23 +858,7 @@ export default function AdminCreateAccountsScreen() {
     setSelectedUserIds(new Set());
   }, [page, roleFilter, searchApplied]);
 
-  useEffect(() => {
-    setSelectedUserIds((prev) => {
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of prev) {
-        const row = userRows.find((r) => r.id === id);
-        if (row && isAdminRoleForBulkBlock(row.role)) {
-          changed = true;
-          continue;
-        }
-        next.add(id);
-      }
-      return changed ? next : prev;
-    });
-  }, [userRows]);
-
-  const toggleSelectUser = useCallback((id: string) => {
+  const toggleUserCheck = useCallback((id: string) => {
     setSelectedUserIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -893,40 +869,15 @@ export default function AdminCreateAccountsScreen() {
 
   const runBulkBlockUnblock = useCallback(
     async (mode: "block" | "unblock") => {
-      const selfId = user?.id;
-      const idsBase = selectedIdsList.filter((id) => id !== selfId);
-      const ids =
-        mode === "block"
-          ? idsBase.filter((id) => {
-              const row = userRows.find((r) => r.id === id);
-              return !row || !isAdminRoleForBulkBlock(row.role);
-            })
-          : idsBase;
-      if (ids.length === 0) {
-        if (selectedIdsList.length === 0) {
-          Toast.show({ type: "info", text1: "Select one or more users" });
-          return;
-        }
-        if (idsBase.length === 0) {
-          Toast.show({
-            type: "info",
-            text1: "Cannot include your own account in this action",
-          });
-          return;
-        }
-        if (
-          mode === "block" &&
-          idsBase.every((id) => {
-            const row = userRows.find((r) => r.id === id);
-            return row != null && isAdminRoleForBulkBlock(row.role);
-          })
-        ) {
-          Toast.show({
-            type: "info",
-            text1: "Admin accounts cannot be blocked here",
-          });
-          return;
-        }
+      const eligible = [...selectedUserIds].filter((id) => {
+        if (id === user?.id) return false;
+        const row = userRows.find((r) => r.id === id);
+        if (!row) return false;
+        if (isAdminRoleForBulkBlock(row.role)) return false;
+        if (mode === "block") return !row.isBlocked;
+        return row.isBlocked === true;
+      });
+      if (eligible.length === 0) {
         Toast.show({
           type: "info",
           text1:
@@ -936,32 +887,27 @@ export default function AdminCreateAccountsScreen() {
         });
         return;
       }
-      setUserBlockPending(mode);
+      setUserBulkPending(mode);
       try {
-        if (mode === "block") await blockAdminUsers(ids);
-        else await unblockAdminUsers(ids);
+        if (mode === "block") await blockAdminUsers(eligible);
+        else await unblockAdminUsers(eligible);
         Toast.show({
           type: "success",
           text1:
             mode === "block"
-              ? "Selected users blocked"
-              : "Selected users unblocked",
+              ? `${eligible.length} user(s) blocked`
+              : `${eligible.length} user(s) unblocked`,
         });
         setSelectedUserIds(new Set());
         await loadUsers();
       } catch (e) {
-        const msg =
-          e instanceof ApiError
-            ? e.message
-            : mode === "block"
-              ? "Block request failed"
-              : "Unblock request failed";
+        const msg = e instanceof ApiError ? e.message : "Action failed";
         Toast.show({ type: "error", text1: msg });
       } finally {
-        setUserBlockPending(null);
+        setUserBulkPending(null);
       }
     },
-    [selectedIdsList, user?.id, userRows, loadUsers],
+    [selectedUserIds, user?.id, userRows, loadUsers],
   );
 
   if (authLoading) {
@@ -1062,89 +1008,125 @@ export default function AdminCreateAccountsScreen() {
             />
           )}
 
-          {roleFilter === "ORG_MANAGER" && (
+          {roleFilter === "ORG_MANAGER" ? (
             <OrgManagementSection colors={colors} w={w} h={h} />
-          )}
-
-          <Input
-            label="Search"
-            placeholder="Name or email"
-            value={searchInput}
-            onChangeText={setSearchInput}
-            autoCapitalize="none"
-            leftIcon="search"
-          />
-          <Button
-            title="Search"
-            onPress={() => {
-              setSearchApplied(searchInput.trim());
-              setPage(1);
-            }}
-            fullWidth
-            style={{ marginTop: h(12) }}
-          />
-
-          <AdminUserBlockActionBar
-            selectedCount={selectedCount}
-            pendingAction={userBlockPending}
-            onBlock={() => void runBulkBlockUnblock("block")}
-            onUnblock={() => void runBulkBlockUnblock("unblock")}
-          />
-
-          <Card style={{ marginTop: h(16) }} padded>
-            {usersLoading ? (
-              <ActivityIndicator
-                color={colors.tint}
-                style={{ marginVertical: h(16) }}
+          ) : (
+            <>
+              <Input
+                label="Search"
+                placeholder="Name or email"
+                value={searchInput}
+                onChangeText={setSearchInput}
+                autoCapitalize="none"
+                leftIcon="search"
               />
-            ) : usersError ? (
-              <Text style={{ color: colors.accent }}>{usersError}</Text>
-            ) : userRows.length === 0 ? (
-              <Text style={{ color: colors.tabIconDefault }}>
-                No users for this query.
-              </Text>
-            ) : (
-              userRows.map((item, i) => {
-                const canBulkSelect = !isAdminRoleForBulkBlock(item.role);
-                return (
-                  <UserRow
-                    key={item.id}
-                    row={item}
-                    colors={colors}
-                    w={w}
-                    isLast={i === userRows.length - 1}
-                    selectable={canBulkSelect}
-                    reserveSelectSlot={!canBulkSelect}
-                    selected={canBulkSelect && selectedUserIds.has(item.id)}
-                    onToggleSelect={
-                      canBulkSelect
-                        ? () => toggleSelectUser(item.id)
-                        : undefined
-                    }
-                  />
+              <Button
+                title="Search"
+                onPress={() => {
+                  setSearchApplied(searchInput.trim());
+                  setPage(1);
+                }}
+                fullWidth
+                style={{ marginTop: h(12) }}
+              />
+
+              {/* Bulk action bar */}
+              {(() => {
+                const selectedCount = selectedUserIds.size;
+                const selectedRows = userRows.filter((r) => selectedUserIds.has(r.id));
+                const hasBlockable = selectedRows.some(
+                  (r) => !r.isBlocked && !isAdminRoleForBulkBlock(r.role) && r.id !== user?.id,
                 );
-              })
-            )}
-          </Card>
+                const hasUnblockable = selectedRows.some((r) => r.isBlocked);
+                return (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: w(8),
+                      marginTop: h(14),
+                      marginBottom: h(6),
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: selectedCount > 0 ? colors.text : colors.tabIconDefault,
+                        fontSize: w(12),
+                        flex: 1,
+                      }}
+                    >
+                      {selectedCount > 0
+                        ? `${selectedCount} selected`
+                        : "Select users to block / unblock"}
+                    </Text>
+                    <Button
+                      title={userBulkPending === "block" ? "Blocking…" : "Block"}
+                      variant="outline"
+                      disabled={!hasBlockable || userBulkPending !== null}
+                      onPress={() => void runBulkBlockUnblock("block")}
+                    />
+                    <Button
+                      title={userBulkPending === "unblock" ? "Unblocking…" : "Unblock"}
+                      variant="outline"
+                      disabled={!hasUnblockable || userBulkPending !== null}
+                      onPress={() => void runBulkBlockUnblock("unblock")}
+                    />
+                  </View>
+                );
+              })()}
 
-          {userTotalPages > 1 && !usersLoading && (
-            <View style={[styles.pager, { marginTop: h(16), gap: w(12) }]}>
-              <Button
-                title="Previous"
-                variant="outline"
-                disabled={page <= 1}
-                onPress={() => setPage((p) => Math.max(1, p - 1))}
-              />
-              <Text style={{ color: colors.tabIconDefault, fontSize: w(14) }}>
-                {page} / {userTotalPages}
-              </Text>
-              <Button
-                title="Next"
-                variant="outline"
-                disabled={page >= userTotalPages}
-                onPress={() => setPage((p) => Math.min(userTotalPages, p + 1))}
-              />
-            </View>
+              <Card padded>
+                {usersLoading ? (
+                  <ActivityIndicator
+                    color={colors.tint}
+                    style={{ marginVertical: h(16) }}
+                  />
+                ) : usersError ? (
+                  <Text style={{ color: colors.accent }}>{usersError}</Text>
+                ) : userRows.length === 0 ? (
+                  <Text style={{ color: colors.tabIconDefault }}>
+                    No users for this query.
+                  </Text>
+                ) : (
+                  userRows.map((item, i) => {
+                    const checkable =
+                      !isAdminRoleForBulkBlock(item.role) && item.id !== user?.id;
+                    return (
+                      <UserRow
+                        key={item.id}
+                        row={item}
+                        colors={colors}
+                        w={w}
+                        isLast={i === userRows.length - 1}
+                        checkable={checkable}
+                        checked={checkable && selectedUserIds.has(item.id)}
+                        onToggle={checkable ? () => toggleUserCheck(item.id) : undefined}
+                      />
+                    );
+                  })
+                )}
+              </Card>
+
+              {userTotalPages > 1 && !usersLoading && (
+                <View style={[styles.pager, { marginTop: h(16), gap: w(12) }]}>
+                  <Button
+                    title="Previous"
+                    variant="outline"
+                    disabled={page <= 1}
+                    onPress={() => setPage((p) => Math.max(1, p - 1))}
+                  />
+                  <Text style={{ color: colors.tabIconDefault, fontSize: w(14) }}>
+                    {page} / {userTotalPages}
+                  </Text>
+                  <Button
+                    title="Next"
+                    variant="outline"
+                    disabled={page >= userTotalPages}
+                    onPress={() => setPage((p) => Math.min(userTotalPages, p + 1))}
+                  />
+                </View>
+              )}
+            </>
           )}
         </View>
       </ScrollView>

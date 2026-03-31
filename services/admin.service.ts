@@ -69,11 +69,13 @@ function normalizeUserRow(raw: unknown): AdminUserRow | null {
     isVerified:
       typeof row.isVerified === 'boolean'
         ? row.isVerified
-        : row.verified === true,
+        : row.isEmailVerified === true ||
+          row.verified === true,
     isBlocked:
       typeof row.isBlocked === 'boolean'
         ? row.isBlocked
-        : row.blocked === true,
+        : row.blocked === true ||
+          (typeof row.isActive === 'boolean' ? !row.isActive : false),
   };
 }
 
@@ -542,7 +544,8 @@ function normalizeOrgRow(raw: unknown): AdminOrganization | null {
     isBlocked:
       typeof row.isBlocked === 'boolean'
         ? row.isBlocked
-        : row.blocked === true,
+        : row.blocked === true ||
+          (typeof row.isActive === 'boolean' ? !row.isActive : false),
   };
 }
 
