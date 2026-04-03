@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useFollowHub } from "@/context/FollowHubContext";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { useSelectedGames } from "@/context/SelectedGamesContext";
-import { isAdminUser } from "@/utils/adminUser";
+import { isAdminUser, isHostUser } from "@/utils/adminUser";
 import { userHasSelectedGames } from "@/utils/gameSelection";
 import { tabIconForGameId } from "@/utils/gameTabIcon";
 import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
@@ -96,8 +96,11 @@ export default function TabLayout() {
   const { w } = useResponsive();
   const { user } = useAuth();
   const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
+  /** Must match `app/(drawer)/_layout.tsx` — hosts skip game pick but still need drawer + tabs. */
   const isLockedForGameSelection =
-    !isAdminUser(user) && !userHasSelectedGames(confirmedSelectedGames);
+    !isAdminUser(user) &&
+    !isHostUser(user) &&
+    !userHasSelectedGames(confirmedSelectedGames);
 
   return (
     <Tabs

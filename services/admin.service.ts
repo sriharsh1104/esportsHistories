@@ -35,6 +35,17 @@ function strId(v: unknown): string {
   return String(v).trim();
 }
 
+/** ObjectId / populated ref: backend may send a string id or `{ _id, ... }`. */
+function refId(v: unknown): string {
+  const r = asRecord(v);
+  if (r) {
+    const id = strId(r._id) || strId(r.id);
+    if (id) return id;
+  }
+  if (typeof v === "string" || typeof v === "number") return strId(v);
+  return "";
+}
+
 function pickUserId(row: Record<string, unknown>): string {
   return (
     strId(row._id) || strId(row.id) || strId(row.userId) || strId(row.uid) || ""
@@ -192,6 +203,23 @@ export function buildAdminDashboardStreamUrl(accessToken: string): string {
       "",
     ) || "";
   const path = API_ENDPOINTS.ADMIN.DASHBOARD_STREAM.replace(/^\//, "");
+  const t = encodeURIComponent(accessToken);
+  return `${base}/${path}?access_token=${t}`;
+}
+
+/** SSE: `GET /admin/host-applications/stream?access_token=…` — event `host_application`. */
+export function buildAdminHostApplicationsStreamUrl(
+  accessToken: string,
+): string {
+  const base =
+    (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined)?.replace(
+      /\/$/,
+      "",
+    ) || "";
+  const path = API_ENDPOINTS.ADMIN.HOST_APPLICATIONS_STREAM.replace(
+    /^\//,
+    "",
+  );
   const t = encodeURIComponent(accessToken);
   return `${base}/${path}?access_token=${t}`;
 }
@@ -790,7 +818,15 @@ function normalizeAdminTournamentRow(raw: unknown): AdminTournamentRow | null {
     startTimeRaw != null ? String(startTimeRaw).trim() : undefined;
 
   const maxTeams =
-    num(o.maxTeams ?? o.max_teams ?? o.maxPlayers ?? o.maxSlots) ?? undefined;
+    num(
+      o.maxTeams ??
+        o.max_teams ??
+        o.maxPlayers ??
+        o.maxSlots ??
+        o.totalSlot ??
+        o.totalSlots ??
+        o.totalTeams,
+    ) ?? undefined;
 
   const potentialPrize = asRecord(o.potentialPrizePool);
   const winnerPrizePool =
@@ -824,12 +860,62 @@ function normalizeAdminTournamentRow(raw: unknown): AdminTournamentRow | null {
       ? o.joinedTeamsIds
       : undefined;
   const joinedCount =
-    num(o.joinedTeamsCount ?? o.joinedCount) ??
+    num(
+      o.joinedTeamsCount ??
+        o.joinedCount ??
+        o.joined ??
+        o.teamsJoined,
+    ) ??
     (joinedTeams ? joinedTeams.length : undefined);
+  const slotsAvailableExplicit = num(
+    o.slotsAvailable ??
+      o.availableSlots ??
+      o.availableTeams ??
+      o.openSlots,
+  );
   const slotsAvailable =
-    maxTeams != null && joinedCount != null
-      ? Math.max(0, maxTeams - joinedCount)
-      : undefined;
+    slotsAvailableExplicit ??
+    (maxTeams != null
+      ? Math.max(0, maxTeams - (joinedCount ?? 0))
+      : undefined);
+
+  const hostRef =
+    asRecord(o.assignedHost) ??
+    asRecord(o.assignedUser) ??
+    asRecord(o.hostUser) ??
+    asRecord(o.host);
+  const assignedHostId =
+    strId(o.assignedHostId) ||
+    strId(o.assignedUserId) ||
+    refId(o.hostId) ||
+    refId(o.assignedHost) ||
+    refId(o.host) ||
+    refId(hostRef);
+  const nameFrom = (r: Record<string, unknown> | null): string | undefined => {
+    if (!r) return undefined;
+    const n =
+      r.name ?? r.fullName ?? r.displayName ?? r.username ?? r.email;
+    const s = n != null ? String(n).trim() : "";
+    return s || undefined;
+  };
+  const assignedHostName =
+    o.assignedHostName != null
+      ? String(o.assignedHostName).trim() || undefined
+      : o.hostName != null
+        ? String(o.hostName).trim() || undefined
+        : nameFrom(hostRef);
+  const assignedHostEmail =
+    o.assignedHostEmail != null
+      ? String(o.assignedHostEmail).trim() || undefined
+      : o.hostEmail != null
+        ? String(o.hostEmail).trim() || undefined
+        : hostRef?.email != null
+          ? String(hostRef.email).trim() || undefined
+          : undefined;
+
+  const hasAssigned =
+    (assignedHostId && assignedHostId.length > 0) ||
+    (assignedHostName && assignedHostName.length > 0);
 
   return {
     id,
@@ -851,6 +937,13 @@ function normalizeAdminTournamentRow(raw: unknown): AdminTournamentRow | null {
     entryFee,
     joinedCount,
     slotsAvailable,
+    ...(hasAssigned
+      ? {
+          assignedHostId: assignedHostId || undefined,
+          assignedHostName,
+          assignedHostEmail,
+        }
+      : {}),
   };
 }
 
@@ -911,24 +1004,28 @@ function normalizeAdminHostApplication(raw: unknown): AdminHostApplication | nul
     "";
   if (!id) return null;
 
+  const hostRef = asRecord(o.hostId);
+
   const hostId =
-    strId(o.hostId) ||
-    strId(o.userId) ||
-    strId(o.uid) ||
+    refId(o.hostId) ||
+    refId(o.userId) ||
+    refId(o.uid) ||
     undefined;
   const tournamentId =
-    strId((o as { tournamentId?: unknown }).tournamentId) ||
-    strId((o as { lobbyGroupId?: unknown }).lobbyGroupId) ||
+    refId((o as { tournamentId?: unknown }).tournamentId) ||
+    refId((o as { lobbyGroupId?: unknown }).lobbyGroupId) ||
     undefined;
 
   const hostNameRaw =
     (o as { hostName?: unknown }).hostName ??
     (o as { name?: unknown }).name ??
     (o as { fullName?: unknown }).fullName ??
-    (o as { displayName?: unknown }).displayName;
+    (o as { displayName?: unknown }).displayName ??
+    (hostRef?.hostName ?? hostRef?.name ?? hostRef?.fullName ?? hostRef?.displayName);
   const hostEmailRaw =
     (o as { hostEmail?: unknown }).hostEmail ??
-    (o as { email?: unknown }).email;
+    (o as { email?: unknown }).email ??
+    hostRef?.email;
 
   const status =
     (o as { status?: unknown }).status != null

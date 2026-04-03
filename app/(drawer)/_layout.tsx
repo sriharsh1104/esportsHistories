@@ -7,7 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { useWallet } from "@/context/WalletContext";
 import type { UserBio } from "@/types/auth";
-import { isAdminUser } from "@/utils/adminUser";
+import { isAdminUser, isHostUser } from "@/utils/adminUser";
 import { userHasSelectedGames } from "@/utils/gameSelection";
 import { getProfileImageUrl } from "@/utils/profileImage";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -48,7 +48,7 @@ const MENU_ITEMS_BASE = [
     icon: "list-alt" as const,
     label: "Lobby Records",
     route: ROUTES.ADMIN_TOURNAMENT_RECORD,
-    adminOnly: true as const,
+    adminOrHost: true as const,
   },
   { icon: "credit-card" as const, label: "Wallet", route: ROUTES.WALLET },
   { icon: "cog" as const, label: "Settings", route: ROUTES.SETTINGS },
@@ -165,6 +165,13 @@ function CustomDrawerContent(props: {
           if (props.isLockedForGameSelection) return false;
           if ("adminOnly" in item && item.adminOnly && !isAdminUser(user))
             return false;
+          if (
+            "adminOrHost" in item &&
+            item.adminOrHost &&
+            !isAdminUser(user) &&
+            !isHostUser(user)
+          )
+            return false;
           return true;
         }).map((item) => {
           const route =
@@ -222,7 +229,9 @@ export default function DrawerLayout() {
     ? user.selectedGames
     : [];
   const isLockedForGameSelection =
-    !isAdminUser(user) && !userHasSelectedGames(confirmedSelectedGames);
+    !isAdminUser(user) &&
+    !isHostUser(user) &&
+    !userHasSelectedGames(confirmedSelectedGames);
   const isOnHomeTab = useMemo(() => {
     const [root, tabs] = segments;
     if (root !== "(drawer)" || tabs !== "(tabs)") return false;

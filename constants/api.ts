@@ -139,6 +139,11 @@ export const API_ENDPOINTS = {
       `/admin/host-applications/${encodeURIComponent(applicationId)}/approve`,
     HOST_APPLICATION_REJECT: (applicationId: string) =>
       `/admin/host-applications/${encodeURIComponent(applicationId)}/reject`,
+    /**
+     * GET (SSE) — host application lifecycle; event `host_application`, e.g. `{ type: "submitted" }`.
+     * Query: `access_token` (EventSource cannot send Authorization header).
+     */
+    HOST_APPLICATIONS_STREAM: "/admin/host-applications/stream",
     /** POST `{ tournamentId, hostId, forceAssign? }` — manual host assign (admin only). */
     ASSIGN_HOST: "/admin/assign-host",
   },
@@ -150,5 +155,23 @@ export const API_ENDPOINTS = {
     LIST: "/tournament/list",
     /** GET (SSE) — stream tournaments; `game` query required by backend. */
     STREAM: "/tournament/list/stream",
+    /** GET — lobby chat history for a tournament (Swagger: `/api/tournament/{tournamentId}/chat`). */
+    CHAT: (tournamentId: string) =>
+      `/tournament/${encodeURIComponent(tournamentId)}/chat`,
+  },
+  /** Host JWT — apply to tournaments, list assigned lobbies. */
+  HOST: {
+    TOURNAMENTS_AVAILABLE: "/host/tournaments/available",
+    TOURNAMENT_APPLY: (tournamentId: string) =>
+      `/host/tournaments/${encodeURIComponent(tournamentId)}/apply`,
+    MY_LOBBIES: "/host/my-lobbies",
+    /**
+     * GET (SSE) — events `ready`, `host_application` (e.g. `type`: approved | rejected | assigned).
+     * Query: `access_token`.
+     */
+    APPLICATIONS_STREAM: "/host/applications/stream",
+    /** POST — host updates room id / password for a tournament lobby. */
+    TOURNAMENT_UPDATE_ROOM: (tournamentId: string) =>
+      `/host/tournaments/${encodeURIComponent(tournamentId)}/update-room`,
   },
 } as const;

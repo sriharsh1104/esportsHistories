@@ -11,7 +11,7 @@ import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
-import { isAdminUser } from '@/utils/adminUser';
+import { isAdminUser, isHostUser } from '@/utils/adminUser';
 import { userHasSelectedGames } from '@/utils/gameSelection';
 import {
   fetchGameDashboardData,
@@ -42,9 +42,11 @@ export default function NewsScreen() {
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [isSubmittingSelection, setIsSubmittingSelection] = useState(false);
   const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
+  const isHost = isHostUser(user);
   const requiresGameSelection =
     isAuthenticated &&
     !isAdminUser(user) &&
+    !isHost &&
     !userHasSelectedGames(confirmedSelectedGames);
 
   function slugFromGameLabel(name: string): string {

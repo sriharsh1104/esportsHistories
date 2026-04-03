@@ -152,6 +152,10 @@ export type AdminTournamentRow = {
   joinedCount?: number;
   /** Derived available slots when backend exposes max + joined. */
   slotsAvailable?: number;
+  /** Set when a host is assigned to this tournament (admin list / assign-host). */
+  assignedHostId?: string;
+  assignedHostName?: string;
+  assignedHostEmail?: string;
   /** Raw payload hook to surface additional fields if needed. */
   [key: string]: unknown;
 };

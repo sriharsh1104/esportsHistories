@@ -7,6 +7,7 @@ import { useResponsive } from "@/context/ResponsiveContext";
 import {
   approveAdminHostApplication,
   assignAdminTournamentHost,
+  buildAdminHostApplicationsStreamUrl,
   fetchAdminGamesCatalog,
   fetchAdminHostApplications,
   fetchAdminTournaments,
@@ -15,6 +16,7 @@ import {
   type FetchAdminHostApplicationsParams,
   type FetchAdminUsersParams,
 } from "@/services/admin.service";
+import { getToken } from "@/services/common.service";
 import { ApiError } from "@/services/api.service";
 import { useAppDispatch } from "@/store/hooks";
 import { hideLoader, showLoader } from "@/store/slices/loaderSlice";
@@ -23,14 +25,15 @@ import type {
   AdminTournamentRow,
   AdminUserRow,
 } from "@/types/admin";
-import { isAdminUser } from "@/utils/adminUser";
+import { canAccessLobbyRecordsUI, isHostUser } from "@/utils/adminUser";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Redirect } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -39,6 +42,7 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { formatDateDdMmYyyy } from "@/utils/date";
+import { HostLobbyRecords } from "@/components/host/HostLobbyRecords";
 
 type StatusFilter =
   | "upcoming"
@@ -102,8 +106,28 @@ export default function AdminTournamentRecordScreen() {
   const [hosts, setHosts] = useState<AdminUserRow[]>([]);
   const [assigningHostId, setAssigningHostId] = useState<string | null>(null);
 
+  const applicationsTournamentRef = useRef<AdminTournamentRow | null>(null);
+  const applicationsModalOpenRef = useRef(false);
+  const loadRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>(
+    async () => {},
+  );
+  const loadApplicationsRef = useRef<
+    (opts?: Partial<FetchAdminHostApplicationsParams> & {
+      forTournament?: AdminTournamentRow | null;
+    }) => Promise<void>
+  >(async () => {});
+
+  useEffect(() => {
+    applicationsTournamentRef.current = applicationsTournament;
+  }, [applicationsTournament]);
+
+  useEffect(() => {
+    applicationsModalOpenRef.current = applicationsModalOpen;
+  }, [applicationsModalOpen]);
+
   const load = async (opts?: { silent?: boolean }) => {
-    if (!isAuthenticated || !isAdminUser(user)) return;
+    if (!isAuthenticated || !canAccessLobbyRecordsUI(user) || isHostUser(user))
+      return;
     if (!opts?.silent) {
       setIsLoading(true);
       setError(null);
@@ -134,7 +158,10 @@ export default function AdminTournamentRecordScreen() {
     }
   };
 
+  loadRef.current = load;
+
   useEffect(() => {
+    if (isHostUser(user)) return;
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, selectedGame]);
@@ -168,7 +195,12 @@ export default function AdminTournamentRecordScreen() {
     STATUS_OPTIONS.find((s) => s.value === status)?.label ?? "Upcoming";
 
   useEffect(() => {
-    if (!isAuthenticated || !isAdminUser(user)) return;
+    if (
+      !isAuthenticated ||
+      !canAccessLobbyRecordsUI(user) ||
+      isHostUser(user)
+    )
+      return;
     let cancelled = false;
     setGamesLoading(true);
     setGamesError(null);
@@ -195,9 +227,13 @@ export default function AdminTournamentRecordScreen() {
   }, [isAuthenticated, user?.id]);
 
   const loadApplications = async (
-    opts?: Partial<FetchAdminHostApplicationsParams>,
+    opts?: Partial<FetchAdminHostApplicationsParams> & {
+      forTournament?: AdminTournamentRow | null;
+    },
   ) => {
-    if (!applicationsTournament) return;
+    const { forTournament, ...apiOpts } = opts ?? {};
+    const tournament = forTournament ?? applicationsTournament;
+    if (!tournament) return;
     setApplicationsLoading(true);
     setApplicationsError(null);
     try {
@@ -205,13 +241,13 @@ export default function AdminTournamentRecordScreen() {
         page: 1,
         limit: 50,
         status: "pending",
-        ...opts,
+        ...apiOpts,
       });
-      const filtered = applicationsTournament.id
+      const filtered = tournament.id
         ? list.filter(
             (app) =>
               !app.tournamentId ||
-              app.tournamentId === applicationsTournament.id,
+              app.tournamentId === tournament.id,
           )
         : list;
       setApplications(filtered);
@@ -228,6 +264,65 @@ export default function AdminTournamentRecordScreen() {
       setApplicationsLoading(false);
     }
   };
+
+  loadApplicationsRef.current = loadApplications;
+
+  /** Web: SSE host-application events; native: periodic silent list refresh. */
+  useEffect(() => {
+    if (!isAuthenticated || !canAccessLobbyRecordsUI(user) || isHostUser(user))
+      return;
+
+    let es: EventSource | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const token = getToken();
+
+    const handleHostApplicationEvent = (raw: string) => {
+      let msg: { type?: string } = {};
+      try {
+        msg = JSON.parse(raw) as { type?: string };
+      } catch {
+        return;
+      }
+      if (msg.type === "submitted") {
+        Toast.show({
+          type: "info",
+          text1: "New host application",
+        });
+      }
+      void loadRef.current({ silent: true });
+      if (applicationsModalOpenRef.current) {
+        const t = applicationsTournamentRef.current;
+        if (t) void loadApplicationsRef.current({ forTournament: t });
+      }
+    };
+
+    if (Platform.OS === "web" && typeof EventSource !== "undefined" && token) {
+      try {
+        es = new EventSource(buildAdminHostApplicationsStreamUrl(token));
+        es.addEventListener("host_application", (ev: MessageEvent) =>
+          handleHostApplicationEvent(String(ev.data)),
+        );
+        es.onerror = () => {};
+      } catch {
+        es = null;
+      }
+    }
+
+    if (!es && token) {
+      interval = setInterval(() => {
+        void loadRef.current({ silent: true });
+        if (applicationsModalOpenRef.current) {
+          const t = applicationsTournamentRef.current;
+          if (t) void loadApplicationsRef.current({ forTournament: t });
+        }
+      }, 60000);
+    }
+
+    return () => {
+      es?.close();
+      if (interval) clearInterval(interval);
+    };
+  }, [isAuthenticated, user?.id]);
 
   const loadAvailableHosts = async (
     opts?: Partial<FetchAdminUsersParams>,
@@ -276,6 +371,7 @@ export default function AdminTournamentRecordScreen() {
         type: "success",
         text1: "Host application approved",
       });
+      await load({ silent: true });
       await loadApplications();
     } catch (e) {
       const msg =
@@ -328,6 +424,7 @@ export default function AdminTournamentRecordScreen() {
         forceAssign,
       });
       Toast.show({ type: "success", text1: "Host assigned" });
+      await load({ silent: true });
       await loadApplications();
     } catch (e) {
       if (!forceAssign && isHostAssignConflictError(e)) {
@@ -373,8 +470,16 @@ export default function AdminTournamentRecordScreen() {
     );
   };
 
-  if (!isAuthenticated || !isAdminUser(user)) {
+  if (!isAuthenticated || !canAccessLobbyRecordsUI(user)) {
     return <Redirect href={ROUTES.HOME} />;
+  }
+
+  if (isHostUser(user)) {
+    return (
+      <Screen scroll keyboardAvoid padded>
+        <HostLobbyRecords />
+      </Screen>
+    );
   }
 
   return (
@@ -708,12 +813,21 @@ export default function AdminTournamentRecordScreen() {
                     : undefined;
                 const joinedCount = row.joinedCount ?? joinedFromTeams;
                 const joined =
-                  joinedCount != null ? String(joinedCount) : undefined;
-                const available =
-                  row.slotsAvailable != null
+                  joinedCount != null
+                    ? String(joinedCount)
+                    : row.maxTeams != null
+                      ? "0"
+                      : undefined;
+                const availableSlots =
+                  row.maxTeams != null && row.slotsAvailable != null
                     ? String(row.slotsAvailable)
-                    : row.maxTeams != null && joinedCount != null
-                      ? String(Math.max(0, row.maxTeams - joinedCount))
+                    : row.maxTeams != null
+                      ? String(
+                          Math.max(
+                            0,
+                            row.maxTeams - (joinedCount ?? 0),
+                          ),
+                        )
                       : undefined;
 
                 const statusColor =
@@ -746,20 +860,20 @@ export default function AdminTournamentRecordScreen() {
                 if (totalSlots)
                   statCells.push({
                     key: "slots",
-                    caption: "Slots",
+                    caption: "Total slots",
                     value: totalSlots,
-                  });
-                if (available)
-                  statCells.push({
-                    key: "open",
-                    caption: "Open slots",
-                    value: available,
                   });
                 if (joined)
                   statCells.push({
                     key: "joined",
                     caption: "Joined",
                     value: joined,
+                  });
+                if (availableSlots)
+                  statCells.push({
+                    key: "available",
+                    caption: "Available slots",
+                    value: availableSlots,
                   });
                 if (row.entryFee != null)
                   statCells.push({
@@ -788,17 +902,29 @@ export default function AdminTournamentRecordScreen() {
 
                 const statColWidth = isSmallDevice ? "48%" : "31%";
 
+                const hasAssignedHost = Boolean(
+                  row.assignedHostId ||
+                    row.assignedHostName ||
+                    row.assignedHostEmail,
+                );
+                const assignedHostLine =
+                  row.assignedHostName || row.assignedHostEmail
+                    ? [row.assignedHostName, row.assignedHostEmail]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Host confirmed";
+
                 return (
                   <View
                     key={row.id}
                     style={{
-                      paddingVertical: h(12),
+                      paddingVertical: h(14),
                       paddingHorizontal: w(14),
                       borderRadius: w(12),
                       borderWidth: 1,
                       borderColor: colors.border,
                       backgroundColor: colors.cardBg,
-                      marginBottom: h(8),
+                      marginBottom: h(10),
                     }}
                   >
                     <View
@@ -895,7 +1021,8 @@ export default function AdminTournamentRecordScreen() {
                         style={{
                           flexDirection: "row",
                           flexWrap: "wrap",
-                          marginTop: h(12),
+                          marginTop: h(14),
+                          paddingTop: h(4),
                           gap: w(10),
                         }}
                       >
@@ -919,7 +1046,7 @@ export default function AdminTournamentRecordScreen() {
                                 fontSize: w(13),
                                 fontWeight: "600",
                                 color: colors.text,
-                                marginTop: h(2),
+                                marginTop: h(4),
                               }}
                               numberOfLines={2}
                             >
@@ -930,22 +1057,83 @@ export default function AdminTournamentRecordScreen() {
                       </View>
                     ) : null}
 
+                    {hasAssignedHost ? (
+                      <View
+                        style={{
+                          marginTop: h(16),
+                          flexDirection: "row",
+                          alignItems: "center",
+                          paddingVertical: h(12),
+                          paddingHorizontal: w(12),
+                          borderRadius: w(10),
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: "#22c55e59",
+                          backgroundColor: scheme === "dark" ? "#14532d38" : "#22c55e14",
+                          gap: w(12),
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: w(40),
+                            height: w(40),
+                            borderRadius: w(20),
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: "#22c55e28",
+                          }}
+                        >
+                          <FontAwesome
+                            name="user"
+                            size={w(18)}
+                            color="#4ade80"
+                          />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            style={{
+                              fontSize: w(10),
+                              fontWeight: "700",
+                              color: "#4ade80",
+                              textTransform: "uppercase",
+                              letterSpacing: 0.7,
+                            }}
+                            numberOfLines={1}
+                          >
+                            Assigned host
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: w(14),
+                              fontWeight: "700",
+                              color: colors.text,
+                              marginTop: h(5),
+                              lineHeight: w(19),
+                            }}
+                            numberOfLines={3}
+                          >
+                            {assignedHostLine}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+
                     <View
                       style={{
                         flexDirection: isSmallDevice ? "column" : "row",
-                        marginTop: h(14),
-                        gap: h(8),
+                        marginTop: hasAssignedHost ? h(12) : h(16),
+                        gap: h(10),
                       }}
                     >
+                      {!hasAssignedHost ? (
                       <Pressable
                         style={{
                           flex: isSmallDevice ? undefined : 1,
-                          paddingVertical: h(10),
+                          paddingVertical: h(12),
                           paddingHorizontal: w(12),
                           borderRadius: w(10),
                           borderWidth: 1,
                           borderColor: colors.tint,
-                          backgroundColor: colors.tint + "14",
+                          backgroundColor: colors.tint + "18",
                           alignItems: "center",
                         }}
                         onPress={() => openApplicationsModal(row)}
@@ -961,15 +1149,20 @@ export default function AdminTournamentRecordScreen() {
                           View applications
                         </Text>
                       </Pressable>
+                      ) : null}
                       <Pressable
                         style={{
                           flex: isSmallDevice ? undefined : 1,
-                          paddingVertical: h(10),
+                          paddingVertical: h(11),
                           paddingHorizontal: w(12),
                           borderRadius: w(10),
                           borderWidth: 1,
-                          borderColor: "#b91c1c",
-                          backgroundColor: "#450a0a",
+                          borderColor: hasAssignedHost
+                            ? "#f8717188"
+                            : "#b91c1c",
+                          backgroundColor: hasAssignedHost
+                            ? "transparent"
+                            : "#450a0a",
                           alignItems: "center",
                         }}
                         onPress={() => {
@@ -982,7 +1175,7 @@ export default function AdminTournamentRecordScreen() {
                         <Text
                           style={{
                             fontSize: w(12),
-                            color: "#fca5a5",
+                            color: hasAssignedHost ? "#f87171" : "#fca5a5",
                             fontWeight: "700",
                             textAlign: "center",
                           }}
@@ -1436,8 +1629,9 @@ export default function AdminTournamentRecordScreen() {
                             textAlign: "center",
                           }}
                         >
-                          Hosts can apply from their panel. New requests will show
-                          here automatically after refresh.
+                          Hosts can apply from their panel. On web, new
+                          requests appear in real time; pull to refresh on
+                          mobile.
                         </Text>
                       </View>
                     ) : null}
