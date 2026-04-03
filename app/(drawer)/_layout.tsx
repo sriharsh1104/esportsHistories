@@ -1,4 +1,6 @@
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useColorScheme } from "@/components/useColorScheme";
+import { LogoutButton } from "@/components/ui";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
 import { useAuth } from "@/context/AuthContext";
@@ -280,6 +282,13 @@ export default function DrawerLayout() {
         headerShown: true,
         drawerActiveTintColor: Colors[colorScheme ?? "light"].tint,
         swipeEnabled: !isLockedForGameSelection,
+        headerRight: () =>
+          isLockedForGameSelection ? null : (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <ThemeToggle />
+              <LogoutButton />
+            </View>
+          ),
       }}
       drawerContent={(props) => (
         <CustomDrawerContent

@@ -13,7 +13,7 @@ import type {
   AdminUsersPage,
 } from "@/types/admin";
 import Constants from "expo-constants";
-import { request } from "./api.service";
+import { ApiError, request } from "./api.service";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v != null && typeof v === "object" && !Array.isArray(v)
@@ -1028,4 +1028,30 @@ export async function rejectAdminHostApplication(
       toast: false,
     },
   );
+}
+
+export type AssignAdminTournamentHostBody = {
+  tournamentId: string;
+  hostId: string;
+  forceAssign?: boolean;
+};
+
+/** POST `/admin/assign-host` — assign a host to a tournament manually (admin JWT). */
+export async function assignAdminTournamentHost(
+  body: AssignAdminTournamentHostBody,
+): Promise<void> {
+  const tournamentId = String(body.tournamentId).trim();
+  const hostId = String(body.hostId).trim();
+  if (!tournamentId || !hostId) {
+    throw new ApiError("Tournament and host are required");
+  }
+  await request<unknown>(API_ENDPOINTS.ADMIN.ASSIGN_HOST, {
+    method: "POST",
+    body: {
+      tournamentId,
+      hostId,
+      forceAssign: body.forceAssign === true,
+    },
+    toast: false,
+  });
 }

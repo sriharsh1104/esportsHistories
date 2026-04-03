@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useResponsive } from "@/context/ResponsiveContext";
 import {
   approveAdminHostApplication,
+  assignAdminTournamentHost,
   fetchAdminGamesCatalog,
   fetchAdminHostApplications,
   fetchAdminTournaments,
@@ -28,6 +29,7 @@ import { Redirect } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -53,16 +55,32 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+function isHostAssignConflictError(e: unknown): boolean {
+  if (!(e instanceof ApiError)) return false;
+  const code = e.statusCode;
+  if (code === 409 || code === 422) return true;
+  const m = e.message.toLowerCase();
+  return (
+    m.includes("conflict") ||
+    m.includes("overlap") ||
+    m.includes("already assigned") ||
+    m.includes("time slot") ||
+    m.includes("scheduling") ||
+    m.includes("forceassign")
+  );
+}
+
 export default function AdminTournamentRecordScreen() {
   const scheme = useColorScheme() ?? "light";
   const colors = Colors[scheme];
-  const { w, h } = useResponsive();
+  const { w, h, isSmallDevice } = useResponsive();
   const { user, isAuthenticated } = useAuth();
   const dispatch = useAppDispatch();
 
   const [status, setStatus] = useState<StatusFilter>("upcoming");
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [gamePickerOpen, setGamePickerOpen] = useState(false);
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +100,7 @@ export default function AdminTournamentRecordScreen() {
   const [hostsLoading, setHostsLoading] = useState(false);
   const [hostsError, setHostsError] = useState<string | null>(null);
   const [hosts, setHosts] = useState<AdminUserRow[]>([]);
+  const [assigningHostId, setAssigningHostId] = useState<string | null>(null);
 
   const load = async (opts?: { silent?: boolean }) => {
     if (!isAuthenticated || !isAdminUser(user)) return;
@@ -144,6 +163,9 @@ export default function AdminTournamentRecordScreen() {
     gameOptions.find((g) => g.value === selectedGame)?.label ??
     gameOptions[0]?.label ??
     "All games";
+
+  const selectedStatusLabel =
+    STATUS_OPTIONS.find((s) => s.value === status)?.label ?? "Upcoming";
 
   useEffect(() => {
     if (!isAuthenticated || !isAdminUser(user)) return;
@@ -294,6 +316,63 @@ export default function AdminTournamentRecordScreen() {
     }
   };
 
+  const runAssignHost = async (host: AdminUserRow, forceAssign: boolean) => {
+    const tid = applicationsTournament?.id;
+    if (!tid) return;
+    setAssigningHostId(host.id);
+    dispatch(showLoader());
+    try {
+      await assignAdminTournamentHost({
+        tournamentId: tid,
+        hostId: host.id,
+        forceAssign,
+      });
+      Toast.show({ type: "success", text1: "Host assigned" });
+      await loadApplications();
+    } catch (e) {
+      if (!forceAssign && isHostAssignConflictError(e)) {
+        const detail =
+          e instanceof ApiError
+            ? e.message
+            : "This host may have another assignment at this time.";
+        Alert.alert("Scheduling conflict", `${detail}\n\nAssign anyway?`, [
+          { text: "No", style: "cancel" },
+          {
+            text: "Yes",
+            onPress: () => {
+              void runAssignHost(host, true);
+            },
+          },
+        ]);
+      } else {
+        const msg =
+          e instanceof ApiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Failed to assign host";
+        Toast.show({ type: "error", text1: msg });
+      }
+    } finally {
+      dispatch(hideLoader());
+      setAssigningHostId(null);
+    }
+  };
+
+  const promptAssignHost = (host: AdminUserRow) => {
+    if (!applicationsTournament?.id) return;
+    const label =
+      host.displayName || host.fullName || host.name || host.email || "this host";
+    Alert.alert(
+      "Assign host",
+      `Assign ${label} to this tournament?`,
+      [
+        { text: "No", style: "cancel" },
+        { text: "Yes", onPress: () => void runAssignHost(host, false) },
+      ],
+    );
+  };
+
   if (!isAuthenticated || !isAdminUser(user)) {
     return <Redirect href={ROUTES.HOME} />;
   }
@@ -393,15 +472,17 @@ export default function AdminTournamentRecordScreen() {
               >
                 {selectedGameLabel}
               </Text>
-              <Text
-                style={{
-                  fontSize: w(11),
-                  color: colors.tabIconDefault,
-                  marginTop: h(2),
-                }}
-              >
-                Filter tournaments by game (e.g. Free Fire, BGMI).
-              </Text>
+              {!isSmallDevice ? (
+                <Text
+                  style={{
+                    fontSize: w(11),
+                    color: colors.tabIconDefault,
+                    marginTop: h(2),
+                  }}
+                >
+                  Filter tournaments by game (e.g. Free Fire, BGMI).
+                </Text>
+              ) : null}
             </View>
             <FontAwesome
               name="chevron-down"
@@ -449,50 +530,46 @@ export default function AdminTournamentRecordScreen() {
               color: colors.tabIconDefault,
               textTransform: "uppercase",
               letterSpacing: 0.6,
-              marginTop: h(14),
+              marginTop: h(10),
               marginBottom: h(6),
             }}
           >
             Status
           </Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: w(8) }}>
-            {STATUS_OPTIONS.map((opt) => (
-              <Pressable
-                key={opt.value}
-                onPress={() => setStatus(opt.value)}
-                style={[
-                  styles.chip,
-                  {
-                    paddingHorizontal: w(12),
-                    paddingVertical: h(8),
-                    borderRadius: w(8),
-                    borderWidth: 1,
-                    borderColor:
-                      status === opt.value ? colors.tint : colors.border,
-                    backgroundColor:
-                      status === opt.value ? colors.tint + "22" : "transparent",
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    fontSize: w(13),
-                    fontWeight: "600",
-                    color: status === opt.value ? colors.tint : colors.text,
-                  }}
-                >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tournament status filter"
+            onPress={() => setStatusPickerOpen(true)}
             style={{
-              marginTop: h(12),
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: w(10),
+              paddingVertical: h(10),
+              paddingHorizontal: w(12),
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: colors.inputBg,
             }}
-          > 
-          </View>
+          >
+            <Text
+              style={{
+                fontSize: w(14),
+                fontWeight: "700",
+                color: colors.text,
+                flex: 1,
+                marginRight: w(8),
+              }}
+              numberOfLines={1}
+            >
+              {selectedStatusLabel}
+            </Text>
+            <FontAwesome
+              name="chevron-down"
+              size={w(16)}
+              color={colors.tabIconDefault}
+            />
+          </Pressable>
         </Card>
 
         <Card>
@@ -650,239 +727,269 @@ export default function AdminTournamentRecordScreen() {
                           ? "#eab308"
                           : colors.tabIconDefault;
 
+                const rowStatus = row.status as StatusFilter | undefined;
+                const statusLabel =
+                  (rowStatus &&
+                    STATUS_OPTIONS.find((o) => o.value === rowStatus)?.label) ??
+                  (row.status
+                    ? row.status.replace(/([A-Z])/g, " $1").trim()
+                    : "");
+
+                const statCells: { key: string; caption: string; value: string }[] =
+                  [];
+                if (startTime)
+                  statCells.push({
+                    key: "start",
+                    caption: "Start",
+                    value: startTime,
+                  });
+                if (totalSlots)
+                  statCells.push({
+                    key: "slots",
+                    caption: "Slots",
+                    value: totalSlots,
+                  });
+                if (available)
+                  statCells.push({
+                    key: "open",
+                    caption: "Open slots",
+                    value: available,
+                  });
+                if (joined)
+                  statCells.push({
+                    key: "joined",
+                    caption: "Joined",
+                    value: joined,
+                  });
+                if (row.entryFee != null)
+                  statCells.push({
+                    key: "entry",
+                    caption: "Entry fee",
+                    value: `₹${row.entryFee}`,
+                  });
+                if (row.winnerPrizePool != null)
+                  statCells.push({
+                    key: "winner",
+                    caption: "Winner pool",
+                    value: `₹${row.winnerPrizePool}`,
+                  });
+                if (row.totalPrizePool != null)
+                  statCells.push({
+                    key: "total",
+                    caption: "Total pool",
+                    value: `₹${row.totalPrizePool}`,
+                  });
+                if (row.totalFees != null)
+                  statCells.push({
+                    key: "fees",
+                    caption: "Fees",
+                    value: `₹${row.totalFees}`,
+                  });
+
+                const statColWidth = isSmallDevice ? "48%" : "31%";
+
                 return (
                   <View
                     key={row.id}
                     style={{
-                      paddingVertical: h(10),
-                      paddingHorizontal: w(12),
-                      borderRadius: w(10),
+                      paddingVertical: h(12),
+                      paddingHorizontal: w(14),
+                      borderRadius: w(12),
                       borderWidth: 1,
                       borderColor: colors.border,
                       backgroundColor: colors.cardBg,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: h(6),
+                      marginBottom: h(8),
                     }}
                   >
                     <View
                       style={{
-                        width: w(32),
-                        height: w(32),
-                        borderRadius: w(16),
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: colors.tint + "22",
-                        marginRight: w(10),
+                        flexDirection: "row",
+                        alignItems: "flex-start",
                       }}
                     >
-                      <FontAwesome
-                        name="trophy"
-                        size={w(16)}
-                        color={colors.tint}
-                      />
+                      <View
+                        style={{
+                          width: w(40),
+                          height: w(40),
+                          borderRadius: w(20),
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: colors.tint + "22",
+                          marginRight: w(12),
+                        }}
+                      >
+                        <FontAwesome
+                          name="trophy"
+                          size={w(18)}
+                          color={colors.tint}
+                        />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0, paddingRight: w(6) }}>
+                        <Text
+                          style={{
+                            fontSize: w(15),
+                            fontWeight: "700",
+                            color: colors.text,
+                            lineHeight: w(20),
+                          }}
+                          numberOfLines={2}
+                        >
+                          {label}
+                        </Text>
+                        {subtitle ? (
+                          <Text
+                            style={{
+                              fontSize: w(12),
+                              color: colors.tabIconDefault,
+                              marginTop: h(4),
+                              lineHeight: w(16),
+                            }}
+                            numberOfLines={2}
+                          >
+                            {subtitle}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {statusLabel ? (
+                        <View
+                          style={{
+                            borderWidth: 1,
+                            borderColor: statusColor + "55",
+                            backgroundColor: statusColor + "18",
+                            paddingHorizontal: w(8),
+                            paddingVertical: h(4),
+                            borderRadius: w(8),
+                            maxWidth: "42%",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: w(11),
+                              fontWeight: "700",
+                              color: statusColor,
+                            }}
+                            numberOfLines={2}
+                          >
+                            {statusLabel}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
-                    <View style={{ flex: 1 }}>
+
+                    {row.lobbyCount != null ? (
                       <Text
                         style={{
-                          fontSize: w(14),
-                          fontWeight: "600",
-                          color: colors.text,
+                          fontSize: w(11),
+                          color: colors.tabIconDefault,
+                          marginTop: h(8),
+                          marginLeft: w(52),
                         }}
-                        numberOfLines={1}
                       >
-                        {label}
+                        {row.lobbyCount} lobby
+                        {row.lobbyCount === 1 ? "" : "ies"}
                       </Text>
-                      {subtitle ? (
+                    ) : null}
+
+                    {statCells.length > 0 ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          marginTop: h(12),
+                          gap: w(10),
+                        }}
+                      >
+                        {statCells.map((cell) => (
+                          <View
+                            key={cell.key}
+                            style={{ width: statColWidth }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: w(11),
+                                color: colors.tabIconDefault,
+                                fontWeight: "600",
+                              }}
+                              numberOfLines={1}
+                            >
+                              {cell.caption}
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: w(13),
+                                fontWeight: "600",
+                                color: colors.text,
+                                marginTop: h(2),
+                              }}
+                              numberOfLines={2}
+                            >
+                              {cell.value}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+
+                    <View
+                      style={{
+                        flexDirection: isSmallDevice ? "column" : "row",
+                        marginTop: h(14),
+                        gap: h(8),
+                      }}
+                    >
+                      <Pressable
+                        style={{
+                          flex: isSmallDevice ? undefined : 1,
+                          paddingVertical: h(10),
+                          paddingHorizontal: w(12),
+                          borderRadius: w(10),
+                          borderWidth: 1,
+                          borderColor: colors.tint,
+                          backgroundColor: colors.tint + "14",
+                          alignItems: "center",
+                        }}
+                        onPress={() => openApplicationsModal(row)}
+                      >
                         <Text
                           style={{
                             fontSize: w(12),
-                            color: colors.tabIconDefault,
-                            marginTop: h(2),
+                            color: colors.tint,
+                            fontWeight: "700",
+                            textAlign: "center",
                           }}
-                          numberOfLines={1}
                         >
-                          {subtitle}
+                          View applications
                         </Text>
-                      ) : null}
-                      <View
+                      </Pressable>
+                      <Pressable
                         style={{
-                          flexDirection: "row",
-                          flexWrap: "wrap",
-                          marginTop: h(6),
-                          gap: w(10),
+                          flex: isSmallDevice ? undefined : 1,
+                          paddingVertical: h(10),
+                          paddingHorizontal: w(12),
+                          borderRadius: w(10),
+                          borderWidth: 1,
+                          borderColor: "#b91c1c",
+                          backgroundColor: "#450a0a",
+                          alignItems: "center",
+                        }}
+                        onPress={() => {
+                          Toast.show({
+                            type: "info",
+                            text1: "Cancel lobby not wired yet",
+                          });
                         }}
                       >
-                        {startTime ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Start: {startTime}
-                          </Text>
-                        ) : null}
-                        {totalSlots ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Slots: {totalSlots}
-                          </Text>
-                        ) : null}
-                        {available ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Available: {available}
-                          </Text>
-                        ) : null}
-                        {joined ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Joined: {joined}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          flexWrap: "wrap",
-                          marginTop: h(4),
-                          gap: w(10),
-                        }}
-                      >
-                        {row.entryFee != null ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Entry fee: ₹{row.entryFee}
-                          </Text>
-                        ) : null}
-                        {row.winnerPrizePool != null ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Winner pool: ₹{row.winnerPrizePool}
-                          </Text>
-                        ) : null}
-                        {row.totalPrizePool != null ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Total pool: ₹{row.totalPrizePool}
-                          </Text>
-                        ) : null}
-                        {row.totalFees != null ? (
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tabIconDefault,
-                            }}
-                          >
-                            Fees: ₹{row.totalFees}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                    <View style={{ marginLeft: w(8), alignItems: "flex-end" }}>
-                      {row.status ? (
                         <Text
                           style={{
-                            fontSize: w(11),
-                            color: statusColor,
-                            textTransform: "capitalize",
+                            fontSize: w(12),
+                            color: "#fca5a5",
+                            fontWeight: "700",
+                            textAlign: "center",
                           }}
                         >
-                          {row.status}
+                          Cancel lobby
                         </Text>
-                      ) : null}
-                      {row.lobbyCount != null ? (
-                        <Text
-                          style={{
-                            fontSize: w(11),
-                            color: colors.tabIconDefault,
-                            marginTop: h(2),
-                          }}
-                        >
-                          {row.lobbyCount} lobby
-                          {row.lobbyCount === 1 ? "" : "ies"}
-                        </Text>
-                      ) : null}
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          marginTop: h(8),
-                          gap: w(8),
-                        }}
-                      >
-                        <Pressable
-                          style={{
-                            paddingHorizontal: w(10),
-                            paddingVertical: h(6),
-                            borderRadius: w(8),
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            backgroundColor: colors.cardBg,
-                          }}
-                          onPress={() => openApplicationsModal(row)}
-                        >
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: colors.tint,
-                              fontWeight: "600",
-                            }}
-                          >
-                            View applications
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          style={{
-                            paddingHorizontal: w(10),
-                            paddingVertical: h(6),
-                            borderRadius: w(8),
-                            borderWidth: 1,
-                            borderColor: "#b91c1c",
-                            backgroundColor: "#450a0a",
-                          }}
-                          onPress={() => {
-                            Toast.show({
-                              type: "info",
-                              text1: "Cancel lobby not wired yet",
-                            });
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: w(11),
-                              color: "#fca5a5",
-                              fontWeight: "600",
-                            }}
-                          >
-                            Cancel
-                          </Text>
-                        </Pressable>
-                      </View>
+                      </Pressable>
                     </View>
                   </View>
                 );
@@ -996,6 +1103,127 @@ export default function AdminTournamentRecordScreen() {
                         }}
                       >
                         {g.label}
+                      </Text>
+                      {isSelected ? (
+                        <FontAwesome
+                          name="check"
+                          size={w(16)}
+                          color={colors.tint}
+                        />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+
+      {statusPickerOpen ? (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setStatusPickerOpen(false)}
+        >
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              paddingHorizontal: w(20),
+              paddingVertical: h(24),
+              backgroundColor: "rgba(0,0,0,0.5)",
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close status filter"
+              onPress={() => setStatusPickerOpen(false)}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View
+              pointerEvents="box-none"
+              style={{
+                width: "100%",
+                maxWidth: 440,
+                alignSelf: "center",
+                borderRadius: w(16),
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.cardBg ?? colors.background,
+                overflow: "hidden",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: w(16),
+                  paddingVertical: h(12),
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: w(16),
+                    fontWeight: "700",
+                    color: colors.text,
+                  }}
+                >
+                  Filter by status
+                </Text>
+                <Pressable
+                  onPress={() => setStatusPickerOpen(false)}
+                  hitSlop={12}
+                >
+                  <Text
+                    style={{
+                      color: colors.tint,
+                      fontWeight: "600",
+                      fontSize: w(15),
+                    }}
+                  >
+                    Close
+                  </Text>
+                </Pressable>
+              </View>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                style={{ maxHeight: h(280) }}
+              >
+                {STATUS_OPTIONS.map((opt) => {
+                  const isSelected = status === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => {
+                        setStatus(opt.value);
+                        setStatusPickerOpen(false);
+                      }}
+                      style={{
+                        paddingHorizontal: w(16),
+                        paddingVertical: h(12),
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: colors.border,
+                        backgroundColor: isSelected
+                          ? colors.tint + "18"
+                          : "transparent",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: w(15),
+                          fontWeight: "600",
+                          color: colors.text,
+                        }}
+                      >
+                        {opt.label}
                       </Text>
                       {isSelected ? (
                         <FontAwesome
@@ -1434,16 +1662,16 @@ export default function AdminTournamentRecordScreen() {
                         >
                           {host.email}
                         </Text>
-                        <Text
-                          style={{
-                            fontSize: w(11),
-                            color: colors.tabIconDefault,
-                            marginTop: h(4),
-                          }}
-                        >
-                          Assigning a host directly may depend on backend support; approving
-                          an application is the primary flow.
-                        </Text>
+                        <View style={{ marginTop: h(10) }}>
+                          <Button
+                            title={
+                              assigningHostId === host.id ? "Assigning…" : "Assign"
+                            }
+                            variant="outline"
+                            disabled={assigningHostId !== null}
+                            onPress={() => promptAssignHost(host)}
+                          />
+                        </View>
                       </View>
                     ))}
                   </>
@@ -1456,10 +1684,4 @@ export default function AdminTournamentRecordScreen() {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  chip: {
-    alignSelf: "flex-start",
-  },
-});
 

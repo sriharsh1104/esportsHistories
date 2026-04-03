@@ -63,8 +63,8 @@ export const ROUTES = {
   GAME: '/(drawer)/(tabs)/game',
   GAME_SLUG: (slug: string) => `/(drawer)/(tabs)/game/${slug}` as const,
 
-  /** Admin console — stats + user management (role `admin` only). */
-  ADMIN: '/(drawer)/admin',
+  /** Admin console — stats + user management (role `admin` only). Tab route keeps bottom nav visible. */
+  ADMIN: '/(drawer)/(tabs)/admin-dashboard',
   /** Admin — manual host / org manager signup forms. */
   ADMIN_CREATE_ACCOUNTS: '/(drawer)/admin-create-accounts',
   /** Admin — generate tournament lobbies (`POST /admin/generate-lobbies`). */

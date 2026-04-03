@@ -22,7 +22,7 @@ import {
   sanitizeFollowProfilePayload,
 } from '@/utils/followProfile';
 import { api, ApiError } from './api.service';
-import { clearToken, commonService, setRefreshToken, setToken } from './common.service';
+import { clearToken, commonService, getToken, setRefreshToken, setToken } from './common.service';
 
 const TOKEN_KEY = '@esports_auth_token';
 const REFRESH_TOKEN_KEY = '@esports_refresh_token';
@@ -902,15 +902,21 @@ export async function resendOtp(email: string): Promise<void> {
 }
 
 export async function logout(options?: { allDevices?: boolean }): Promise<void> {
+  const storedAccess = (await commonService.getItemString(TOKEN_KEY))?.trim() || '';
   const refreshToken = await commonService.getItemString(REFRESH_TOKEN_KEY);
   const allDevices = options?.allDevices === true;
+  /** In-memory token may be unset (e.g. `getStoredAuth` failed before `setToken`). Backend still expects Bearer. */
+  const bearer = (getToken() ?? storedAccess)?.trim() || '';
+  const authHeaders = bearer ? { Authorization: `Bearer ${bearer}` } : {};
 
   try {
     if (allDevices) {
-      await api.post(API_ENDPOINTS.AUTH.LOGOUT_ALL, undefined);
+      await api.post(API_ENDPOINTS.AUTH.LOGOUT_ALL, undefined, { skipAuth: true, headers: authHeaders });
     } else {
-      // Backend expects `Authorization: Bearer <accessToken>`; do not use skipAuth here.
-      await api.post(API_ENDPOINTS.AUTH.LOGOUT, refreshToken ? { refreshToken } : {});
+      await api.post(API_ENDPOINTS.AUTH.LOGOUT, refreshToken ? { refreshToken } : {}, {
+        skipAuth: true,
+        headers: authHeaders,
+      });
     }
   } catch {
     // Local cleanup still runs even if remote logout fails.

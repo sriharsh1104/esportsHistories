@@ -152,6 +152,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="admin-dashboard"
+        options={{
+          title: "Dashboard",
+          href:
+            !isLockedForGameSelection && isAdminUser(user)
+              ? undefined
+              : null,
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="home" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",

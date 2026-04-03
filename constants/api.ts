@@ -139,6 +139,8 @@ export const API_ENDPOINTS = {
       `/admin/host-applications/${encodeURIComponent(applicationId)}/approve`,
     HOST_APPLICATION_REJECT: (applicationId: string) =>
       `/admin/host-applications/${encodeURIComponent(applicationId)}/reject`,
+    /** POST `{ tournamentId, hostId, forceAssign? }` — manual host assign (admin only). */
+    ASSIGN_HOST: "/admin/assign-host",
   },
   TOURNAMENT: {
     /**
