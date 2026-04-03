@@ -1,0 +1,41 @@
+---
+description: EsportsHistories — global loader, toasts, theme, paths (always follow)
+alwaysApply: true
+---
+
+# Project conventions (always)
+
+Full detail: `.cursor/skills/react-native-coding-standards/SKILL.md`. When in doubt, match that skill and existing files.
+
+## Global blocking loader (mandatory pattern)
+
+- `GlobalLoader` is mounted **once** in `app/_layout.tsx`. **Do not** add another root `GlobalLoader`, duplicate full-screen loading `Modal`, or a second app-wide overlay for the same purpose.
+- For **user-blocking async work** (auth, wallet, payments, submits that need a full-screen block): use Redux helpers from `@/store/slices/loaderSlice`:
+
+  - `dispatch(showLoader())` before the async work
+  - `dispatch(hideLoader())` in `finally` (or every error path) so the overlay never sticks
+
+- **Do not** build a new global loader mechanism unless explicitly asked.
+
+## Screen-level vs inline loading
+
+- **Whole screen inside `Screen`**: use `<Screen isLoading={...}>` (`components/ui/Screen.tsx`) — `ActivityIndicator` + `colors.tint` is already wired there.
+- **Lists / sections / inline**: local `ActivityIndicator` with `color={colors.tint}` is fine.
+- Prefer **one clear pattern per screen**: avoid showing both global loader and a redundant full-screen spinner for the same operation.
+
+## Toasts
+
+- Root UI mounts `Toaster` from `@/components/Toaster` in `app/_layout.tsx`. Use `react-native-toast-message` the same way existing screens do; keep styling consistent with the app toasts (do not introduce a second toast library for the same UX).
+
+## Theme and imports
+
+- Colors: `import Colors from '@/constants/Colors'` and `const colors = Colors[useColorScheme() ?? 'light']` (or the pattern already used in the file).
+- Prefer **`@/`** path aliases for app imports; match surrounding files.
+
+## Web dev (`expo start --web`)
+
+- Local web uses SPA (`web.output: single`) to avoid Metro static-prerender stream failures (`Error: Premature close`). `expo export -p web` still uses `static`. Override: `EXPO_WEB_OUTPUT=static|single|server`.
+
+## Scope of changes
+
+- Only change what the task requires. Do not refactor unrelated screens to “fix” loader usage unless asked.

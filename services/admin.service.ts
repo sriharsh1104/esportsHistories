@@ -1,24 +1,29 @@
-import Constants from 'expo-constants';
-import { API_ENDPOINTS } from '@/constants/api';
+import { API_ENDPOINTS } from "@/constants/api";
 import type {
+  AdminCatalogGame,
   AdminDashboardStats,
   AdminFinancePeriod,
   AdminFinancialSeries,
+  AdminHostApplication,
   AdminOrganization,
   AdminOrganizationsPage,
+  AdminTournamentRow,
+  AdminUserRoleFilter,
   AdminUserRow,
   AdminUsersPage,
-  AdminUserRoleFilter,
-} from '@/types/admin';
-import { request } from './api.service';
+} from "@/types/admin";
+import Constants from "expo-constants";
+import { request } from "./api.service";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
-  return v != null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  return v != null && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
 }
 
 function num(v: unknown): number | undefined {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.trim() !== '') {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
     const n = Number(v);
     if (Number.isFinite(n)) return n;
   }
@@ -26,17 +31,13 @@ function num(v: unknown): number | undefined {
 }
 
 function strId(v: unknown): string {
-  if (v == null) return '';
+  if (v == null) return "";
   return String(v).trim();
 }
 
 function pickUserId(row: Record<string, unknown>): string {
   return (
-    strId(row._id) ||
-    strId(row.id) ||
-    strId(row.userId) ||
-    strId(row.uid) ||
-    ''
+    strId(row._id) || strId(row.id) || strId(row.userId) || strId(row.uid) || ""
   );
 }
 
@@ -45,7 +46,7 @@ function normalizeUserRow(raw: unknown): AdminUserRow | null {
   if (!row) return null;
   const id = pickUserId(row);
   const emailRaw = row.email ?? row.userEmail;
-  const email = emailRaw != null ? String(emailRaw).trim() : '';
+  const email = emailRaw != null ? String(emailRaw).trim() : "";
   if (!id || !email) return null;
   const name =
     row.name != null
@@ -55,8 +56,7 @@ function normalizeUserRow(raw: unknown): AdminUserRow | null {
         : row.displayName != null
           ? String(row.displayName)
           : undefined;
-  const displayName =
-    row.displayName != null ? String(row.displayName) : name;
+  const displayName = row.displayName != null ? String(row.displayName) : name;
   const fullName = row.fullName != null ? String(row.fullName) : name;
   return {
     id,
@@ -67,19 +67,20 @@ function normalizeUserRow(raw: unknown): AdminUserRow | null {
     role: row.role != null ? String(row.role) : undefined,
     status: row.status != null ? String(row.status) : undefined,
     isVerified:
-      typeof row.isVerified === 'boolean'
+      typeof row.isVerified === "boolean"
         ? row.isVerified
-        : row.isEmailVerified === true ||
-          row.verified === true,
+        : row.isEmailVerified === true || row.verified === true,
     isBlocked:
-      typeof row.isBlocked === 'boolean'
+      typeof row.isBlocked === "boolean"
         ? row.isBlocked
         : row.blocked === true ||
-          (typeof row.isActive === 'boolean' ? !row.isActive : false),
+          (typeof row.isActive === "boolean" ? !row.isActive : false),
   };
 }
 
-function normalizeFeesBreakdown(raw: unknown): AdminDashboardStats['feesBreakdown'] {
+function normalizeFeesBreakdown(
+  raw: unknown,
+): AdminDashboardStats["feesBreakdown"] {
   const o = asRecord(raw);
   if (!o) return undefined;
   return {
@@ -96,7 +97,7 @@ function normalizeFeesBreakdown(raw: unknown): AdminDashboardStats['feesBreakdow
   };
 }
 
-function normalizeLobbyStats(raw: unknown): AdminDashboardStats['lobbyStats'] {
+function normalizeLobbyStats(raw: unknown): AdminDashboardStats["lobbyStats"] {
   const o = asRecord(raw);
   if (!o) return undefined;
   return {
@@ -113,8 +114,7 @@ export function normalizeDashboardStats(raw: unknown): AdminDashboardStats {
   const inner = root?.data != null ? asRecord(root.data) : root;
   const data = inner ?? {};
   const feesRaw = data.feesBreakdown ?? data.feeBreakdown;
-  const userSelf =
-    num(data.userSelfTopupsINR) ?? num(data.totalDepositsINR);
+  const userSelf = num(data.userSelfTopupsINR) ?? num(data.totalDepositsINR);
   const deposits = num(data.totalDepositsINR) ?? num(data.userSelfTopupsINR);
   const lobbyBase = normalizeLobbyStats(data.lobbyStats);
   const activeLobbies = num(data.activeLobbyCount);
@@ -137,16 +137,19 @@ export function normalizeDashboardStats(raw: unknown): AdminDashboardStats {
       num(data.totalTopupGC) ??
       num(data.totalTopUpGC),
     totalTopupGC: num(data.totalTopupGC ?? data.totalTopUpGC),
-    activeLobbyCount:
-      activeLobbies ?? lobbyBase?.running,
+    activeLobbyCount: activeLobbies ?? lobbyBase?.running,
     lobbyStats: lobbyStatsMerged,
     prizePoolDistributed: num(data.prizePoolDistributed),
     totalHostFeePaid: num(data.totalHostFeePaid),
     platformFeeCollected: num(data.platformFeeCollected),
     casterFeeCollected: num(data.casterFeeCollected),
     platformProfit: num(data.platformProfit ?? data.tournamentFeeProfitINR),
-    tournamentFeeProfitINR: num(data.tournamentFeeProfitINR ?? data.platformProfit),
-    netProfit: num(data.netProfit ?? data.platformProfit ?? data.tournamentFeeProfitINR),
+    tournamentFeeProfitINR: num(
+      data.tournamentFeeProfitINR ?? data.platformProfit,
+    ),
+    netProfit: num(
+      data.netProfit ?? data.platformProfit ?? data.tournamentFeeProfitINR,
+    ),
     walletNetFlowINR: num(data.walletNetFlowINR),
     feesBreakdown: normalizeFeesBreakdown(feesRaw),
   };
@@ -155,18 +158,17 @@ export function normalizeDashboardStats(raw: unknown): AdminDashboardStats {
 /**
  * SSE / stream payloads: `{ type: "dashboard", data: { ... } }` or wrapped `{ data: stats }`.
  */
-export function parseAdminDashboardStreamPayload(raw: unknown): AdminDashboardStats | null {
+export function parseAdminDashboardStreamPayload(
+  raw: unknown,
+): AdminDashboardStats | null {
   try {
-    const parsed =
-      typeof raw === 'string'
-        ? (JSON.parse(raw) as unknown)
-        : raw;
+    const parsed = typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
     const o = asRecord(parsed);
     if (!o) return null;
-    if (o.type === 'dashboard' && o.data != null) {
+    if (o.type === "dashboard" && o.data != null) {
       return normalizeDashboardStats({ data: o.data });
     }
-    if (o.type === 'stats' && o.data != null) {
+    if (o.type === "stats" && o.data != null) {
       return normalizeDashboardStats({ data: o.data });
     }
     return normalizeDashboardStats(parsed);
@@ -184,19 +186,25 @@ export async function fetchAdminDashboardStats(): Promise<AdminDashboardStats> {
 
 /** Full URL for SSE (browser EventSource cannot send Authorization header). */
 export function buildAdminDashboardStreamUrl(accessToken: string): string {
-  const base = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined)?.replace(/\/$/, '') || '';
-  const path = API_ENDPOINTS.ADMIN.DASHBOARD_STREAM.replace(/^\//, '');
+  const base =
+    (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined)?.replace(
+      /\/$/,
+      "",
+    ) || "";
+  const path = API_ENDPOINTS.ADMIN.DASHBOARD_STREAM.replace(/^\//, "");
   const t = encodeURIComponent(accessToken);
   return `${base}/${path}?access_token=${t}`;
 }
 
 function formatChartLabel(raw: string): string {
   const s = raw.trim();
-  if (!s) return '';
+  if (!s) return "";
   const ts = Date.parse(s);
   if (!Number.isNaN(ts)) {
     try {
-      return new Intl.DateTimeFormat('en', { weekday: 'short' }).format(new Date(ts));
+      return new Intl.DateTimeFormat("en", { weekday: "short" }).format(
+        new Date(ts),
+      );
     } catch {
       return s.length > 6 ? s.slice(0, 6) : s;
     }
@@ -208,7 +216,7 @@ function toNumArrayLoose(v: unknown): number[] | undefined {
   if (!Array.isArray(v) || v.length === 0) return undefined;
   const out: number[] = [];
   for (const x of v) {
-    const n = typeof x === 'number' ? x : Number(x);
+    const n = typeof x === "number" ? x : Number(x);
     out.push(Number.isFinite(n) ? n : 0);
   }
   return out;
@@ -219,7 +227,10 @@ function toLabelArray(v: unknown): string[] | undefined {
   return v.map((x) => formatChartLabel(String(x)));
 }
 
-function pickNumberSeries(obj: Record<string, unknown>, keys: string[]): number[] | undefined {
+function pickNumberSeries(
+  obj: Record<string, unknown>,
+  keys: string[],
+): number[] | undefined {
   for (const k of keys) {
     const arr = toNumArrayLoose(obj[k]);
     if (arr && arr.length) return arr;
@@ -227,7 +238,10 @@ function pickNumberSeries(obj: Record<string, unknown>, keys: string[]): number[
   return undefined;
 }
 
-function pickLabelSeries(obj: Record<string, unknown>, keys: string[]): string[] | undefined {
+function pickLabelSeries(
+  obj: Record<string, unknown>,
+  keys: string[],
+): string[] | undefined {
   for (const k of keys) {
     const v = obj[k];
     if (Array.isArray(v) && v.length) return toLabelArray(v);
@@ -243,13 +257,18 @@ function seriesFromPointRows(rows: unknown[]): AdminFinancialSeries | null {
   for (const r of rows) {
     const o = asRecord(r);
     if (!o) continue;
-    const rawLabel = o.label ?? o.date ?? o.period ?? o.week ?? o.month ?? o.day ?? o.name;
+    const rawLabel =
+      o.label ?? o.date ?? o.period ?? o.week ?? o.month ?? o.day ?? o.name;
     const label =
       rawLabel != null && String(rawLabel).trim()
         ? formatChartLabel(String(rawLabel))
         : String(idx + 1);
-    const inc = num(o.totalIncome ?? o.income ?? o.totalIncomeINR ?? o.deposits ?? o.deposit);
-    const pr = num(o.netProfit ?? o.profit ?? o.netProfitINR ?? o.platformProfit);
+    const inc = num(
+      o.totalIncome ?? o.income ?? o.totalIncomeINR ?? o.deposits ?? o.deposit,
+    );
+    const pr = num(
+      o.netProfit ?? o.profit ?? o.netProfitINR ?? o.platformProfit,
+    );
     if (inc == null && pr == null) continue;
     labels.push(label);
     totalIncome.push(inc ?? 0);
@@ -263,20 +282,26 @@ function seriesFromPointRows(rows: unknown[]): AdminFinancialSeries | null {
 function mergeFlexibleSeries(
   labels: string[] | undefined,
   income: number[] | undefined,
-  profit: number[] | undefined
+  profit: number[] | undefined,
 ): AdminFinancialSeries | null {
   const ni = income?.length ?? 0;
   const np = profit?.length ?? 0;
   if (ni === 0 && np === 0) return null;
   const n = Math.max(ni, np, labels?.length ?? 0, 1);
-  const inc = Array.from({ length: n }, (_, i) => (i < ni && income ? income[i]! : 0));
-  const pr = Array.from({ length: n }, (_, i) => (i < np && profit ? profit[i]! : 0));
+  const inc = Array.from({ length: n }, (_, i) =>
+    i < ni && income ? income[i]! : 0,
+  );
+  const pr = Array.from({ length: n }, (_, i) =>
+    i < np && profit ? profit[i]! : 0,
+  );
   let L: string[];
   if (labels && labels.length >= n) L = labels.slice(0, n);
   else if (labels && labels.length > 0) {
     L = [
       ...labels,
-      ...Array.from({ length: n - labels.length }, (_, i) => String(labels.length + i + 1)),
+      ...Array.from({ length: n - labels.length }, (_, i) =>
+        String(labels.length + i + 1),
+      ),
     ];
   } else {
     L = Array.from({ length: n }, (_, i) => String(i + 1));
@@ -288,14 +313,16 @@ function seriesHasPoints(s: AdminFinancialSeries): boolean {
   return s.totalIncome.length > 0 || s.netProfit.length > 0;
 }
 
-function extractFinancialSeriesFromData(data: Record<string, unknown>): AdminFinancialSeries | null {
+function extractFinancialSeriesFromData(
+  data: Record<string, unknown>,
+): AdminFinancialSeries | null {
   const nestedKeys = [
-    'financialAnalytics',
-    'analytics',
-    'financial',
-    'chart',
-    'timeSeries',
-    'timeseries',
+    "financialAnalytics",
+    "analytics",
+    "financial",
+    "chart",
+    "timeSeries",
+    "timeseries",
   ];
   for (const nk of nestedKeys) {
     const inner = asRecord(data[nk]);
@@ -306,42 +333,42 @@ function extractFinancialSeriesFromData(data: Record<string, unknown>): AdminFin
   }
 
   const rows = data.series ?? data.points ?? data.buckets ?? data.records;
-  if (Array.isArray(rows) && rows.length && typeof rows[0] === 'object') {
+  if (Array.isArray(rows) && rows.length && typeof rows[0] === "object") {
     const fromRows = seriesFromPointRows(rows);
     if (fromRows) return fromRows;
   }
 
   const income = pickNumberSeries(data, [
-    'totalIncome',
-    'totalIncomeINR',
-    'income',
-    'totalDeposits',
-    'totalDepositsINR',
-    'deposits',
-    'rewards',
-    'totalRewards',
-    'totalIncomeSeries',
-    'incomes',
-    'depositSeries',
-    'depositTrend',
+    "totalIncome",
+    "totalIncomeINR",
+    "income",
+    "totalDeposits",
+    "totalDepositsINR",
+    "deposits",
+    "rewards",
+    "totalRewards",
+    "totalIncomeSeries",
+    "incomes",
+    "depositSeries",
+    "depositTrend",
   ]);
   const profit = pickNumberSeries(data, [
-    'netProfit',
-    'netProfitINR',
-    'profit',
-    'profits',
-    'platformProfit',
-    'profitSeries',
-    'netProfits',
-    'profitTrend',
+    "netProfit",
+    "netProfitINR",
+    "profit",
+    "profits",
+    "platformProfit",
+    "profitSeries",
+    "netProfits",
+    "profitTrend",
   ]);
   const labels = pickLabelSeries(data, [
-    'labels',
-    'categories',
-    'dates',
-    'periods',
-    'xLabels',
-    'axisLabels',
+    "labels",
+    "categories",
+    "dates",
+    "periods",
+    "xLabels",
+    "axisLabels",
   ]);
 
   return mergeFlexibleSeries(labels, income, profit);
@@ -359,7 +386,7 @@ export function normalizeFinancialSeries(raw: unknown): AdminFinancialSeries {
  * One analytics request (lowercase `period`, Swagger-style), then one stats fallback — no casing retries.
  */
 export async function fetchAdminFinancialSeries(
-  period: AdminFinancePeriod
+  period: AdminFinancePeriod,
 ): Promise<AdminFinancialSeries> {
   const p = String(period).toLowerCase() as AdminFinancePeriod;
   try {
@@ -397,7 +424,11 @@ export type FetchAdminUsersParams = {
   role?: AdminUserRoleFilter;
 };
 
-function normalizeUsersPage(raw: unknown, page: number, limit: number): AdminUsersPage {
+function normalizeUsersPage(
+  raw: unknown,
+  page: number,
+  limit: number,
+): AdminUsersPage {
   const root = asRecord(raw);
   const data = root?.data != null ? asRecord(root.data) : root;
   const d = data ?? {};
@@ -420,8 +451,7 @@ function normalizeUsersPage(raw: unknown, page: number, limit: number): AdminUse
     items.length;
   const totalPagesRaw = num(d.totalPages) ?? num(d.pages);
   const totalPages =
-    totalPagesRaw ??
-    (limit > 0 ? Math.max(1, Math.ceil(total / limit)) : 1);
+    totalPagesRaw ?? (limit > 0 ? Math.max(1, Math.ceil(total / limit)) : 1);
 
   return {
     items,
@@ -433,24 +463,30 @@ function normalizeUsersPage(raw: unknown, page: number, limit: number): AdminUse
 }
 
 /** Query `role` — align with backend `UserRole` / typical Swagger enums. */
-function adminRoleFilterToApiParam(role: AdminUserRoleFilter): string | undefined {
-  if (role === 'ALL') return undefined;
-  const map: Record<Exclude<AdminUserRoleFilter, 'ALL'>, string> = {
-    ADMIN: 'admin',
-    HOST: 'host',
-    USER: 'user',
-    ORG_MANAGER: 'org_manager',
+function adminRoleFilterToApiParam(
+  role: AdminUserRoleFilter,
+): string | undefined {
+  if (role === "ALL") return undefined;
+  const map: Record<Exclude<AdminUserRoleFilter, "ALL">, string> = {
+    ADMIN: "admin",
+    HOST: "host",
+    USER: "user",
+    ORG_MANAGER: "org_manager",
   };
   return map[role];
 }
 
-export async function fetchAdminUsers(params: FetchAdminUsersParams): Promise<AdminUsersPage> {
+export async function fetchAdminUsers(
+  params: FetchAdminUsersParams,
+): Promise<AdminUsersPage> {
   const page = params.page ?? 1;
   const limit = params.limit ?? 10;
   const query: Record<string, string | number | undefined> = { page, limit };
   const q = params.search?.trim();
   if (q) query.search = q;
-  const roleParam = params.role ? adminRoleFilterToApiParam(params.role) : undefined;
+  const roleParam = params.role
+    ? adminRoleFilterToApiParam(params.role)
+    : undefined;
   if (roleParam) query.role = roleParam;
 
   const raw = await request<unknown>(API_ENDPOINTS.ADMIN.USERS, {
@@ -461,20 +497,24 @@ export async function fetchAdminUsers(params: FetchAdminUsersParams): Promise<Ad
 }
 
 export async function blockAdminUsers(userIds: string[]): Promise<void> {
-  const ids = [...new Set(userIds.map((x) => String(x).trim()).filter(Boolean))];
+  const ids = [
+    ...new Set(userIds.map((x) => String(x).trim()).filter(Boolean)),
+  ];
   if (ids.length === 0) return;
   await request<unknown>(API_ENDPOINTS.ADMIN.USERS_BLOCK, {
-    method: 'POST',
+    method: "POST",
     body: { userIds: ids },
     toast: false,
   });
 }
 
 export async function unblockAdminUsers(userIds: string[]): Promise<void> {
-  const ids = [...new Set(userIds.map((x) => String(x).trim()).filter(Boolean))];
+  const ids = [
+    ...new Set(userIds.map((x) => String(x).trim()).filter(Boolean)),
+  ];
   if (ids.length === 0) return;
   await request<unknown>(API_ENDPOINTS.ADMIN.USERS_UNBLOCK, {
-    method: 'POST',
+    method: "POST",
     body: { userIds: ids },
     toast: false,
   });
@@ -487,17 +527,21 @@ export type AdminManualAccountCreateBody = {
   password: string;
 };
 
-export async function createAdminHost(body: AdminManualAccountCreateBody): Promise<unknown> {
+export async function createAdminHost(
+  body: AdminManualAccountCreateBody,
+): Promise<unknown> {
   return request<unknown>(API_ENDPOINTS.ADMIN.HOSTS_CREATE, {
-    method: 'POST',
+    method: "POST",
     body,
     toast: false,
   });
 }
 
-export async function createAdminOrgManager(body: AdminManualAccountCreateBody): Promise<unknown> {
+export async function createAdminOrgManager(
+  body: AdminManualAccountCreateBody,
+): Promise<unknown> {
   return request<unknown>(API_ENDPOINTS.ADMIN.ORG_MANAGERS_CREATE, {
-    method: 'POST',
+    method: "POST",
     body,
     toast: false,
   });
@@ -513,9 +557,11 @@ export type AdminCreateOrgBody = {
   };
 };
 
-export async function createAdminOrganization(body: AdminCreateOrgBody): Promise<unknown> {
+export async function createAdminOrganization(
+  body: AdminCreateOrgBody,
+): Promise<unknown> {
   return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS, {
-    method: 'POST',
+    method: "POST",
     body,
     toast: false,
   });
@@ -530,26 +576,35 @@ export type FetchAdminOrgsParams = {
 function normalizeOrgRow(raw: unknown): AdminOrganization | null {
   const row = asRecord(raw);
   if (!row) return null;
-  const id = strId(row._id) || strId(row.id) || strId(row.orgId) || '';
-  const name = row.name != null ? String(row.name).trim() : '';
+  const id = strId(row._id) || strId(row.id) || strId(row.orgId) || "";
+  const name = row.name != null ? String(row.name).trim() : "";
   if (!id || !name) return null;
   const manager = asRecord(row.manager);
   return {
     id,
     name,
-    slug: row.slug != null ? String(row.slug).trim() : '',
+    slug: row.slug != null ? String(row.slug).trim() : "",
     managerEmail: manager?.email != null ? String(manager.email) : undefined,
     managerName: manager?.name != null ? String(manager.name) : undefined,
-    managerId: manager?._id != null ? String(manager._id) : manager?.id != null ? String(manager.id) : undefined,
+    managerId:
+      manager?._id != null
+        ? String(manager._id)
+        : manager?.id != null
+          ? String(manager.id)
+          : undefined,
     isBlocked:
-      typeof row.isBlocked === 'boolean'
+      typeof row.isBlocked === "boolean"
         ? row.isBlocked
         : row.blocked === true ||
-          (typeof row.isActive === 'boolean' ? !row.isActive : false),
+          (typeof row.isActive === "boolean" ? !row.isActive : false),
   };
 }
 
-function normalizeOrgsPage(raw: unknown, page: number, limit: number): AdminOrganizationsPage {
+function normalizeOrgsPage(
+  raw: unknown,
+  page: number,
+  limit: number,
+): AdminOrganizationsPage {
   const root = asRecord(raw);
   const data = root?.data != null ? asRecord(root.data) : root;
   const d = data ?? {};
@@ -579,7 +634,9 @@ function normalizeOrgsPage(raw: unknown, page: number, limit: number): AdminOrga
   };
 }
 
-export async function fetchAdminOrganizations(params: FetchAdminOrgsParams): Promise<AdminOrganizationsPage> {
+export async function fetchAdminOrganizations(
+  params: FetchAdminOrgsParams,
+): Promise<AdminOrganizationsPage> {
   const page = params.page ?? 1;
   const limit = params.limit ?? 20;
   const query: Record<string, string | number | undefined> = { page, limit };
@@ -601,25 +658,374 @@ export type AdminUpdateOrgManagerBody = {
 
 export async function updateAdminOrgManager(
   orgId: string,
-  body: AdminUpdateOrgManagerBody
+  body: AdminUpdateOrgManagerBody,
 ): Promise<unknown> {
-  return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS_UPDATE_MANAGER(orgId), {
-    method: 'PATCH',
-    body,
-    toast: false,
-  });
+  return request<unknown>(
+    API_ENDPOINTS.ADMIN.ORGANIZATIONS_UPDATE_MANAGER(orgId),
+    {
+      method: "PATCH",
+      body,
+      toast: false,
+    },
+  );
 }
 
 export async function blockAdminOrganization(orgId: string): Promise<unknown> {
   return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS_BLOCK(orgId), {
-    method: 'PATCH',
+    method: "PATCH",
     toast: false,
   });
 }
 
-export async function unblockAdminOrganization(orgId: string): Promise<unknown> {
+export async function unblockAdminOrganization(
+  orgId: string,
+): Promise<unknown> {
   return request<unknown>(API_ENDPOINTS.ADMIN.ORGANIZATIONS_UNBLOCK(orgId), {
-    method: 'PATCH',
+    method: "PATCH",
     toast: false,
   });
+}
+
+/** Body for `POST /admin/generate-lobbies` (admin only). */
+export type AdminGenerateLobbiesBody = {
+  date: string;
+  timeSlots: string[];
+  mode: string;
+  subModes: string[];
+  price: number;
+  entryFees: number[];
+  totalMatches: number;
+  game: string;
+  games: string[];
+  /** Empty = server can derive labels from lobby index + time (fees/prize pool still server-side). */
+  lobbyName?: string;
+};
+
+export async function generateAdminLobbies(
+  body: AdminGenerateLobbiesBody,
+): Promise<unknown> {
+  return request<unknown>(API_ENDPOINTS.ADMIN.GENERATE_LOBBIES, {
+    method: "POST",
+    body,
+  });
+}
+
+function normalizeCatalogGame(raw: unknown): AdminCatalogGame | null {
+  const o = asRecord(raw);
+  if (!o) return null;
+  const title = o.title != null ? String(o.title).trim() : "";
+  const slug = o.slug != null ? String(o.slug).trim() : "";
+  if (!title || !slug) return null;
+  const platform = o.platform != null ? String(o.platform).trim() : undefined;
+  return { title, slug, platform: platform || undefined };
+}
+
+/** `GET /admin/games/catalog` — admin JWT required. */
+export async function fetchAdminGamesCatalog(): Promise<AdminCatalogGame[]> {
+  const raw = await request<unknown>(API_ENDPOINTS.ADMIN.GAMES_CATALOG, {
+    toast: false,
+  });
+  const root = asRecord(raw);
+  const data = root?.data != null ? asRecord(root.data) : root;
+  const gamesRaw = data?.games;
+  if (!Array.isArray(gamesRaw)) return [];
+  const items = gamesRaw
+    .map((row) => normalizeCatalogGame(row))
+    .filter((x): x is AdminCatalogGame => x != null);
+  const bySlug = new Map<string, AdminCatalogGame>();
+  for (const g of items) {
+    const key = g.slug.toLowerCase();
+    if (!bySlug.has(key)) bySlug.set(key, g);
+  }
+  return Array.from(bySlug.values()).sort((a, b) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+  );
+}
+
+function normalizeAdminTournamentRow(raw: unknown): AdminTournamentRow | null {
+  const o = asRecord(raw);
+  if (!o) return null;
+  const id =
+    strId(o._id) ||
+    strId(o.id) ||
+    strId(o.tournamentId) ||
+    strId(o.lobbyGroupId) ||
+    "";
+  if (!id) return null;
+  const status =
+    o.status != null ? String(o.status).trim() : undefined;
+  const mode =
+    o.mode != null ? String(o.mode).trim() : undefined;
+  const subMode =
+    (o.subMode ?? o.submode ?? o.sub_mode) != null
+      ? String(o.subMode ?? o.subMode ?? o.sub_mode).trim()
+      : undefined;
+  const gameRaw = o.game ?? o.gameSlug ?? o.gameTitle ?? o.title;
+  const game =
+    gameRaw != null ? String(gameRaw).trim() : undefined;
+  const dateRaw = o.date ?? o.day ?? o.lobbyDate;
+  const date =
+    dateRaw != null ? String(dateRaw).trim() : undefined;
+  const fromDateRaw = o.fromDate ?? o.startDate;
+  const toDateRaw = o.toDate ?? o.endDate;
+  const fromDate =
+    fromDateRaw != null ? String(fromDateRaw).trim() : undefined;
+  const toDate =
+    toDateRaw != null ? String(toDateRaw).trim() : undefined;
+  const nameRaw =
+    o.name ?? o.label ?? o.tournamentName ?? o.lobbyGroupName ?? o.lobbyName;
+  const name = nameRaw != null ? String(nameRaw).trim() : undefined;
+  const lobbyName =
+    o.lobbyName != null ? String(o.lobbyName).trim() : name;
+  const lobbyCount =
+    num(o.lobbyCount ?? o.lobbiesCount ?? o.totalLobbies ?? o.lobbyTotal);
+
+  const startTimeRaw =
+    o.startTime ??
+    o.startTimeIST ??
+    o.startTimeLocal ??
+    o.start_time ??
+    o.startAt;
+  const startTime =
+    startTimeRaw != null ? String(startTimeRaw).trim() : undefined;
+
+  const maxTeams =
+    num(o.maxTeams ?? o.max_teams ?? o.maxPlayers ?? o.maxSlots) ?? undefined;
+
+  const potentialPrize = asRecord(o.potentialPrizePool);
+  const winnerPrizePool =
+    num(
+      (potentialPrize as { winnerPool?: unknown })?.winnerPool ??
+        (potentialPrize as { winnerPrizePool?: unknown })?.winnerPrizePool ??
+        o.winnerPrizePool ??
+        o.winner_pool,
+    ) ?? undefined;
+  const totalFees =
+    num(
+      (potentialPrize as { totalFees?: unknown })?.totalFees ??
+        o.totalFees ??
+        o.feesTotal,
+    ) ?? undefined;
+  const totalPrizePool =
+    num(
+      (potentialPrize as { totalPrizePool?: unknown })?.totalPrizePool ??
+        o.totalPrizePool,
+    ) ?? undefined;
+
+  const entryFee =
+    num(o.entryFee ?? o.entry_fee) ??
+    (Array.isArray(o.entryFees) && o.entryFees.length
+      ? num(o.entryFees[0])
+      : undefined);
+
+  const joinedTeams: unknown[] | undefined = Array.isArray(o.joinedTeams)
+    ? o.joinedTeams
+    : Array.isArray(o.joinedTeamsIds)
+      ? o.joinedTeamsIds
+      : undefined;
+  const joinedCount =
+    num(o.joinedTeamsCount ?? o.joinedCount) ??
+    (joinedTeams ? joinedTeams.length : undefined);
+  const slotsAvailable =
+    maxTeams != null && joinedCount != null
+      ? Math.max(0, maxTeams - joinedCount)
+      : undefined;
+
+  return {
+    id,
+    status,
+    mode,
+    subMode,
+    game,
+    date,
+    fromDate,
+    toDate,
+    name,
+    lobbyName,
+    lobbyCount,
+    startTime,
+    maxTeams,
+    winnerPrizePool,
+    totalFees,
+    totalPrizePool,
+    entryFee,
+    joinedCount,
+    slotsAvailable,
+  };
+}
+
+export type FetchAdminTournamentsParams = {
+  status?: "upcoming" | "live" | "completed" | "pendingResult" | "cancelled";
+  /** Exclusive specific-day filter (yyyy-mm-dd). */
+  date?: string;
+  /** Range start (yyyy-mm-dd) for upcoming or history views. */
+  fromDate?: string;
+  /** Range end (yyyy-mm-dd). */
+  toDate?: string;
+  /** solo, duo, squad, 1v1, 2v2, 4v4, depending on backend. */
+  subMode?: string;
+  /** BR, CS, LW etc. */
+  mode?: string;
+  /** Optional game slug or name, e.g. `freefire`, `bgmi`. */
+  game?: string;
+};
+
+export async function fetchAdminTournaments(
+  params: FetchAdminTournamentsParams,
+): Promise<AdminTournamentRow[]> {
+  const query: Record<string, string> = {};
+  if (params.status) query.status = params.status;
+  if (params.date) query.date = params.date;
+  if (params.fromDate) query.fromDate = params.fromDate;
+  if (params.toDate) query.toDate = params.toDate;
+  if (params.subMode) query.subMode = params.subMode;
+  if (params.mode) query.mode = params.mode;
+  if (params.game) query.game = params.game;
+
+  const raw = await request<unknown>(API_ENDPOINTS.ADMIN.TOURNAMENTS, {
+    params: query,
+    toast: false,
+  });
+  const root = asRecord(raw);
+  const data = root?.data ?? raw;
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { items?: unknown[] })?.items)
+      ? (data as { items: unknown[] }).items
+      : Array.isArray((data as { tournaments?: unknown[] })?.tournaments)
+        ? (data as { tournaments: unknown[] }).tournaments
+        : [];
+  return list
+    .map((row) => normalizeAdminTournamentRow(row))
+    .filter((x): x is AdminTournamentRow => x != null);
+}
+
+function normalizeAdminHostApplication(raw: unknown): AdminHostApplication | null {
+  const o = asRecord(raw);
+  if (!o) return null;
+  const id =
+    strId(o._id) ||
+    strId(o.id) ||
+    strId(o.applicationId) ||
+    strId(o.hostApplicationId) ||
+    "";
+  if (!id) return null;
+
+  const hostId =
+    strId(o.hostId) ||
+    strId(o.userId) ||
+    strId(o.uid) ||
+    undefined;
+  const tournamentId =
+    strId((o as { tournamentId?: unknown }).tournamentId) ||
+    strId((o as { lobbyGroupId?: unknown }).lobbyGroupId) ||
+    undefined;
+
+  const hostNameRaw =
+    (o as { hostName?: unknown }).hostName ??
+    (o as { name?: unknown }).name ??
+    (o as { fullName?: unknown }).fullName ??
+    (o as { displayName?: unknown }).displayName;
+  const hostEmailRaw =
+    (o as { hostEmail?: unknown }).hostEmail ??
+    (o as { email?: unknown }).email;
+
+  const status =
+    (o as { status?: unknown }).status != null
+      ? String((o as { status?: unknown }).status).trim()
+      : undefined;
+  const adminNotes =
+    (o as { adminNotes?: unknown }).adminNotes != null
+      ? String((o as { adminNotes?: unknown }).adminNotes)
+      : undefined;
+  const createdAtRaw =
+    (o as { createdAt?: unknown }).createdAt ??
+    (o as { created_at?: unknown }).created_at ??
+    (o as { appliedAt?: unknown }).appliedAt;
+  const createdAt =
+    createdAtRaw != null ? String(createdAtRaw).trim() : undefined;
+
+  return {
+    id,
+    hostId: hostId || undefined,
+    tournamentId: tournamentId || undefined,
+    hostName:
+      hostNameRaw != null && String(hostNameRaw).trim()
+        ? String(hostNameRaw).trim()
+        : undefined,
+    hostEmail:
+      hostEmailRaw != null && String(hostEmailRaw).trim()
+        ? String(hostEmailRaw).trim()
+        : undefined,
+    status,
+    adminNotes,
+    createdAt,
+  };
+}
+
+export type FetchAdminHostApplicationsParams = {
+  page?: number;
+  limit?: number;
+  /** Filter by application status (backend: pending | approved | rejected). */
+  status?: "pending" | "approved" | "rejected";
+};
+
+export async function fetchAdminHostApplications(
+  params: FetchAdminHostApplicationsParams,
+): Promise<AdminHostApplication[]> {
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 10;
+  const query: Record<string, string | number> = { page, limit };
+  if (params.status) query.status = params.status;
+
+  const raw = await request<unknown>(API_ENDPOINTS.ADMIN.HOST_APPLICATIONS, {
+    params: query,
+    toast: false,
+  });
+  const root = asRecord(raw);
+  const data = root?.data ?? raw;
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { items?: unknown[] })?.items)
+      ? (data as { items: unknown[] }).items
+      : Array.isArray((data as { applications?: unknown[] })?.applications)
+        ? (data as { applications: unknown[] }).applications
+        : [];
+  return list
+    .map((row) => normalizeAdminHostApplication(row))
+    .filter((x): x is AdminHostApplication => x != null);
+}
+
+export async function approveAdminHostApplication(
+  applicationId: string,
+): Promise<void> {
+  const id = String(applicationId).trim();
+  if (!id) return;
+  await request<unknown>(
+    API_ENDPOINTS.ADMIN.HOST_APPLICATION_APPROVE(id),
+    {
+      method: "POST",
+      toast: false,
+    },
+  );
+}
+
+export type RejectAdminHostApplicationBody = {
+  adminNotes?: string;
+};
+
+export async function rejectAdminHostApplication(
+  applicationId: string,
+  body?: RejectAdminHostApplicationBody,
+): Promise<void> {
+  const id = String(applicationId).trim();
+  if (!id) return;
+  await request<unknown>(
+    API_ENDPOINTS.ADMIN.HOST_APPLICATION_REJECT(id),
+    {
+      method: "POST",
+      body: body && body.adminNotes ? body : undefined,
+      toast: false,
+    },
+  );
 }

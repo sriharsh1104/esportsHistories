@@ -14,12 +14,12 @@ import { Redirect, router, useSegments } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import React, { useMemo } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
+    ActivityIndicator,
+    Image,
+    Pressable,
+    ScrollView,
+    Text,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -34,6 +34,18 @@ const MENU_ITEMS_BASE = [
     icon: "user-plus" as const,
     label: "Create accounts",
     route: ROUTES.ADMIN_CREATE_ACCOUNTS,
+    adminOnly: true as const,
+  },
+  {
+    icon: "trophy" as const,
+    label: "Tournament",
+    route: ROUTES.ADMIN_TOURNAMENT,
+    adminOnly: true as const,
+  },
+  {
+    icon: "list-alt" as const,
+    label: "Lobby Records",
+    route: ROUTES.ADMIN_TOURNAMENT_RECORD,
     adminOnly: true as const,
   },
   { icon: "credit-card" as const, label: "Wallet", route: ROUTES.WALLET },
@@ -313,6 +325,22 @@ export default function DrawerLayout() {
         name="admin-create-accounts"
         options={{
           title: "Create accounts",
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: !isLockedForGameSelection,
+        }}
+      />
+      <Drawer.Screen
+        name="admin-tournament"
+        options={{
+          title: "Tournament",
+          drawerItemStyle: { display: "none" },
+          swipeEnabled: !isLockedForGameSelection,
+        }}
+      />
+      <Drawer.Screen
+        name="admin-tournament-record"
+        options={{
+          title: "Lobby Records",
           drawerItemStyle: { display: "none" },
           swipeEnabled: !isLockedForGameSelection,
         }}

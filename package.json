@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
+    "dev": "APP_ENV=development expo start",
     "start": "APP_ENV=development expo start",
     "start:stage": "APP_ENV=stage expo start",
     "start:prod": "APP_ENV=production expo start",

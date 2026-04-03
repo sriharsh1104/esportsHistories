@@ -78,6 +78,17 @@ export function MyComponent({ title }: Props) {
   - **Empty states**
 - Never ignore a promise. Either `await` it or explicitly handle it.
 
+## Global loader & loading UX (this project)
+
+- **Blocking, app-wide async** (auth, wallet, payments, critical submits): use Redux `showLoader` / `hideLoader` from `@/store/slices/loaderSlice`. Always call `hideLoader` in `finally` (or on every error path). Do not add a second full-screen loading `Modal` or duplicate `GlobalLoader` (it is mounted once in `app/_layout.tsx`).
+- **Full-screen loading inside `Screen`**: use the `isLoading` prop on `components/ui/Screen.tsx`.
+- **Lists / sections**: local `ActivityIndicator` with `colors.tint` is appropriate.
+- **Toasts**: use `react-native-toast-message` as existing screens do; `Toaster` is wired in the root layout.
+
+## Tooling
+
+- **Dev server**: prefer `npm run dev` or `npm run start` (not a missing `dev` script). **Web**: `npm run web`. Static export for hosting uses `expo export` (config picks `web.output: 'static'` automatically). To force SPA mode anytime: `EXPO_WEB_OUTPUT=single`.
+
 ## Styling
 
 - Prefer **StyleSheet.create** or **typed style helpers** over inline objects where styles are reused.

@@ -671,9 +671,50 @@ function inferMimeTypeFromName(name: string): string | null {
 }
 
 function getTokenFields(data: any): { token: string; refreshToken: string } {
-  const token = data?.accessToken ?? data?.token ?? data?.access_token ?? '';
-  const refreshToken = data?.refreshToken ?? data?.refresh_token ?? '';
-  return { token: String(token), refreshToken: String(refreshToken) };
+  /**
+   * Backends return tokens in a variety of shapes:
+   * - flat: { accessToken, refreshToken }
+   * - envelope: { data: { accessToken, refreshToken } }
+   * - nested: { tokens: { accessToken, refreshToken } }
+   * - legacy: { token, refresh_token }
+   *
+   * To keep session stable (especially for admin flows), aggressively
+   * search the common locations instead of assuming one shape.
+   */
+  const root = data ?? {};
+  const candidates: any[] = [
+    root,
+    root.data ?? {},
+    root.tokens ?? {},
+    // Older shape: { user: { ... }, accessToken, refreshToken }
+    { accessToken: root.accessToken, refreshToken: root.refreshToken },
+  ];
+
+  let token: unknown = '';
+  let refreshToken: unknown = '';
+
+  for (const src of candidates) {
+    if (!src || typeof src !== 'object') continue;
+    if (!token) {
+      token =
+        (src as any).accessToken ??
+        (src as any).token ??
+        (src as any).access_token ??
+        token;
+    }
+    if (!refreshToken) {
+      refreshToken =
+        (src as any).refreshToken ??
+        (src as any).refresh_token ??
+        (src as any).refresh ??
+        refreshToken;
+    }
+  }
+
+  return {
+    token: String(token ?? ''),
+    refreshToken: String(refreshToken ?? ''),
+  };
 }
 
 function decodeJwtExp(token?: string | null): number | null {

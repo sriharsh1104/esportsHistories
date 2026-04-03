@@ -7,6 +7,16 @@ config({ path: resolve(process.cwd(), envFile) });
 console.log(`[Config] Loading ${envFile}`);
 console.log(`[Config] API_BASE_URL: ${process.env.API_BASE_URL}`);
 
+/** Web `output`: `static` runs route prerender/SSR (needed for `expo export`). `single` is SPA-only and avoids flaky stream errors during `expo start --web` ("Premature close"). */
+function getWebOutput() {
+  const explicit = process.env.EXPO_WEB_OUTPUT;
+  if (explicit === 'static' || explicit === 'single' || explicit === 'server') {
+    return explicit;
+  }
+  const isExport = process.argv.includes('export');
+  return isExport ? 'static' : 'single';
+}
+
 export default {
   expo: {
     name: 'Esports Histories',
@@ -33,7 +43,7 @@ export default {
     },
     web: {
       bundler: 'metro',
-      output: 'static',
+      output: getWebOutput(),
       favicon: './assets/images/favicon.png',
     },
     plugins: [

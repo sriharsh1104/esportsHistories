@@ -93,21 +93,21 @@ export const API_ENDPOINTS = {
   },
   /** Admin JWT — dashboard metrics, user listing, etc. */
   ADMIN: {
-    DASHBOARD_STATS: '/admin/dashboard/stats',
-    DASHBOARD_STREAM: '/admin/dashboard/stream',
+    DASHBOARD_STATS: "/admin/dashboard/stats",
+    DASHBOARD_STREAM: "/admin/dashboard/stream",
     /** GET — financial time-series (`period`: daily | weekly | monthly). */
-    ANALYTICS: '/admin/analytics',
-    USERS: '/admin/users',
+    ANALYTICS: "/admin/analytics",
+    USERS: "/admin/users",
     /** POST `{ userIds: string[] }` — set isBlocked true. */
-    USERS_BLOCK: '/admin/users/block',
+    USERS_BLOCK: "/admin/users/block",
     /** POST `{ userIds: string[] }` — set isBlocked false. */
-    USERS_UNBLOCK: '/admin/users/unblock',
+    USERS_UNBLOCK: "/admin/users/unblock",
     /** POST `{ email, name, password }` — create verified host (admin only). */
-    HOSTS_CREATE: '/admin/hosts/create',
+    HOSTS_CREATE: "/admin/hosts/create",
     /** POST `{ email, name, password }` — create org manager (admin only; Swagger path may vary). */
-    ORG_MANAGERS_CREATE: '/org-managers/create',
+    ORG_MANAGERS_CREATE: "/org-managers/create",
     /** POST `{ name, slug, manager: { email, name, password } }` — create organization + dedicated manager. */
-    ORGANIZATIONS: '/admin/organizations',
+    ORGANIZATIONS: "/admin/organizations",
     /** PATCH `{ email, name, password }` — replace org manager. */
     ORGANIZATIONS_UPDATE_MANAGER: (orgId: string) =>
       `/admin/organizations/${encodeURIComponent(orgId)}/manager`,
@@ -117,6 +117,28 @@ export const API_ENDPOINTS = {
     /** PATCH — unblock an organization. */
     ORGANIZATIONS_UNBLOCK: (orgId: string) =>
       `/admin/organizations/${encodeURIComponent(orgId)}/unblock`,
+    /** POST — generate lobbies (admin only; Swagger: `/api/admin/generate-lobbies`). */
+    GENERATE_LOBBIES: "/admin/generate-lobbies",
+    /** GET — game catalog for lobby creation (admin only; Swagger: `/api/admin/games/catalog`). */
+    GAMES_CATALOG: "/admin/games/catalog",
+    /**
+     * GET — tournaments list for admin (Swagger: `/api/admin/tournaments`).
+     * Query: status, date, fromDate, toDate, subMode, mode (backend may treat some as optional).
+     */
+    TOURNAMENTS: "/admin/tournaments",
+    /**
+     * Host applications for tournaments (admin only).
+     *
+     * Swagger:
+     * - `GET /api/admin/host-applications` — query: page, limit, status (`pending` | `approved` | `rejected`).
+     * - `POST /api/admin/host-applications/{applicationId}/approve`
+     * - `POST /api/admin/host-applications/{applicationId}/reject`
+     */
+    HOST_APPLICATIONS: "/admin/host-applications",
+    HOST_APPLICATION_APPROVE: (applicationId: string) =>
+      `/admin/host-applications/${encodeURIComponent(applicationId)}/approve`,
+    HOST_APPLICATION_REJECT: (applicationId: string) =>
+      `/admin/host-applications/${encodeURIComponent(applicationId)}/reject`,
   },
   TOURNAMENT: {
     /**

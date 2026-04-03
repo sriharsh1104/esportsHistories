@@ -67,6 +67,10 @@ export const ROUTES = {
   ADMIN: '/(drawer)/admin',
   /** Admin — manual host / org manager signup forms. */
   ADMIN_CREATE_ACCOUNTS: '/(drawer)/admin-create-accounts',
+  /** Admin — generate tournament lobbies (`POST /admin/generate-lobbies`). */
+  ADMIN_TOURNAMENT: '/(drawer)/admin-tournament',
+  /** Admin — view tournaments / lobbies generated via `/admin/tournaments`. */
+  ADMIN_TOURNAMENT_RECORD: '/(drawer)/admin-tournament-record',
 
   // Drawer
   PROFILE: '/(drawer)/(tabs)/profile',
