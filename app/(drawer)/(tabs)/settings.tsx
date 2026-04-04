@@ -11,6 +11,7 @@ import { useSelectedGames } from '@/context/SelectedGamesContext';
 import { useResponsive } from '@/context/ResponsiveContext';
 import Constants from 'expo-constants';
 import { ROUTES } from '@/constants/routes';
+import { isHostUser } from '@/utils/adminUser';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -105,15 +106,21 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>
           PREFERENCES
         </Text>
-        <Card style={{ ...styles.card, marginBottom: h(12) }} padded={false}>
-          <SettingsRow
-            icon="gamepad"
-            label="Games to follow"
-            value={selectedGameIds.length > 0 ? `${selectedGameIds.length} selected` : 'Not set'}
-            onPress={() => router.push(ROUTES.SELECT_GAMES_SETTINGS)}
-            showArrow={true}
-          />
-        </Card>
+        {!isHostUser(user) ? (
+          <Card style={{ ...styles.card, marginBottom: h(12) }} padded={false}>
+            <SettingsRow
+              icon="gamepad"
+              label="Games to follow"
+              value={
+                selectedGameIds.length > 0
+                  ? `${selectedGameIds.length} selected`
+                  : 'Not set'
+              }
+              onPress={() => router.push(ROUTES.SELECT_GAMES_SETTINGS)}
+              showArrow={true}
+            />
+          </Card>
+        ) : null}
         <Card style={styles.card} padded={false}>
           <SettingsRow
             icon="bell"

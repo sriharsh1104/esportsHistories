@@ -2,6 +2,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
+import { isHostUser } from '@/utils/adminUser';
 import { useResponsive } from '@/context/ResponsiveContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from 'expo-router';
@@ -15,7 +16,7 @@ type FollowHubModalProps = {
 };
 
 export function FollowHubModal({ visible, onClose }: FollowHubModalProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
@@ -37,6 +38,9 @@ export function FollowHubModal({ visible, onClose }: FollowHubModalProps) {
     onClose();
     router.push(path as any);
   };
+
+  /** Host workflow is tournament / wallet — no follow-discovery sheet. */
+  if (isHostUser(user)) return null;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>

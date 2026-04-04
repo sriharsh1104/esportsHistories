@@ -1,50 +1,50 @@
-import { Button, Card, NoDataFound, Screen } from '@/components/ui';
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
-import { useAuth } from '@/context/AuthContext';
-import { useResponsive } from '@/context/ResponsiveContext';
-import { useSelectedGames } from '@/context/SelectedGamesContext';
-import type { TournamentUiItem } from '@/services/tournament.service';
-import { fetchTournamentList } from '@/services/tournament.service';
-import { useAppDispatch } from '@/store/hooks';
-import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { ROUTES } from '@/constants/routes';
-import { router } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Button, Card, ClassicEmptyState, Screen } from "@/components/ui";
+import { useColorScheme } from "@/components/useColorScheme";
+import Colors from "@/constants/Colors";
+import { useAuth } from "@/context/AuthContext";
+import { useResponsive } from "@/context/ResponsiveContext";
+import { useSelectedGames } from "@/context/SelectedGamesContext";
+import type { TournamentUiItem } from "@/services/tournament.service";
+import { fetchTournamentList } from "@/services/tournament.service";
+import { useAppDispatch } from "@/store/hooks";
+import { hideLoader, showLoader } from "@/store/slices/loaderSlice";
+import { router } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 const STATUS_COLORS = {
-  ongoing: '#22c55e',
-  upcoming: '#f59e0b',
-  recent: '#6b7280',
+  ongoing: "#22c55e",
+  upcoming: "#f59e0b",
+  recent: "#6b7280",
 };
 
 function normKey(input: unknown): string {
-  return String(input ?? '')
+  return String(input ?? "")
     .toLowerCase()
     .trim()
-    .replace(/&/g, 'and')
-    .replace(/[^a-z0-9]+/g, '');
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "");
 }
 
-function TournamentCard({
-  item,
-}: {
-  item: TournamentUiItem;
-}) {
-  const scheme = useColorScheme() ?? 'light';
+function TournamentCard({ item }: { item: TournamentUiItem }) {
+  const scheme = useColorScheme() ?? "light";
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
 
   return (
     <Card style={{ marginBottom: h(12) }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
         <View style={{ flex: 1 }}>
           <View
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
+              flexDirection: "row",
+              alignItems: "center",
               gap: w(8),
               marginBottom: h(8),
             }}
@@ -54,29 +54,44 @@ function TournamentCard({
                 paddingHorizontal: w(8),
                 paddingVertical: h(4),
                 borderRadius: w(6),
-                backgroundColor: STATUS_COLORS[item.status] + '25',
+                backgroundColor: STATUS_COLORS[item.status] + "25",
               }}
             >
               <Text
                 style={{
                   fontSize: w(10),
-                  fontWeight: '600',
+                  fontWeight: "600",
                   color: STATUS_COLORS[item.status],
-                  textTransform: 'uppercase',
+                  textTransform: "uppercase",
                 }}
               >
                 {item.status}
               </Text>
             </View>
-            <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>{item.gameName}</Text>
+            <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
+              {item.gameName}
+            </Text>
           </View>
-          <Text style={{ fontSize: w(16), fontWeight: '600', color: colors.text, marginBottom: h(4) }}>
+          <Text
+            style={{
+              fontSize: w(16),
+              fontWeight: "600",
+              color: colors.text,
+              marginBottom: h(4),
+            }}
+          >
             {item.name}
           </Text>
           <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
             {item.prizePool} • {item.teamsCount} teams
           </Text>
-          <Text style={{ fontSize: w(11), color: colors.tabIconDefault, marginTop: h(2) }}>
+          <Text
+            style={{
+              fontSize: w(11),
+              color: colors.tabIconDefault,
+              marginTop: h(2),
+            }}
+          >
             {item.startDate}
           </Text>
         </View>
@@ -89,33 +104,38 @@ export default function TournamentScreen() {
   const dispatch = useAppDispatch();
   const { isAuthenticated } = useAuth();
   const { selectedGameIds, availableGames, refreshGames } = useSelectedGames();
-  const scheme = useColorScheme() ?? 'light';
+  const scheme = useColorScheme() ?? "light";
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
-  const [activeGameId, setActiveGameId] = useState<string | null>(selectedGameIds[0] ?? null);
+  const [activeGameId, setActiveGameId] = useState<string | null>(
+    selectedGameIds[0] ?? null,
+  );
   const [isLoadingTournaments, setIsLoadingTournaments] = useState(false);
   const [tournamentError, setTournamentError] = useState<string | null>(null);
   const [tournaments, setTournaments] = useState<TournamentUiItem[]>([]);
+  const [tournamentFetchKey, setTournamentFetchKey] = useState(0);
 
   const styles = useMemo(
     () => ({
       header: { paddingTop: h(16), paddingBottom: h(24) },
-      title: { fontSize: w(24), fontWeight: '700' as const, marginBottom: h(4) },
+      title: {
+        fontSize: w(24),
+        fontWeight: "700" as const,
+        marginBottom: h(4),
+      },
       subtitle: { fontSize: w(16) },
       section: { marginBottom: h(24) },
       sectionTitle: {
         fontSize: w(14),
-        fontWeight: '600' as const,
+        fontWeight: "600" as const,
         marginBottom: h(12),
         color: colors.tabIconDefault,
       },
-      followCard: {
-        padding: w(16),
-        marginBottom: h(12),
-        borderWidth: 1,
-        borderStyle: 'dashed' as const,
+      centered: {
+        flex: 1,
+        justifyContent: "center" as const,
+        paddingTop: h(48),
       },
-      centered: { flex: 1, justifyContent: 'center' as const, paddingTop: h(48) },
       btn: { maxWidth: w(200) },
       chip: {
         paddingVertical: h(8),
@@ -125,7 +145,7 @@ export default function TournamentScreen() {
         marginRight: w(10),
       },
     }),
-    [w, h, colors.tabIconDefault]
+    [w, h, colors.tabIconDefault],
   );
 
   useEffect(() => {
@@ -178,13 +198,14 @@ export default function TournamentScreen() {
         setTournamentError(null);
         dispatch(showLoader());
         const [live, upcoming] = await Promise.all([
-          fetchTournamentList({ status: 'live', game: activeGame.name }),
-          fetchTournamentList({ status: 'upcoming', game: activeGame.name }),
+          fetchTournamentList({ status: "live", game: activeGame.name }),
+          fetchTournamentList({ status: "upcoming", game: activeGame.name }),
         ]);
         const merged = [...live, ...upcoming];
         if (!cancelled) setTournaments(merged);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to load tournaments';
+        const msg =
+          e instanceof Error ? e.message : "Failed to load tournaments";
         if (!cancelled) {
           setTournamentError(msg);
           setTournaments([]);
@@ -199,7 +220,7 @@ export default function TournamentScreen() {
       cancelled = true;
       dispatch(hideLoader());
     };
-  }, [isAuthenticated, activeGame, dispatch]);
+  }, [isAuthenticated, activeGame, dispatch, tournamentFetchKey]);
 
   const { paidTournaments, specialTournaments } = useMemo(() => {
     const paid: TournamentUiItem[] = [];
@@ -212,19 +233,27 @@ export default function TournamentScreen() {
     return { paidTournaments: paid, specialTournaments: special };
   }, [tournaments]);
 
-  const isEmpty = !isLoadingTournaments && !tournamentError && tournaments.length === 0;
+  const isEmpty =
+    !isLoadingTournaments && !tournamentError && tournaments.length === 0;
 
   if (!isAuthenticated) {
     return (
       <Screen padded maxForm>
         <View style={styles.centered}>
-          <Text style={[styles.title, { color: colors.text }]}>Tournaments</Text>
-          <Text style={[styles.subtitle, { color: colors.tabIconDefault, marginBottom: h(24) }]}>
+          <Text style={[styles.title, { color: colors.text }]}>
+            Tournaments
+          </Text>
+          <Text
+            style={[
+              styles.subtitle,
+              { color: colors.tabIconDefault, marginBottom: h(24) },
+            ]}
+          >
             Sign in to view and follow esports tournaments
           </Text>
           <Button
             title="Sign in"
-            onPress={() => router.push('/(auth)/login')}
+            onPress={() => router.push("/(auth)/login")}
             fullWidth
             style={styles.btn}
           />
@@ -244,40 +273,8 @@ export default function TournamentScreen() {
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>
-          MANAGE FOLLOWS
+          GAMES
         </Text>
-        <Card
-          onPress={() => router.push(ROUTES.SELECT_GAMES_TOURNAMENT)}
-          style={{
-            ...styles.followCard,
-            borderColor: colors.tint,
-            backgroundColor: colors.tint + '12',
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <FontAwesome
-              name="gamepad"
-              size={w(22)}
-              color={colors.tint}
-              style={{ marginRight: w(12) }}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: w(16), fontWeight: '600', color: colors.text }}>
-                Games to follow
-              </Text>
-              <Text style={{ fontSize: w(12), color: colors.tabIconDefault, marginTop: h(4) }}>
-                {selectedGameIds.length > 0
-                  ? `${selectedGameIds.length} games selected`
-                  : 'Add games to see tournament news'}
-              </Text>
-            </View>
-            <FontAwesome name="chevron-right" size={w(16)} color={colors.tint} />
-          </View>
-        </Card>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>GAMES</Text>
         {followedGames.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {followedGames.map((g) => {
@@ -290,11 +287,18 @@ export default function TournamentScreen() {
                     styles.chip,
                     {
                       borderColor: active ? colors.tint : colors.border,
-                      backgroundColor: active ? colors.tint + '18' : 'transparent',
+                      backgroundColor: active
+                        ? colors.tint + "18"
+                        : "transparent",
                     },
                   ]}
                 >
-                  <Text style={{ color: active ? colors.tint : colors.tabIconDefault, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: active ? colors.tint : colors.tabIconDefault,
+                      fontWeight: "600",
+                    }}
+                  >
                     {g.name}
                   </Text>
                 </Pressable>
@@ -310,43 +314,82 @@ export default function TournamentScreen() {
 
       {isEmpty ? (
         <View style={styles.section}>
-          <NoDataFound
-            title="No Data Found"
-            description="No tournaments found for this game. Try another game or check back later."
+          <ClassicEmptyState
+            title="No tournaments for this game"
+            message="Try another followed game or check back later."
+            icon="trophy"
           />
         </View>
       ) : null}
 
-      {!isEmpty ? (
+      {!isEmpty && tournamentError && !isLoadingTournaments ? (
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>PAID TOURNAMENTS</Text>
-          {tournamentError ? (
-            <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>{tournamentError}</Text>
-          ) : paidTournaments.length > 0 ? (
-            <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
-              {paidTournaments.map((item) => (
-                <TournamentCard key={item.id} item={item} />
-              ))}
-            </ScrollView>
-          ) : null}
+          <ClassicEmptyState
+            variant="error"
+            title="Couldn't load tournaments"
+            message={tournamentError}
+          >
+            <Button
+              title="Retry"
+              variant="outline"
+              onPress={() => setTournamentFetchKey((k) => k + 1)}
+            />
+          </ClassicEmptyState>
         </View>
       ) : null}
 
-      {!isEmpty ? (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.tabIconDefault }]}>
-            SPECIAL (FREE / SPONSORED)
-          </Text>
-          {tournamentError ? (
-            <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>{tournamentError}</Text>
-          ) : specialTournaments.length > 0 ? (
-            <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
-              {specialTournaments.map((item) => (
-                <TournamentCard key={item.id} item={item} />
-              ))}
-            </ScrollView>
-          ) : null}
-        </View>
+      {!isEmpty && !tournamentError ? (
+        <>
+          <View style={styles.section}>
+            <Text
+              style={[styles.sectionTitle, { color: colors.tabIconDefault }]}
+            >
+              PAID TOURNAMENTS
+            </Text>
+            {paidTournaments.length > 0 ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
+                {paidTournaments.map((item) => (
+                  <TournamentCard key={item.id} item={item} />
+                ))}
+              </ScrollView>
+            ) : (
+              <ClassicEmptyState
+                title="No paid tournaments"
+                message="Nothing scheduled right now for this game."
+                icon="money"
+                style={{ marginTop: h(4) }}
+              />
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <Text
+              style={[styles.sectionTitle, { color: colors.tabIconDefault }]}
+            >
+              SPECIAL (FREE / SPONSORED)
+            </Text>
+            {specialTournaments.length > 0 ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
+                {specialTournaments.map((item) => (
+                  <TournamentCard key={item.id} item={item} />
+                ))}
+              </ScrollView>
+            ) : (
+              <ClassicEmptyState
+                title="No free or sponsored events"
+                message="Check the paid section or try again later."
+                icon="gift"
+                style={{ marginTop: h(4) }}
+              />
+            )}
+          </View>
+        </>
       ) : null}
     </Screen>
   );

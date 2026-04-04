@@ -1,5 +1,5 @@
 import { WalletSection } from '@/components/dashboard';
-import { Button, Card, Input, Screen } from '@/components/ui';
+import { Button, Card, ClassicEmptyState, Input, Screen } from '@/components/ui';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { ROUTES } from '@/constants/routes';
@@ -336,10 +336,13 @@ export default function WalletScreen() {
           </Text>
         </View>
         {savedUpiList.length === 0 ? (
-          <View style={[styles.upiRow, { borderBottomWidth: 0 }]}>
-            <Text style={{ fontSize: w(14), color: colors.tabIconDefault, flex: 1 }}>
-              No payout UPI saved yet
-            </Text>
+          <View style={{ paddingHorizontal: w(12), paddingBottom: h(8) }}>
+            <ClassicEmptyState
+              title="No payout UPI yet"
+              message="Add a UPI ID below — used for wallet withdrawals."
+              icon="credit-card"
+              style={{ marginVertical: 0, paddingVertical: h(14) }}
+            />
           </View>
         ) : (
           savedUpiList.map((id) => {
@@ -472,9 +475,13 @@ export default function WalletScreen() {
         </View>
         
         {transactions.length === 0 ? (
-          <View style={{ padding: w(24), alignItems: 'center' }}>
-            <FontAwesome name="history" size={w(32)} color={colors.tabIconDefault} style={{ marginBottom: h(12), opacity: 0.3 }} />
-            <Text style={{ fontSize: w(14), color: colors.tabIconDefault }}>No transactions yet</Text>
+          <View style={{ paddingHorizontal: w(8), paddingBottom: h(8) }}>
+            <ClassicEmptyState
+              title="No transactions yet"
+              message="Top up or withdraw — history will appear here."
+              icon="history"
+              style={{ marginVertical: 0 }}
+            />
           </View>
         ) : (
           <View style={{ paddingBottom: h(8) }}>
@@ -648,7 +655,14 @@ export default function WalletScreen() {
             </View>
 
             {modalError ? (
-              <Text style={{ color: '#dc3545', fontSize: w(13), marginBottom: h(8) }}>{modalError}</Text>
+              <ClassicEmptyState
+                variant="error"
+                title="Couldn't load history"
+                message={modalError}
+                style={{ marginBottom: h(10), marginTop: 0 }}
+              >
+                <Button title="Retry" variant="outline" onPress={() => void loadModalHistory()} />
+              </ClassicEmptyState>
             ) : null}
 
             {modalLoading && modalHistory.length === 0 ? (
@@ -666,9 +680,12 @@ export default function WalletScreen() {
                 renderItem={({ item }) => renderHistoryRow(item)}
                 ListEmptyComponent={
                   !modalLoading ? (
-                    <Text style={{ fontSize: w(14), color: colors.tabIconDefault, textAlign: 'center', paddingVertical: h(24) }}>
-                      No transactions for this filter.
-                    </Text>
+                    <ClassicEmptyState
+                      title="No transactions for this filter"
+                      message="Change the type or date range and try again."
+                      icon="history"
+                      style={{ marginVertical: h(16), alignSelf: 'center' }}
+                    />
                   ) : null
                 }
               />

@@ -3,13 +3,9 @@ import { LogoutButton } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { useAuth } from "@/context/AuthContext";
-import { useFollowHub } from "@/context/FollowHubContext";
 import { useResponsive } from "@/context/ResponsiveContext";
-import { useSelectedGames } from "@/context/SelectedGamesContext";
 import { isAdminUser, isHostUser } from "@/utils/adminUser";
 import { userHasSelectedGames } from "@/utils/gameSelection";
-import { tabIconForGameId } from "@/utils/gameTabIcon";
-import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
 import { Tabs } from "expo-router";
@@ -22,53 +18,6 @@ function TabBarIcon(props: {
 }) {
   const { w } = useResponsive();
   return <FontAwesome size={w(24)} style={{ marginBottom: -4 }} {...props} />;
-}
-
-function FollowTabBarButton(props: BottomTabBarButtonProps) {
-  const { accessibilityState, style, onLongPress } = props;
-  const { openFollowHub } = useFollowHub();
-  const { selectedGameIds } = useSelectedGames();
-  const { w } = useResponsive();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
-  const focused = accessibilityState?.selected;
-  const tint = focused ? colors.tabIconSelected : colors.tabIconDefault;
-  const firstId = selectedGameIds[0];
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Add or manage follows"
-      accessibilityState={accessibilityState}
-      onPress={() => openFollowHub()}
-      onLongPress={onLongPress}
-      style={({ pressed }) => [
-        style,
-        {
-          opacity: pressed ? 0.8 : 1,
-          justifyContent: "center",
-          alignItems: "center",
-          flex: 1,
-        },
-      ]}
-    >
-      {firstId ? (
-        <FontAwesome
-          name={tabIconForGameId(firstId)}
-          size={w(24)}
-          color={tint}
-          style={{ marginBottom: -4 }}
-        />
-      ) : (
-        <FontAwesome
-          name="plus-circle"
-          size={w(24)}
-          color={tint}
-          style={{ marginBottom: -4 }}
-        />
-      )}
-    </Pressable>
-  );
 }
 
 function DrawerToggle() {
@@ -95,15 +44,29 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { w } = useResponsive();
   const { user } = useAuth();
-  const confirmedSelectedGames = Array.isArray(user?.selectedGames) ? user.selectedGames : [];
+  const confirmedSelectedGames = Array.isArray(user?.selectedGames)
+    ? user.selectedGames
+    : [];
   /** Must match `app/(drawer)/_layout.tsx` — hosts skip game pick but still need drawer + tabs. */
   const isLockedForGameSelection =
     !isAdminUser(user) &&
     !isHostUser(user) &&
     !userHasSelectedGames(confirmedSelectedGames);
 
+  const tabsUnlocked = !isLockedForGameSelection;
+  /** Bottom bar: Tournament → Wallet → Dashboard → Settings; hosts also get Lobby after Tournament. */
+  const showMainTabsInBar = tabsUnlocked;
+  const showLobbyTab = showMainTabsInBar && isHostUser(user);
+
   return (
     <Tabs
+      initialRouteName={
+        isLockedForGameSelection
+          ? "index"
+          : isHostUser(user)
+            ? "lobby"
+            : "index"
+      }
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: true,
@@ -116,36 +79,12 @@ export default function TabLayout() {
             </View>
           ),
         tabBarShowLabel: false,
-        tabBarStyle: isLockedForGameSelection ? { display: 'none' } : { paddingHorizontal: w(16) },
+        tabBarStyle: isLockedForGameSelection
+          ? { display: "none" }
+          : { paddingHorizontal: w(16) },
         tabBarItemStyle: { flex: 1 },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: isLockedForGameSelection ? "Game Selection" : "News",
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="newspaper-o" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="shop"
-        options={{
-          title: "Shop",
-          href: isLockedForGameSelection ? null : undefined,
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="shopping-bag" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="follow"
-        options={{
-          title: "Follow",
-          tabBarButton: (p) => <FollowTabBarButton {...p} />,
-        }}
-      />
       <Tabs.Screen
         name="tournament"
         options={{
@@ -155,15 +94,31 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="admin-dashboard"
+        name="lobby"
         options={{
-          title: "Dashboard",
-          href:
-            !isLockedForGameSelection && isAdminUser(user)
-              ? undefined
-              : null,
+          title: "Lobby",
+          href: showLobbyTab ? undefined : null,
           tabBarIcon: ({ color }) => (
-            <TabBarIcon name="home" color={color} />
+            <TabBarIcon name="list-alt" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: "Wallet",
+          href: showMainTabsInBar ? undefined : null,
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="credit-card" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: isLockedForGameSelection ? "Game Selection" : "Dashboard",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="th-large" color={color} />
           ),
         }}
       />
@@ -171,16 +126,34 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
-          href: null,
-          tabBarIcon: () => null,
+          href: showMainTabsInBar ? undefined : null,
+          tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="wallet"
+        name="shop"
         options={{
-          title: "Wallet",
+          title: "Shop",
           href: null,
-          tabBarIcon: ({ color }) => <TabBarIcon name="credit-card" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="shopping-bag" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="follow"
+        options={{
+          title: "Follow",
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="admin-dashboard"
+        options={{
+          title: "Admin",
+          href:
+            !isLockedForGameSelection && isAdminUser(user) ? undefined : null,
+          tabBarIcon: ({ color }) => <TabBarIcon name="shield" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -196,7 +169,9 @@ export default function TabLayout() {
         options={{
           title: "Games",
           href: null,
-          tabBarIcon: ({ color }) => <TabBarIcon name="gamepad" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="gamepad" color={color} />
+          ),
         }}
       />
     </Tabs>

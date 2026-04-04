@@ -4,11 +4,11 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { ROUTES } from '@/constants/routes';
 import { useAuth } from '@/context/AuthContext';
+import { isHostUser } from '@/utils/adminUser';
 import { useResponsive } from '@/context/ResponsiveContext';
 import { useSelectedGames } from '@/context/SelectedGamesContext';
-import { isHostUser } from '@/utils/adminUser';
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
 import { Text, View } from 'react-native';
 
@@ -18,19 +18,13 @@ export default function FollowScreen() {
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
-  const isHost = isHostUser(user);
-
   const chipGames = useMemo(
-    () => {
-      const ids = isHost
-        ? availableGames.map((g) => g._id)
-        : selectedGameIds;
-      return ids.map((id) => ({
+    () =>
+      selectedGameIds.map((id) => ({
         id,
         label: availableGames.find((g) => g._id === id)?.name ?? id,
-      }));
-    },
-    [isHost, selectedGameIds, availableGames]
+      })),
+    [selectedGameIds, availableGames]
   );
 
   const feedChips = useMemo((): FeedFilterChip[] => {
@@ -76,6 +70,10 @@ export default function FollowScreen() {
     [w, h]
   );
 
+  if (isHostUser(user)) {
+    return <Redirect href={ROUTES.TOURNAMENT} />;
+  }
+
   if (!isAuthenticated) {
     return (
       <Screen padded maxForm>
@@ -110,29 +108,27 @@ export default function FollowScreen() {
         </View>
       )}
 
-      {!isHost && (
-        <View style={styles.section}>
-          <Card
-            onPress={() => router.push(ROUTES.SELECT_GAMES_FOLLOW)}
-            style={{
-              ...styles.card,
-              borderWidth: 1,
-              borderColor: colors.tint,
-              borderStyle: 'dashed',
-              backgroundColor: colors.tint + '12',
-            }}
-          >
-            <Text style={[styles.cardTitle, { color: colors.text }]}>
-              Manage games to follow
-            </Text>
-            <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
-              {selectedGameIds.length > 0
-                ? `${selectedGameIds.length} games selected • Tap to add/remove`
-                : 'Select games to get personalized news'}
-            </Text>
-          </Card>
-        </View>
-      )}
+      <View style={styles.section}>
+        <Card
+          onPress={() => router.push(ROUTES.SELECT_GAMES_FOLLOW)}
+          style={{
+            ...styles.card,
+            borderWidth: 1,
+            borderColor: colors.tint,
+            borderStyle: 'dashed',
+            backgroundColor: colors.tint + '12',
+          }}
+        >
+          <Text style={[styles.cardTitle, { color: colors.text }]}>
+            Manage games to follow
+          </Text>
+          <Text style={[styles.cardDesc, { color: colors.tabIconDefault }]}>
+            {selectedGameIds.length > 0
+              ? `${selectedGameIds.length} games selected • Tap to add/remove`
+              : 'Select games to get personalized news'}
+          </Text>
+        </Card>
+      </View>
 
       <View style={styles.section}>
         <NewsSection />

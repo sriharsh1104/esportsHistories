@@ -1,7 +1,9 @@
-import { Button } from "@/components/ui";
+import { Button, ClassicEmptyState } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { useResponsive } from "@/context/ResponsiveContext";
+import { ApiError } from "@/services/api.service";
+import { getToken } from "@/services/common.service";
 import {
   applyHostTournament,
   buildHostApplicationsStreamUrl,
@@ -10,8 +12,6 @@ import {
   fetchHostMyLobbiesHistory,
   updateHostTournamentRoom,
 } from "@/services/host.service";
-import { getToken } from "@/services/common.service";
-import { ApiError } from "@/services/api.service";
 import { useAppDispatch } from "@/store/hooks";
 import { hideLoader, showLoader } from "@/store/slices/loaderSlice";
 import type { HostAssignedLobby, HostAvailableTournament } from "@/types/host";
@@ -70,12 +70,19 @@ function hostListingStatusMeta(
     locked: "Locked",
   };
   const label =
-    labels[key] ||
-    (status ? status.replace(/([A-Z])/g, " $1").trim() : "");
+    labels[key] || (status ? status.replace(/([A-Z])/g, " $1").trim() : "");
   return { color, label };
 }
 
-export function HostLobbyRecords() {
+export type HostLobbyRecordsProps = {
+  /**
+   * Use inside a parent `ScrollView` (e.g. Tournament tab). Skips outer scroll + page title
+   * so the parent can provide section headings.
+   */
+  embedded?: boolean;
+};
+
+export function HostLobbyRecords({ embedded = false }: HostLobbyRecordsProps) {
   const scheme = useColorScheme() ?? "light";
   const colors = Colors[scheme];
   const { w, h, isSmallDevice } = useResponsive();
@@ -84,9 +91,9 @@ export function HostLobbyRecords() {
   const [mainTab, setMainTab] = useState<MainTab>("available");
 
   const [availFilter, setAvailFilter] = useState<AvailFilter>("upcoming");
-  const [availableItems, setAvailableItems] = useState<HostAvailableTournament[]>(
-    [],
-  );
+  const [availableItems, setAvailableItems] = useState<
+    HostAvailableTournament[]
+  >([]);
   const [availLoading, setAvailLoading] = useState(true);
   const [availRefreshing, setAvailRefreshing] = useState(false);
   const [availError, setAvailError] = useState<string | null>(null);
@@ -101,20 +108,20 @@ export function HostLobbyRecords() {
   const [activeError, setActiveError] = useState<string | null>(null);
   const [activeRefreshing, setActiveRefreshing] = useState(false);
 
-  const [historyStatus, setHistoryStatus] = useState<HistoryStatus>("completed");
+  const [historyStatus, setHistoryStatus] =
+    useState<HistoryStatus>("completed");
   const [historyItems, setHistoryItems] = useState<HostAssignedLobby[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
 
-  const [applyingTournamentId, setApplyingTournamentId] = useState<string | null>(
-    null,
-  );
+  const [applyingTournamentId, setApplyingTournamentId] = useState<
+    string | null
+  >(null);
 
-  const [roomModalLobby, setRoomModalLobby] = useState<HostAssignedLobby | null>(
-    null,
-  );
+  const [roomModalLobby, setRoomModalLobby] =
+    useState<HostAssignedLobby | null>(null);
   const [roomId, setRoomId] = useState("");
   const [roomPassword, setRoomPassword] = useState("");
   /** false = plain text visible by default; tap icon to mask. */
@@ -296,11 +303,7 @@ export function HostLobbyRecords() {
       try {
         const msg = JSON.parse(raw) as { type?: string };
         const ev = (msg.type ?? "").toLowerCase();
-        if (
-          ev === "approved" ||
-          ev === "rejected" ||
-          ev === "assigned"
-        ) {
+        if (ev === "approved" || ev === "rejected" || ev === "assigned") {
           if (ev === "rejected") {
             Toast.show({
               type: "info",
@@ -356,7 +359,9 @@ export function HostLobbyRecords() {
     setApplyingTournamentId(id);
     try {
       dispatch(showLoader());
-      await applyHostTournament(t.applyTournamentId, { applicationDetails: {} });
+      await applyHostTournament(t.applyTournamentId, {
+        applicationDetails: {},
+      });
       Toast.show({ type: "success", text1: "Application submitted" });
       void loadAvailable({ page: 1 });
     } catch (e) {
@@ -403,9 +408,7 @@ export function HostLobbyRecords() {
       t.hasApplied === true ||
       (appSt.length > 0 && appSt !== "none" && appSt !== "rejected");
     const applicationPhaseDone =
-      appSt === "approved" ||
-      appSt === "assigned" ||
-      appSt === "accepted";
+      appSt === "approved" || appSt === "assigned" || appSt === "accepted";
     const applicationCtaLabel = t.applicationStatus?.trim()
       ? t.applicationStatus.trim()
       : hasAppResponse
@@ -434,8 +437,7 @@ export function HostLobbyRecords() {
           })
         : t.startTime;
 
-    const totalSlotStr =
-      t.maxTeams != null ? String(t.maxTeams) : undefined;
+    const totalSlotStr = t.maxTeams != null ? String(t.maxTeams) : undefined;
     let availableSlot: number | undefined;
     if (t.maxTeams != null && t.joinedCount != null) {
       availableSlot = Math.max(0, t.maxTeams - t.joinedCount);
@@ -669,7 +671,9 @@ export function HostLobbyRecords() {
                     textAlign: "center",
                   }}
                 >
-                  {applyingTournamentId === t.id ? "Applying…" : "Apply to host"}
+                  {applyingTournamentId === t.id
+                    ? "Applying…"
+                    : "Apply to host"}
                 </Text>
               </Pressable>
             ) : (
@@ -1045,12 +1049,9 @@ export function HostLobbyRecords() {
     );
   };
 
-  return (
+  const mainColumn = (
     <>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: h(32) }}
-      >
+      {!embedded ? (
         <Text
           style={{
             fontSize: w(20),
@@ -1059,10 +1060,11 @@ export function HostLobbyRecords() {
             marginBottom: h(12),
           }}
         >
-          Lobby records
+          Lobby
         </Text>
+      ) : null}
 
-        <View
+      <View
           style={{
             flexDirection: "row",
             gap: w(8),
@@ -1090,7 +1092,9 @@ export function HostLobbyRecords() {
             >
               Listing filter
             </Text>
-            <View style={{ flexDirection: "row", gap: w(8), marginBottom: h(12) }}>
+            <View
+              style={{ flexDirection: "row", gap: w(8), marginBottom: h(12) }}
+            >
               {tabChip(availFilter === "upcoming", "Upcoming", () =>
                 setAvailFilter("upcoming"),
               )}
@@ -1108,7 +1112,8 @@ export function HostLobbyRecords() {
             >
               <Pressable
                 onPress={() => {
-                  if (!availRefreshing) void loadAvailable({ page: 1, silent: true });
+                  if (!availRefreshing)
+                    void loadAvailable({ page: 1, silent: true });
                 }}
                 hitSlop={8}
                 style={{
@@ -1124,19 +1129,32 @@ export function HostLobbyRecords() {
                 {availRefreshing ? (
                   <ActivityIndicator size="small" color={colors.tint} />
                 ) : (
-                  <FontAwesome name="refresh" size={w(16)} color={colors.tint} />
+                  <FontAwesome
+                    name="refresh"
+                    size={w(16)}
+                    color={colors.tint}
+                  />
                 )}
               </Pressable>
             </View>
 
             {availLoading ? (
-              <ActivityIndicator color={colors.tint} style={{ marginTop: h(24) }} />
+              <ActivityIndicator
+                color={colors.tint}
+                style={{ marginTop: h(24) }}
+              />
             ) : availError ? (
-              <Text style={{ color: "#dc2626", marginBottom: h(8) }}>{availError}</Text>
+              <ClassicEmptyState
+                variant="error"
+                title="Couldn't load tournaments"
+                message={availError}
+              />
             ) : availableItems.length === 0 ? (
-              <Text style={{ color: colors.tabIconDefault }}>
-                No tournaments available for this filter.
-              </Text>
+              <ClassicEmptyState
+                variant="empty"
+                title="No tournaments for this filter"
+                message="Try switching Upcoming / Locked or refresh the list."
+              />
             ) : (
               <>
                 {availableItems.map(renderAvailableCard)}
@@ -1155,7 +1173,9 @@ export function HostLobbyRecords() {
           </>
         ) : (
           <>
-            <View style={{ flexDirection: "row", gap: w(8), marginBottom: h(14) }}>
+            <View
+              style={{ flexDirection: "row", gap: w(8), marginBottom: h(14) }}
+            >
               {tabChip(assignedSub === "active", "Active", () =>
                 setAssignedSub("active"),
               )}
@@ -1190,18 +1210,28 @@ export function HostLobbyRecords() {
                     {activeRefreshing ? (
                       <ActivityIndicator size="small" color={colors.tint} />
                     ) : (
-                      <FontAwesome name="refresh" size={w(16)} color={colors.tint} />
+                      <FontAwesome
+                        name="refresh"
+                        size={w(16)}
+                        color={colors.tint}
+                      />
                     )}
                   </Pressable>
                 </View>
                 {activeLoading ? (
                   <ActivityIndicator color={colors.tint} />
                 ) : activeError ? (
-                  <Text style={{ color: "#dc2626" }}>{activeError}</Text>
+                  <ClassicEmptyState
+                    variant="error"
+                    title="Couldn't load your lobbies"
+                    message={activeError}
+                  />
                 ) : activeGrouped.length === 0 ? (
-                  <Text style={{ color: colors.tabIconDefault }}>
-                    No assigned lobbies yet.
-                  </Text>
+                  <ClassicEmptyState
+                    variant="empty"
+                    title="No assigned lobbies yet"
+                    message="When you're assigned to a tournament, it will show up here."
+                  />
                 ) : (
                   activeGrouped.map((sec) => (
                     <View key={sec.label} style={{ marginBottom: h(12) }}>
@@ -1267,11 +1297,17 @@ export function HostLobbyRecords() {
                 {historyLoading && historyItems.length === 0 ? (
                   <ActivityIndicator color={colors.tint} />
                 ) : historyError ? (
-                  <Text style={{ color: "#dc2626" }}>{historyError}</Text>
+                  <ClassicEmptyState
+                    variant="error"
+                    title="Couldn't load history"
+                    message={historyError}
+                  />
                 ) : historyItems.length === 0 ? (
-                  <Text style={{ color: colors.tabIconDefault }}>
-                    No history for this status.
-                  </Text>
+                  <ClassicEmptyState
+                    variant="empty"
+                    title="No history for this status"
+                    message="Completed, cancelled, or result-pending lobbies will appear when available."
+                  />
                 ) : (
                   <>
                     {historyItems.map(renderLobbyCard)}
@@ -1280,7 +1316,10 @@ export function HostLobbyRecords() {
                         title="Load more"
                         variant="outline"
                         onPress={() =>
-                          void loadHistory({ page: historyPage + 1, append: true })
+                          void loadHistory({
+                            page: historyPage + 1,
+                            append: true,
+                          })
                         }
                       />
                     ) : null}
@@ -1290,7 +1329,21 @@ export function HostLobbyRecords() {
             )}
           </>
         )}
-      </ScrollView>
+    </>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        <View style={{ paddingBottom: h(24) }}>{mainColumn}</View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: h(32) }}
+        >
+          {mainColumn}
+        </ScrollView>
+      )}
 
       {roomModalLobby ? (
         <Modal

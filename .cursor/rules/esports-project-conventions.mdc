@@ -23,6 +23,15 @@ Full detail: `.cursor/skills/react-native-coding-standards/SKILL.md`. When in do
 - **Lists / sections / inline**: local `ActivityIndicator` with `color={colors.tint}` is fine.
 - Prefer **one clear pattern per screen**: avoid showing both global loader and a redundant full-screen spinner for the same operation.
 
+## Empty states and API errors (ClassicEmptyState)
+
+- When **data failed to load**, **the list is empty**, or **filters/search return nothing**, use **`ClassicEmptyState`** from `@/components/ui` — not one-off `Text` blocks, random copy, or mismatched layouts.
+- **`NoDataFound`** remains a thin wrapper around the same pattern; prefer **`ClassicEmptyState`** when you need **`variant`** (`empty` | `error` | `info`), a custom **`icon`**, or **`children`** (e.g. **Retry** `Button`).
+- **Errors**: `variant="error"`, clear **`title`** + **`message`** (API/user-facing string). Put **Retry** in **`children`** when the user can refetch.
+- **Empty success**: `variant="empty"` (default), **`title`** + optional **`message`** explaining what to do next (change filter, pull to refresh, etc.).
+- Inside dense UI (cards, modals, pickers), you may tighten spacing via **`style`** on `ClassicEmptyState` — keep the same component, not a duplicate “empty card” pattern.
+- Do not introduce a second empty-state component for the same job unless explicitly requested.
+
 ## Toasts
 
 - Root UI mounts `Toaster` from `@/components/Toaster` in `app/_layout.tsx`. Use `react-native-toast-message` the same way existing screens do; keep styling consistent with the app toasts (do not introduce a second toast library for the same UX).

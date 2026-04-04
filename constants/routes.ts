@@ -60,6 +60,8 @@ export const ROUTES = {
   SHOP_CHECKOUT: '/(drawer)/(tabs)/shop/checkout',
   FOLLOW: '/(drawer)/(tabs)/follow',
   TOURNAMENT: '/(drawer)/(tabs)/tournament',
+  /** Host-only bottom tab — lobby records (separate from public Tournament list). */
+  LOBBY_TAB: '/(drawer)/(tabs)/lobby',
   GAME: '/(drawer)/(tabs)/game',
   GAME_SLUG: (slug: string) => `/(drawer)/(tabs)/game/${slug}` as const,
 

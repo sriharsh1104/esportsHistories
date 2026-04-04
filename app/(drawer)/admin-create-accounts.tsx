@@ -1,4 +1,4 @@
-import { Button, Card, Input, Screen } from "@/components/ui";
+import { Button, Card, ClassicEmptyState, Input, Screen } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
@@ -1082,11 +1082,23 @@ export default function AdminCreateAccountsScreen() {
                     style={{ marginVertical: h(16) }}
                   />
                 ) : usersError ? (
-                  <Text style={{ color: colors.accent }}>{usersError}</Text>
+                  <ClassicEmptyState
+                    variant="error"
+                    title="Couldn't load users"
+                    message={usersError}
+                  >
+                    <Button
+                      title="Retry"
+                      variant="outline"
+                      onPress={() => void loadUsers()}
+                    />
+                  </ClassicEmptyState>
                 ) : userRows.length === 0 ? (
-                  <Text style={{ color: colors.tabIconDefault }}>
-                    No users for this query.
-                  </Text>
+                  <ClassicEmptyState
+                    title="No users for this query"
+                    message="Try another search or adjust filters."
+                    icon="user-o"
+                  />
                 ) : (
                   userRows.map((item, i) => {
                     const checkable =

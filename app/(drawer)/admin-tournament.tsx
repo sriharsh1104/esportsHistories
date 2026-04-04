@@ -1,4 +1,4 @@
-import { Button, Card, Input, Screen } from "@/components/ui";
+import { Button, Card, ClassicEmptyState, Input, Screen } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
@@ -1797,16 +1797,14 @@ export default function AdminTournamentScreen() {
               style={{ maxHeight: h(400) }}
             >
               {filteredCatalogGames.length === 0 ? (
-                <Text
-                  style={{
-                    paddingHorizontal: w(16),
-                    paddingVertical: h(20),
-                    color: colors.tabIconDefault,
-                    fontSize: w(14),
-                  }}
-                >
-                  No matches
-                </Text>
+                <View style={{ paddingHorizontal: w(12), paddingVertical: h(8) }}>
+                  <ClassicEmptyState
+                    title="No matches"
+                    message="Try another search term."
+                    icon="search"
+                    style={{ marginVertical: 0, paddingVertical: h(14) }}
+                  />
+                </View>
               ) : (
                 filteredCatalogGames.map((g, idx) => {
                   const isLast = idx === filteredCatalogGames.length - 1;

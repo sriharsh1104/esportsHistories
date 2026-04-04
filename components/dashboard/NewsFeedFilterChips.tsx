@@ -3,6 +3,8 @@ import Colors from '@/constants/Colors';
 import type { FeedFocus } from '@/context/FeedFocusContext';
 import { useFeedFocus } from '@/context/FeedFocusContext';
 import { useFollowHub } from '@/context/FollowHubContext';
+import { useAuth } from '@/context/AuthContext';
+import { isHostUser } from '@/utils/adminUser';
 import { useResponsive } from '@/context/ResponsiveContext';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import React from 'react';
@@ -36,8 +38,10 @@ export function NewsFeedFilterChips({ chips }: NewsFeedFilterChipsProps) {
   const scheme = useColorScheme() ?? 'light';
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
+  const { user } = useAuth();
   const { focus, setFocus } = useFeedFocus();
   const { openFollowHub } = useFollowHub();
+  const hideFollowHub = isHostUser(user);
 
   if (chips.length === 0) return null;
 
@@ -141,41 +145,43 @@ export function NewsFeedFilterChips({ chips }: NewsFeedFilterChipsProps) {
           );
         })}
 
-        <Pressable
-          onPress={openFollowHub}
-          accessibilityRole="button"
-          accessibilityLabel="Add follow"
-          style={{ alignItems: 'center' }}
-        >
-          <View
-            style={{
-              width: w(48),
-              height: w(48),
-              borderRadius: w(24),
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 2,
-              borderStyle: 'dashed',
-              borderColor: colors.accent,
-              backgroundColor: colors.accent + '12',
-            }}
+        {!hideFollowHub ? (
+          <Pressable
+            onPress={openFollowHub}
+            accessibilityRole="button"
+            accessibilityLabel="Add follow"
+            style={{ alignItems: 'center' }}
           >
-            <FontAwesome name="plus" size={w(20)} color={colors.accent} />
-          </View>
-          <Text
-            numberOfLines={1}
-            style={{
-              fontSize: w(11),
-              fontWeight: '600',
-              color: colors.accent,
-              marginTop: h(4),
-              maxWidth: w(56),
-              textAlign: 'center',
-            }}
-          >
-            Add
-          </Text>
-        </Pressable>
+            <View
+              style={{
+                width: w(48),
+                height: w(48),
+                borderRadius: w(24),
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderStyle: 'dashed',
+                borderColor: colors.accent,
+                backgroundColor: colors.accent + '12',
+              }}
+            >
+              <FontAwesome name="plus" size={w(20)} color={colors.accent} />
+            </View>
+            <Text
+              numberOfLines={1}
+              style={{
+                fontSize: w(11),
+                fontWeight: '600',
+                color: colors.accent,
+                marginTop: h(4),
+                maxWidth: w(56),
+                textAlign: 'center',
+              }}
+            >
+              Add
+            </Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );

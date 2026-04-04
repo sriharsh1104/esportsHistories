@@ -1,4 +1,4 @@
-import { Button, Card, Screen } from "@/components/ui";
+import { Button, Card, ClassicEmptyState, Screen } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
@@ -710,20 +710,11 @@ export default function AdminTournamentRecordScreen() {
           </View>
 
           {error && !isLoading ? (
-            <View
-              style={{
-                paddingVertical: h(10),
-              }}
+            <ClassicEmptyState
+              variant="error"
+              title="Couldn't load tournaments"
+              message={error}
             >
-              <Text
-                style={{
-                  fontSize: w(12),
-                  color: "#dc2626",
-                  marginBottom: h(6),
-                }}
-              >
-                {error}
-              </Text>
               <Button
                 title="Retry"
                 variant="outline"
@@ -731,43 +722,16 @@ export default function AdminTournamentRecordScreen() {
                   void load();
                 }}
               />
-            </View>
+            </ClassicEmptyState>
           ) : null}
 
           {!isLoading && !error && !hasItems ? (
-            <View
-              style={{
-                alignItems: "center",
-                paddingVertical: h(18),
-              }}
-            >
-              <FontAwesome
-                name="calendar-o"
-                size={w(32)}
-                color={colors.tabIconDefault}
-              />
-              <Text
-                style={{
-                  marginTop: h(8),
-                  fontSize: w(14),
-                  fontWeight: "600",
-                  color: colors.text,
-                }}
-              >
-                No tournaments found
-              </Text>
-              <Text
-                style={{
-                  marginTop: h(4),
-                  fontSize: w(12),
-                  color: colors.tabIconDefault,
-                  textAlign: "center",
-                }}
-              >
-                Change the status filter or create new lobbies from the
-                Tournament screen.
-              </Text>
-            </View>
+            <ClassicEmptyState
+              variant="empty"
+              title="No tournaments found"
+              message="Change the status filter or create new lobbies from the Tournament screen."
+              icon="calendar-o"
+            />
           ) : null}
 
           {grouped.map(([dateKey, rows]) => (
@@ -1574,20 +1538,11 @@ export default function AdminTournamentRecordScreen() {
                       </View>
                     ) : null}
                     {applicationsError && !applicationsLoading ? (
-                      <View
-                        style={{
-                          paddingVertical: h(10),
-                        }}
+                      <ClassicEmptyState
+                        variant="error"
+                        title="Couldn't load applications"
+                        message={applicationsError}
                       >
-                        <Text
-                          style={{
-                            fontSize: w(12),
-                            color: "#dc2626",
-                            marginBottom: h(6),
-                          }}
-                        >
-                          {applicationsError}
-                        </Text>
                         <Button
                           title="Retry"
                           variant="outline"
@@ -1595,45 +1550,17 @@ export default function AdminTournamentRecordScreen() {
                             void loadApplications();
                           }}
                         />
-                      </View>
+                      </ClassicEmptyState>
                     ) : null}
                     {!applicationsLoading &&
                     !applicationsError &&
                     applications.length === 0 ? (
-                      <View
-                        style={{
-                          alignItems: "center",
-                          paddingVertical: h(18),
-                        }}
-                      >
-                        <FontAwesome
-                          name="users"
-                          size={w(28)}
-                          color={colors.tabIconDefault}
-                        />
-                        <Text
-                          style={{
-                            marginTop: h(8),
-                            fontSize: w(14),
-                            fontWeight: "600",
-                            color: colors.text,
-                          }}
-                        >
-                          No host applications yet
-                        </Text>
-                        <Text
-                          style={{
-                            marginTop: h(4),
-                            fontSize: w(12),
-                            color: colors.tabIconDefault,
-                            textAlign: "center",
-                          }}
-                        >
-                          Hosts can apply from their panel. On web, new
-                          requests appear in real time; pull to refresh on
-                          mobile.
-                        </Text>
-                      </View>
+                      <ClassicEmptyState
+                        variant="empty"
+                        title="No host applications yet"
+                        message="Hosts can apply from their panel. On web, new requests appear in real time; pull to refresh on mobile."
+                        icon="users"
+                      />
                     ) : null}
                     {applications.map((app) => {
                       const statusLabel = app.status ?? "pending";
@@ -1768,20 +1695,11 @@ export default function AdminTournamentRecordScreen() {
                       </View>
                     ) : null}
                     {hostsError && !hostsLoading ? (
-                      <View
-                        style={{
-                          paddingVertical: h(10),
-                        }}
+                      <ClassicEmptyState
+                        variant="error"
+                        title="Couldn't load hosts"
+                        message={hostsError}
                       >
-                        <Text
-                          style={{
-                            fontSize: w(12),
-                            color: "#dc2626",
-                            marginBottom: h(6),
-                          }}
-                        >
-                          {hostsError}
-                        </Text>
                         <Button
                           title="Retry"
                           variant="outline"
@@ -1789,41 +1707,15 @@ export default function AdminTournamentRecordScreen() {
                             void loadAvailableHosts();
                           }}
                         />
-                      </View>
+                      </ClassicEmptyState>
                     ) : null}
                     {!hostsLoading && !hostsError && hosts.length === 0 ? (
-                      <View
-                        style={{
-                          alignItems: "center",
-                          paddingVertical: h(18),
-                        }}
-                      >
-                        <FontAwesome
-                          name="user-o"
-                          size={w(28)}
-                          color={colors.tabIconDefault}
-                        />
-                        <Text
-                          style={{
-                            marginTop: h(8),
-                            fontSize: w(14),
-                            fontWeight: "600",
-                            color: colors.text,
-                          }}
-                        >
-                          No hosts found
-                        </Text>
-                        <Text
-                          style={{
-                            marginTop: h(4),
-                            fontSize: w(12),
-                            color: colors.tabIconDefault,
-                            textAlign: "center",
-                          }}
-                        >
-                          Use admin users screen to create or manage hosts.
-                        </Text>
-                      </View>
+                      <ClassicEmptyState
+                        variant="empty"
+                        title="No hosts found"
+                        message="Use the admin users screen to create or manage hosts."
+                        icon="user-o"
+                      />
                     ) : null}
                     {hosts.map((host) => (
                       <View

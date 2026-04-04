@@ -1,6 +1,6 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useColorScheme } from "@/components/useColorScheme";
 import { LogoutButton } from "@/components/ui";
+import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
 import { useAuth } from "@/context/AuthContext";
@@ -30,7 +30,15 @@ const MENU_ITEMS_BASE = [
     icon: "home" as const,
     label: "Dashboard",
     routeUser: ROUTES.HOME,
+    /** Hosts: open Tournament first so they can apply without an extra tap. */
+    routeHost: ROUTES.TOURNAMENT,
     routeAdmin: ROUTES.ADMIN,
+  },
+  {
+    icon: "heart" as const,
+    label: "Follow",
+    route: ROUTES.FOLLOW,
+    hideForHost: true as const,
   },
   {
     icon: "user-plus" as const,
@@ -47,7 +55,8 @@ const MENU_ITEMS_BASE = [
   {
     icon: "list-alt" as const,
     label: "Lobby Records",
-    route: ROUTES.ADMIN_TOURNAMENT_RECORD,
+    routeAdmin: ROUTES.ADMIN_TOURNAMENT_RECORD,
+    routeHost: ROUTES.LOBBY_TAB,
     adminOrHost: true as const,
   },
   { icon: "credit-card" as const, label: "Wallet", route: ROUTES.WALLET },
@@ -163,6 +172,8 @@ function CustomDrawerContent(props: {
         {MENU_ITEMS_BASE.filter((item) => {
           if (!isAuthenticated) return false;
           if (props.isLockedForGameSelection) return false;
+          if ("hideForHost" in item && item.hideForHost && isHostUser(user))
+            return false;
           if ("adminOnly" in item && item.adminOnly && !isAdminUser(user))
             return false;
           if (
@@ -179,7 +190,9 @@ function CustomDrawerContent(props: {
               ? item.route
               : isAdminUser(user)
                 ? item.routeAdmin
-                : item.routeUser;
+                : isHostUser(user) && "routeHost" in item && item.routeHost
+                  ? item.routeHost
+                  : item.routeUser;
           return (
             <Pressable
               key={item.label}
