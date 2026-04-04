@@ -1,3 +1,4 @@
+import { UserTournamentCard } from "@/components/tournament/UserTournamentCard";
 import { Button, Card, ClassicEmptyState, Screen } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
@@ -8,15 +9,10 @@ import type { TournamentUiItem } from "@/services/tournament.service";
 import { fetchTournamentList } from "@/services/tournament.service";
 import { useAppDispatch } from "@/store/hooks";
 import { hideLoader, showLoader } from "@/store/slices/loaderSlice";
+import { formatDateDdMmYyyy } from "@/utils/date";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-
-const STATUS_COLORS = {
-  ongoing: "#22c55e",
-  upcoming: "#f59e0b",
-  recent: "#6b7280",
-};
 
 function normKey(input: unknown): string {
   return String(input ?? "")
@@ -26,78 +22,16 @@ function normKey(input: unknown): string {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-function TournamentCard({ item }: { item: TournamentUiItem }) {
-  const scheme = useColorScheme() ?? "light";
-  const { w, h } = useResponsive();
-  const colors = Colors[scheme];
-
-  return (
-    <Card style={{ marginBottom: h(12) }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: w(8),
-              marginBottom: h(8),
-            }}
-          >
-            <View
-              style={{
-                paddingHorizontal: w(8),
-                paddingVertical: h(4),
-                borderRadius: w(6),
-                backgroundColor: STATUS_COLORS[item.status] + "25",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: w(10),
-                  fontWeight: "600",
-                  color: STATUS_COLORS[item.status],
-                  textTransform: "uppercase",
-                }}
-              >
-                {item.status}
-              </Text>
-            </View>
-            <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
-              {item.gameName}
-            </Text>
-          </View>
-          <Text
-            style={{
-              fontSize: w(16),
-              fontWeight: "600",
-              color: colors.text,
-              marginBottom: h(4),
-            }}
-          >
-            {item.name}
-          </Text>
-          <Text style={{ fontSize: w(12), color: colors.tabIconDefault }}>
-            {item.prizePool} • {item.teamsCount} teams
-          </Text>
-          <Text
-            style={{
-              fontSize: w(11),
-              color: colors.tabIconDefault,
-              marginTop: h(2),
-            }}
-          >
-            {item.startDate}
-          </Text>
-        </View>
-      </View>
-    </Card>
-  );
+function groupTournamentsByDate(
+  items: TournamentUiItem[],
+): [string, TournamentUiItem[]][] {
+  const byDate = new Map<string, TournamentUiItem[]>();
+  items.forEach((row) => {
+    const key = row.sortDateKey || "Unknown date";
+    if (!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key)!.push(row);
+  });
+  return Array.from(byDate.entries()).sort(([a], [b]) => a.localeCompare(b));
 }
 
 export default function TournamentScreen() {
@@ -233,6 +167,15 @@ export default function TournamentScreen() {
     return { paidTournaments: paid, specialTournaments: special };
   }, [tournaments]);
 
+  const groupedPaid = useMemo(
+    () => groupTournamentsByDate(paidTournaments),
+    [paidTournaments],
+  );
+  const groupedSpecial = useMemo(
+    () => groupTournamentsByDate(specialTournaments),
+    [specialTournaments],
+  );
+
   const isEmpty =
     !isLoadingTournaments && !tournamentError && tournaments.length === 0;
 
@@ -341,53 +284,135 @@ export default function TournamentScreen() {
       {!isEmpty && !tournamentError ? (
         <>
           <View style={styles.section}>
-            <Text
-              style={[styles.sectionTitle, { color: colors.tabIconDefault }]}
-            >
-              PAID TOURNAMENTS
-            </Text>
-            {paidTournaments.length > 0 ? (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                nestedScrollEnabled
+            <Card>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: h(8),
+                }}
               >
-                {paidTournaments.map((item) => (
-                  <TournamentCard key={item.id} item={item} />
-                ))}
-              </ScrollView>
-            ) : (
-              <ClassicEmptyState
-                title="No paid tournaments"
-                message="Nothing scheduled right now for this game."
-                icon="money"
-                style={{ marginTop: h(4) }}
-              />
-            )}
+                <Text
+                  style={{
+                    fontSize: w(15),
+                    fontWeight: "700",
+                    color: colors.text,
+                  }}
+                >
+                  PAID TOURNAMENTS
+                </Text>
+                {paidTournaments.length > 0 ? (
+                  <Text
+                    style={{
+                      fontSize: w(12),
+                      color: colors.tabIconDefault,
+                    }}
+                  >
+                    {paidTournaments.length} item
+                    {paidTournaments.length === 1 ? "" : "s"}
+                  </Text>
+                ) : null}
+              </View>
+              {paidTournaments.length > 0 ? (
+                groupedPaid.map(([dateKey, rows]) => (
+                  <View key={dateKey} style={{ marginTop: h(10) }}>
+                    <Text
+                      style={{
+                        fontSize: w(13),
+                        fontWeight: "700",
+                        color: colors.tabIconDefault,
+                        marginBottom: h(4),
+                      }}
+                    >
+                      {formatDateDdMmYyyy(dateKey) || dateKey}
+                    </Text>
+                    {rows.map((item) => (
+                      <UserTournamentCard
+                        key={item.id}
+                        item={item}
+                        onTournamentMutated={() =>
+                          setTournamentFetchKey((k) => k + 1)
+                        }
+                      />
+                    ))}
+                  </View>
+                ))
+              ) : (
+                <ClassicEmptyState
+                  title="No paid tournaments"
+                  message="Nothing scheduled right now for this game."
+                  icon="money"
+                  style={{ marginTop: h(4) }}
+                />
+              )}
+            </Card>
           </View>
 
           <View style={styles.section}>
-            <Text
-              style={[styles.sectionTitle, { color: colors.tabIconDefault }]}
-            >
-              SPECIAL (FREE / SPONSORED)
-            </Text>
-            {specialTournaments.length > 0 ? (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                nestedScrollEnabled
+            <Card>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: h(8),
+                }}
               >
-                {specialTournaments.map((item) => (
-                  <TournamentCard key={item.id} item={item} />
-                ))}
-              </ScrollView>
-            ) : (
-              <ClassicEmptyState
-                title="No free or sponsored events"
-                message="Check the paid section or try again later."
-                icon="gift"
-                style={{ marginTop: h(4) }}
-              />
-            )}
+                <Text
+                  style={{
+                    fontSize: w(15),
+                    fontWeight: "700",
+                    color: colors.text,
+                  }}
+                >
+                  SPECIAL (FREE / SPONSORED)
+                </Text>
+                {specialTournaments.length > 0 ? (
+                  <Text
+                    style={{
+                      fontSize: w(12),
+                      color: colors.tabIconDefault,
+                    }}
+                  >
+                    {specialTournaments.length} item
+                    {specialTournaments.length === 1 ? "" : "s"}
+                  </Text>
+                ) : null}
+              </View>
+              {specialTournaments.length > 0 ? (
+                groupedSpecial.map(([dateKey, rows]) => (
+                  <View key={dateKey} style={{ marginTop: h(10) }}>
+                    <Text
+                      style={{
+                        fontSize: w(13),
+                        fontWeight: "700",
+                        color: colors.tabIconDefault,
+                        marginBottom: h(4),
+                      }}
+                    >
+                      {formatDateDdMmYyyy(dateKey) || dateKey}
+                    </Text>
+                    {rows.map((item) => (
+                      <UserTournamentCard
+                        key={item.id}
+                        item={item}
+                        onTournamentMutated={() =>
+                          setTournamentFetchKey((k) => k + 1)
+                        }
+                      />
+                    ))}
+                  </View>
+                ))
+              ) : (
+                <ClassicEmptyState
+                  title="No free or sponsored events"
+                  message="Check the paid section or try again later."
+                  icon="gift"
+                  style={{ marginTop: h(4) }}
+                />
+              )}
+            </Card>
           </View>
         </>
       ) : null}

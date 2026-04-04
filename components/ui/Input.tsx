@@ -1,15 +1,15 @@
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
-import { useResponsive } from '@/context/ResponsiveContext';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import React, { useEffect, useState } from 'react';
+import { useColorScheme } from "@/components/useColorScheme";
+import Colors from "@/constants/Colors";
+import { useResponsive } from "@/context/ResponsiveContext";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import React, { useEffect, useState } from "react";
 import {
     Text,
     TextInput,
     TextInputProps,
     TouchableOpacity,
-    View
-} from 'react-native';
+    View,
+} from "react-native";
 
 type InputProps = TextInputProps & {
   label?: string;
@@ -32,18 +32,15 @@ export function Input({
   secure = false,
   ...props
 }: InputProps) {
-  const {
-    onFocus,
-    onBlur,
-    onChangeText,
-    value,
-    ...textInputRest
-  } = props as TextInputProps;
+  const { onFocus, onBlur, onChangeText, value, ...textInputRest } =
+    props as TextInputProps;
 
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [internalError, setInternalError] = useState<string | undefined>(undefined);
-  const scheme = useColorScheme() ?? 'light';
+  const [internalError, setInternalError] = useState<string | undefined>(
+    undefined,
+  );
+  const scheme = useColorScheme() ?? "light";
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
 
@@ -76,7 +73,7 @@ export function Input({
         <Text
           style={{
             fontSize: w(14),
-            fontWeight: '500',
+            fontWeight: "500",
             marginBottom: h(8),
             color: colors.text,
           }}
@@ -87,12 +84,16 @@ export function Input({
       <View
         style={[
           {
-            flexDirection: 'row',
-            alignItems: 'center',
+            flexDirection: "row",
+            alignItems: "center",
             borderWidth: 1.5,
             borderRadius: w(12),
             minHeight: h(52),
-            borderColor: displayError ? '#dc3545' : isFocused ? colors.tint : colors.border,
+            borderColor: displayError
+              ? "#dc3545"
+              : isFocused
+                ? colors.tint
+                : colors.border,
             backgroundColor: colors.inputBg,
           },
         ]}
@@ -102,7 +103,7 @@ export function Input({
             name={leftIcon}
             size={w(18)}
             color={colors.tabIconDefault}
-            style={{ position: 'absolute', left: w(16), zIndex: 1 }}
+            style={{ position: "absolute", left: w(16), zIndex: 1 }}
           />
         )}
         <TextInput
@@ -131,10 +132,10 @@ export function Input({
         {isPassword ? (
           <TouchableOpacity
             onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-            style={{ position: 'absolute', right: w(16), padding: w(4) }}
+            style={{ position: "absolute", right: w(16), padding: w(4) }}
           >
             <FontAwesome
-              name={showPassword ? 'eye-slash' : 'eye'}
+              name={showPassword ? "eye-slash" : "eye"}
               size={w(18)}
               color={colors.tabIconDefault}
             />
@@ -142,14 +143,20 @@ export function Input({
         ) : rightIcon ? (
           <TouchableOpacity
             onPress={onRightIconPress}
-            style={{ position: 'absolute', right: w(16), padding: w(4) }}
+            style={{ position: "absolute", right: w(16), padding: w(4) }}
           >
-            <FontAwesome name={rightIcon} size={w(18)} color={colors.tabIconDefault} />
+            <FontAwesome
+              name={rightIcon}
+              size={w(18)}
+              color={colors.tabIconDefault}
+            />
           </TouchableOpacity>
         ) : null}
       </View>
       {displayError ? (
-        <Text style={{ color: '#dc3545', fontSize: w(12), marginTop: h(4) }}>{displayError}</Text>
+        <Text style={{ color: "#dc3545", fontSize: w(12), marginTop: h(4) }}>
+          {displayError}
+        </Text>
       ) : null}
     </View>
   );

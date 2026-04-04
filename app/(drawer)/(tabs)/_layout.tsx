@@ -2,13 +2,14 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutButton } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { ROUTES } from "@/constants/routes";
 import { useAuth } from "@/context/AuthContext";
 import { useResponsive } from "@/context/ResponsiveContext";
 import { isAdminUser, isHostUser } from "@/utils/adminUser";
 import { userHasSelectedGames } from "@/utils/gameSelection";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
 import React from "react";
 import { Pressable, View } from "react-native";
 
@@ -42,6 +43,7 @@ function DrawerToggle() {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? "light"];
   const { w } = useResponsive();
   const { user } = useAuth();
   const confirmedSelectedGames = Array.isArray(user?.selectedGames)
@@ -54,18 +56,21 @@ export default function TabLayout() {
     !userHasSelectedGames(confirmedSelectedGames);
 
   const tabsUnlocked = !isLockedForGameSelection;
-  /** Bottom bar: Tournament → Wallet → Dashboard → Settings; hosts also get Lobby after Tournament. */
+  /** Bottom bar: Tournament → Wallet → home/dashboard tab → Settings; hosts also get Lobby after Tournament. */
   const showMainTabsInBar = tabsUnlocked;
   const showLobbyTab = showMainTabsInBar && isHostUser(user);
+  const showAdminDashboardTab = showMainTabsInBar && isAdminUser(user);
 
   return (
     <Tabs
       initialRouteName={
         isLockedForGameSelection
           ? "index"
-          : isHostUser(user)
-            ? "lobby"
-            : "index"
+          : isAdminUser(user)
+            ? "admin-dashboard"
+            : isHostUser(user)
+              ? "lobby"
+              : "index"
       }
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
@@ -74,6 +79,19 @@ export default function TabLayout() {
         headerRight: () =>
           isLockedForGameSelection ? null : (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {isAdminUser(user) ? (
+                <Pressable
+                  accessibilityLabel="Admin console"
+                  onPress={() => router.push(ROUTES.ADMIN)}
+                  style={({ pressed }) => ({
+                    padding: w(8),
+                    marginRight: w(4),
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <FontAwesome name="shield" size={w(22)} color={colors.text} />
+                </Pressable>
+              ) : null}
               <ThemeToggle />
               <LogoutButton />
             </View>
@@ -114,9 +132,26 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="admin-dashboard"
+        options={{
+          title: "Dashboard",
+          href: showAdminDashboardTab ? undefined : null,
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon name="tachometer" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: isLockedForGameSelection ? "Game Selection" : "Dashboard",
+          href: isLockedForGameSelection
+            ? undefined
+            : isAdminUser(user)
+              ? null
+              : showMainTabsInBar
+                ? undefined
+                : null,
           tabBarIcon: ({ color }) => (
             <TabBarIcon name="th-large" color={color} />
           ),
@@ -145,15 +180,6 @@ export default function TabLayout() {
         options={{
           title: "Follow",
           href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="admin-dashboard"
-        options={{
-          title: "Admin",
-          href:
-            !isLockedForGameSelection && isAdminUser(user) ? undefined : null,
-          tabBarIcon: ({ color }) => <TabBarIcon name="shield" color={color} />,
         }}
       />
       <Tabs.Screen

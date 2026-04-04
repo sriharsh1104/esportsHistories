@@ -158,6 +158,26 @@ export const API_ENDPOINTS = {
     /** GET — lobby chat history for a tournament (Swagger: `/api/tournament/{tournamentId}/chat`). */
     CHAT: (tournamentId: string) =>
       `/tournament/${encodeURIComponent(tournamentId)}/chat`,
+    /** POST — join as team leader `{ tournamentId, teamName, players }` (Swagger: `/api/tournament/join`). */
+    JOIN: "/tournament/join",
+    /** GET — joined teams / slot assignment for a tournament. */
+    JOINED_TEAMS: (tournamentId: string) =>
+      `/tournament/${encodeURIComponent(tournamentId)}/joined-teams`,
+    /** GET — single tournament / lobby detail (rules, metadata). */
+    DETAIL: (tournamentId: string) =>
+      `/tournament/${encodeURIComponent(tournamentId)}`,
+    /** GET — leaderboard / point table snapshot. */
+    RESULTS: (tournamentId: string) =>
+      `/tournament/${encodeURIComponent(tournamentId)}/results`,
+    /** GET — live aggregated standings + per-match rows (host updates). */
+    LIVE_RESULTS: (tournamentId: string) =>
+      `/tournament/${encodeURIComponent(tournamentId)}/live-results`,
+    /**
+     * GET (SSE) — live results / point table updates; `access_token` query (same pattern as other streams).
+     * Optional: use polling via RESULTS on native if stream is unavailable.
+     */
+    RESULTS_STREAM: (tournamentId: string) =>
+      `/tournament/${encodeURIComponent(tournamentId)}/results/stream`,
   },
   /** Host JWT — apply to tournaments, list assigned lobbies. */
   HOST: {

@@ -1,4 +1,10 @@
-import { Button, Card, ClassicEmptyState, Input, Screen } from "@/components/ui";
+import {
+  Button,
+  Card,
+  ClassicEmptyState,
+  Input,
+  Screen,
+} from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { ROUTES } from "@/constants/routes";
@@ -145,7 +151,12 @@ function UserRow({
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: w(6) }}>
           <Text
-            style={{ color: colors.text, fontSize: w(14), fontWeight: "600", flex: 1 }}
+            style={{
+              color: colors.text,
+              fontSize: w(14),
+              fontWeight: "600",
+              flex: 1,
+            }}
             numberOfLines={1}
           >
             {title}
@@ -160,7 +171,11 @@ function UserRow({
           ) : null}
         </View>
         <Text
-          style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: w(3) }}
+          style={{
+            color: colors.tabIconDefault,
+            fontSize: w(12),
+            marginTop: w(3),
+          }}
           numberOfLines={1}
         >
           {row.email}
@@ -176,7 +191,9 @@ function UserRow({
               borderRadius: 3,
             }}
           >
-            <Text style={{ color: "#ef5350", fontSize: w(10), fontWeight: "700" }}>
+            <Text
+              style={{ color: "#ef5350", fontSize: w(10), fontWeight: "700" }}
+            >
               BLOCKED
             </Text>
           </View>
@@ -318,7 +335,11 @@ function OrgRow({
         </Text>
         {org.managerEmail ? (
           <Text
-            style={{ color: colors.tabIconDefault, fontSize: w(12), marginTop: w(3) }}
+            style={{
+              color: colors.tabIconDefault,
+              fontSize: w(12),
+              marginTop: w(3),
+            }}
             numberOfLines={1}
           >
             {org.managerEmail}
@@ -335,7 +356,9 @@ function OrgRow({
               borderRadius: 3,
             }}
           >
-            <Text style={{ color: "#ef5350", fontSize: w(10), fontWeight: "700" }}>
+            <Text
+              style={{ color: "#ef5350", fontSize: w(10), fontWeight: "700" }}
+            >
               BLOCKED
             </Text>
           </View>
@@ -354,8 +377,8 @@ function OrgManagementSection({
   w: (n: number) => number;
   h: (n: number) => number;
 }) {
-  const [createOrgForm, setCreateOrgForm] = useState<AdminCreateOrgBody>(
-    () => emptyCreateOrgForm(),
+  const [createOrgForm, setCreateOrgForm] = useState<AdminCreateOrgBody>(() =>
+    emptyCreateOrgForm(),
   );
   const [createOrgSubmitting, setCreateOrgSubmitting] = useState(false);
 
@@ -368,8 +391,12 @@ function OrgManagementSection({
   const [orgsError, setOrgsError] = useState<string | null>(null);
 
   // Bulk selection
-  const [selectedOrgIds, setSelectedOrgIds] = useState<Set<string>>(() => new Set());
-  const [bulkBlockPending, setBulkBlockPending] = useState<"block" | "unblock" | null>(null);
+  const [selectedOrgIds, setSelectedOrgIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [bulkBlockPending, setBulkBlockPending] = useState<
+    "block" | "unblock" | null
+  >(null);
 
   // Update manager (single org, shown when exactly 1 checked)
   const [updateManagerForm, setUpdateManagerForm] =
@@ -380,14 +407,17 @@ function OrgManagementSection({
   const selectedCount = selectedOrgIds.size;
   const singleSelectedOrg =
     selectedCount === 1
-      ? orgRows.find((o) => selectedOrgIds.has(o.id)) ?? null
+      ? (orgRows.find((o) => selectedOrgIds.has(o.id)) ?? null)
       : null;
 
   const loadOrgs = useCallback(async () => {
     setOrgsError(null);
     setOrgsLoading(true);
     try {
-      const res = await fetchAdminOrganizations({ page: orgPage, limit: orgLimit });
+      const res = await fetchAdminOrganizations({
+        page: orgPage,
+        limit: orgLimit,
+      });
       setOrgRows(res.items);
       setOrgTotal(res.total);
       setOrgTotalPages(res.totalPages);
@@ -492,19 +522,30 @@ function OrgManagementSection({
     const name = updateManagerForm.name.trim();
     const password = updateManagerForm.password;
     if (!email || !name || !password) {
-      Toast.show({ type: "error", text1: "Fill manager email, name, and password" });
+      Toast.show({
+        type: "error",
+        text1: "Fill manager email, name, and password",
+      });
       return;
     }
     setUpdateManagerSubmitting(true);
     try {
-      await updateAdminOrgManager(singleSelectedOrg.id, { email, name, password });
-      Toast.show({ type: "success", text1: `Manager updated for "${singleSelectedOrg.name}"` });
+      await updateAdminOrgManager(singleSelectedOrg.id, {
+        email,
+        name,
+        password,
+      });
+      Toast.show({
+        type: "success",
+        text1: `Manager updated for "${singleSelectedOrg.name}"`,
+      });
       setUpdateManagerForm(emptyUpdateManagerForm());
       setSelectedOrgIds(new Set());
       setShowUpdateManager(false);
       await loadOrgs();
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Could not update manager";
+      const msg =
+        e instanceof ApiError ? e.message : "Could not update manager";
       Toast.show({ type: "error", text1: msg });
     } finally {
       setUpdateManagerSubmitting(false);
@@ -513,7 +554,6 @@ function OrgManagementSection({
 
   return (
     <View style={{ marginTop: h(24) }}>
-
       {/* ── 1. Create Organization ── */}
       <Text
         style={{
@@ -562,7 +602,10 @@ function OrgManagementSection({
           label="Email"
           value={createOrgForm.manager.email}
           onChangeText={(t) =>
-            setCreateOrgForm((s) => ({ ...s, manager: { ...s.manager, email: t } }))
+            setCreateOrgForm((s) => ({
+              ...s,
+              manager: { ...s.manager, email: t },
+            }))
           }
           autoCapitalize="none"
           autoCorrect={false}
@@ -572,14 +615,20 @@ function OrgManagementSection({
           label="Name"
           value={createOrgForm.manager.name}
           onChangeText={(t) =>
-            setCreateOrgForm((s) => ({ ...s, manager: { ...s.manager, name: t } }))
+            setCreateOrgForm((s) => ({
+              ...s,
+              manager: { ...s.manager, name: t },
+            }))
           }
         />
         <Input
           label="Password"
           value={createOrgForm.manager.password}
           onChangeText={(t) =>
-            setCreateOrgForm((s) => ({ ...s, manager: { ...s.manager, password: t } }))
+            setCreateOrgForm((s) => ({
+              ...s,
+              manager: { ...s.manager, password: t },
+            }))
           }
           secure
         />
@@ -654,11 +703,16 @@ function OrgManagementSection({
 
       <Card padded>
         {orgsLoading ? (
-          <ActivityIndicator color={colors.tint} style={{ marginVertical: h(16) }} />
+          <ActivityIndicator
+            color={colors.tint}
+            style={{ marginVertical: h(16) }}
+          />
         ) : orgsError ? (
           <Text style={{ color: colors.accent }}>{orgsError}</Text>
         ) : orgRows.length === 0 ? (
-          <Text style={{ color: colors.tabIconDefault }}>No organizations yet.</Text>
+          <Text style={{ color: colors.tabIconDefault }}>
+            No organizations yet.
+          </Text>
         ) : (
           orgRows.map((org, i) => (
             <OrgRow
@@ -718,7 +772,12 @@ function OrgManagementSection({
                 Update Manager
               </Text>
               <Text
-                style={{ color: colors.text, fontSize: w(14), fontWeight: "700", marginTop: h(2) }}
+                style={{
+                  color: colors.text,
+                  fontSize: w(14),
+                  fontWeight: "700",
+                  marginTop: h(2),
+                }}
                 numberOfLines={1}
               >
                 {singleSelectedOrg.name}
@@ -732,13 +791,17 @@ function OrgManagementSection({
                 borderRadius: 6,
                 borderWidth: 1,
                 borderColor: showUpdateManager ? colors.tint : colors.border,
-                backgroundColor: showUpdateManager ? colors.tint + "18" : "transparent",
+                backgroundColor: showUpdateManager
+                  ? colors.tint + "18"
+                  : "transparent",
               }}
               accessibilityRole="button"
             >
               <Text
                 style={{
-                  color: showUpdateManager ? colors.tint : colors.tabIconDefault,
+                  color: showUpdateManager
+                    ? colors.tint
+                    : colors.tabIconDefault,
                   fontSize: w(12),
                   fontWeight: "600",
                 }}
@@ -753,7 +816,9 @@ function OrgManagementSection({
               <Input
                 label="New Manager Email"
                 value={updateManagerForm.email}
-                onChangeText={(t) => setUpdateManagerForm((s) => ({ ...s, email: t }))}
+                onChangeText={(t) =>
+                  setUpdateManagerForm((s) => ({ ...s, email: t }))
+                }
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -761,12 +826,16 @@ function OrgManagementSection({
               <Input
                 label="Name"
                 value={updateManagerForm.name}
-                onChangeText={(t) => setUpdateManagerForm((s) => ({ ...s, name: t }))}
+                onChangeText={(t) =>
+                  setUpdateManagerForm((s) => ({ ...s, name: t }))
+                }
               />
               <Input
                 label="Password"
                 value={updateManagerForm.password}
-                onChangeText={(t) => setUpdateManagerForm((s) => ({ ...s, password: t }))}
+                onChangeText={(t) =>
+                  setUpdateManagerForm((s) => ({ ...s, password: t }))
+                }
                 secure
               />
               <Button
@@ -802,8 +871,12 @@ export default function AdminCreateAccountsScreen() {
   const [userTotalPages, setUserTotalPages] = useState(1);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(() => new Set());
-  const [userBulkPending, setUserBulkPending] = useState<"block" | "unblock" | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [userBulkPending, setUserBulkPending] = useState<
+    "block" | "unblock" | null
+  >(null);
 
   const loadUsers = useCallback(async () => {
     setUsersError(null);
@@ -945,17 +1018,6 @@ export default function AdminCreateAccountsScreen() {
         }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text
-          style={{
-            color: colors.text,
-            fontSize: w(18),
-            fontWeight: "700",
-            marginBottom: h(8),
-          }}
-        >
-          Create accounts
-        </Text>
-
         <View style={{ marginTop: h(24) }}>
           <Text
             style={{
@@ -1033,9 +1095,14 @@ export default function AdminCreateAccountsScreen() {
               {/* Bulk action bar */}
               {(() => {
                 const selectedCount = selectedUserIds.size;
-                const selectedRows = userRows.filter((r) => selectedUserIds.has(r.id));
+                const selectedRows = userRows.filter((r) =>
+                  selectedUserIds.has(r.id),
+                );
                 const hasBlockable = selectedRows.some(
-                  (r) => !r.isBlocked && !isAdminRoleForBulkBlock(r.role) && r.id !== user?.id,
+                  (r) =>
+                    !r.isBlocked &&
+                    !isAdminRoleForBulkBlock(r.role) &&
+                    r.id !== user?.id,
                 );
                 const hasUnblockable = selectedRows.some((r) => r.isBlocked);
                 return (
@@ -1050,7 +1117,10 @@ export default function AdminCreateAccountsScreen() {
                   >
                     <Text
                       style={{
-                        color: selectedCount > 0 ? colors.text : colors.tabIconDefault,
+                        color:
+                          selectedCount > 0
+                            ? colors.text
+                            : colors.tabIconDefault,
                         fontSize: w(12),
                         flex: 1,
                       }}
@@ -1060,13 +1130,19 @@ export default function AdminCreateAccountsScreen() {
                         : "Select users to block / unblock"}
                     </Text>
                     <Button
-                      title={userBulkPending === "block" ? "Blocking…" : "Block"}
+                      title={
+                        userBulkPending === "block" ? "Blocking…" : "Block"
+                      }
                       variant="outline"
                       disabled={!hasBlockable || userBulkPending !== null}
                       onPress={() => void runBulkBlockUnblock("block")}
                     />
                     <Button
-                      title={userBulkPending === "unblock" ? "Unblocking…" : "Unblock"}
+                      title={
+                        userBulkPending === "unblock"
+                          ? "Unblocking…"
+                          : "Unblock"
+                      }
                       variant="outline"
                       disabled={!hasUnblockable || userBulkPending !== null}
                       onPress={() => void runBulkBlockUnblock("unblock")}
@@ -1102,7 +1178,8 @@ export default function AdminCreateAccountsScreen() {
                 ) : (
                   userRows.map((item, i) => {
                     const checkable =
-                      !isAdminRoleForBulkBlock(item.role) && item.id !== user?.id;
+                      !isAdminRoleForBulkBlock(item.role) &&
+                      item.id !== user?.id;
                     return (
                       <UserRow
                         key={item.id}
@@ -1112,7 +1189,9 @@ export default function AdminCreateAccountsScreen() {
                         isLast={i === userRows.length - 1}
                         checkable={checkable}
                         checked={checkable && selectedUserIds.has(item.id)}
-                        onToggle={checkable ? () => toggleUserCheck(item.id) : undefined}
+                        onToggle={
+                          checkable ? () => toggleUserCheck(item.id) : undefined
+                        }
                       />
                     );
                   })
@@ -1127,14 +1206,18 @@ export default function AdminCreateAccountsScreen() {
                     disabled={page <= 1}
                     onPress={() => setPage((p) => Math.max(1, p - 1))}
                   />
-                  <Text style={{ color: colors.tabIconDefault, fontSize: w(14) }}>
+                  <Text
+                    style={{ color: colors.tabIconDefault, fontSize: w(14) }}
+                  >
                     {page} / {userTotalPages}
                   </Text>
                   <Button
                     title="Next"
                     variant="outline"
                     disabled={page >= userTotalPages}
-                    onPress={() => setPage((p) => Math.min(userTotalPages, p + 1))}
+                    onPress={() =>
+                      setPage((p) => Math.min(userTotalPages, p + 1))
+                    }
                   />
                 </View>
               )}
