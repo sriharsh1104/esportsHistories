@@ -50,7 +50,6 @@ export function AccountSecurityModal({
   const colors = Colors[scheme];
   const insets = useSafeAreaInsets();
   const { logout } = useAuth();
-  const [loggingOut, setLoggingOut] = useState(false);
   const logoutInFlight = useRef(false);
 
   const [devicesLoading, setDevicesLoading] = useState(false);
@@ -292,17 +291,15 @@ export function AccountSecurityModal({
     async (allDevices: boolean) => {
       if (logoutInFlight.current) return;
       logoutInFlight.current = true;
-      setLoggingOut(true);
       try {
-        await logout(allDevices ? { allDevices: true } : undefined);
         onClose();
+        await logout(allDevices ? { allDevices: true } : undefined);
         router.replace(ROUTES.LOGIN);
       } finally {
         logoutInFlight.current = false;
-        setLoggingOut(false);
       }
     },
-    [logout, onClose]
+    [logout, onClose],
   );
 
   /** Tap → `POST /auth/logout` (via `auth.service.logout`) */
@@ -317,7 +314,7 @@ export function AccountSecurityModal({
 
   const onPressLogoutSession = useCallback(
     async (sessionId: string, isCurrent?: boolean) => {
-      if (loggingOut || devicesLoading) return;
+      if (logoutInFlight.current || devicesLoading) return;
       if (isCurrent) {
         void runLogout(false);
         return;
@@ -334,7 +331,7 @@ export function AccountSecurityModal({
         setDevicesLoading(false);
       }
     },
-    [devicesLoading, loggingOut, refreshDevices, runLogout]
+    [devicesLoading, refreshDevices, runLogout]
   );
 
   const sectionTitle = {
@@ -464,19 +461,15 @@ export function AccountSecurityModal({
               >
                 Account security
               </Text>
-              {loggingOut ? (
-                <ActivityIndicator color={colors.tint} style={{ marginRight: w(8) }} />
-              ) : (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close account security"
-                  onPress={onClose}
-                  hitSlop={12}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: w(8) })}
-                >
-                  <FontAwesome name="times" size={w(22)} color={colors.tabIconDefault} />
-                </Pressable>
-              )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close account security"
+                onPress={onClose}
+                hitSlop={12}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: w(8) })}
+              >
+                <FontAwesome name="times" size={w(22)} color={colors.tabIconDefault} />
+              </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -486,13 +479,13 @@ export function AccountSecurityModal({
                 <SettingsRow
                   icon="sign-out"
                   label="Log out from this device"
-                  onPress={loggingOut ? undefined : onPressLogoutThisDevice}
+                  onPress={onPressLogoutThisDevice}
                   destructive
                 />
                 <SettingsRow
                   icon="power-off"
                   label="Log out from all devices"
-                  onPress={loggingOut ? undefined : onPressLogoutAllDevices}
+                  onPress={onPressLogoutAllDevices}
                   destructive
                 />
               </Card>

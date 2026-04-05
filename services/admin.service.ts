@@ -1152,3 +1152,73 @@ export async function assignAdminTournamentHost(
     toast: false,
   });
 }
+
+function specialTournamentIdFromResponse(raw: unknown): string {
+  const root = asRecord(raw);
+  const data = asRecord(root?.data) ?? root;
+  return (
+    strId(data?.id) ||
+    strId(data?._id) ||
+    strId(data?.tournamentId) ||
+    strId(root?.id) ||
+    strId(root?._id)
+  );
+}
+
+/**
+ * POST `/special-tournament/create` — body shape must match backend Swagger (rounds, prize pool, etc.).
+ * Entry fee is always 0 for users; tournament starts in `draft`.
+ */
+export async function createAdminSpecialTournament(
+  body: Record<string, unknown>,
+): Promise<{ id: string }> {
+  const raw = await request<unknown>(
+    API_ENDPOINTS.ADMIN.SPECIAL_TOURNAMENT_CREATE,
+    {
+      method: "POST",
+      body,
+      toast: false,
+    },
+  );
+  const id = specialTournamentIdFromResponse(raw);
+  if (!id) {
+    throw new ApiError(
+      "Tournament may have been created but the response did not include an id",
+    );
+  }
+  return { id };
+}
+
+/** POST `/special-tournament/{id}/open-registration` — draft → registration_open (admin only). */
+export async function openAdminSpecialTournamentRegistration(
+  tournamentId: string,
+): Promise<void> {
+  const id = String(tournamentId).trim();
+  if (!id) throw new ApiError("Tournament id is required");
+  await request<unknown>(
+    API_ENDPOINTS.ADMIN.SPECIAL_TOURNAMENT_OPEN_REGISTRATION(id),
+    {
+      method: "POST",
+      toast: false,
+    },
+  );
+}
+
+export type CancelAdminSpecialTournamentBody = {
+  reason?: string;
+};
+
+/** POST `/special-tournament/{id}/cancel` — free entry, no refunds (admin only). */
+export async function cancelAdminSpecialTournament(
+  tournamentId: string,
+  body?: CancelAdminSpecialTournamentBody,
+): Promise<void> {
+  const id = String(tournamentId).trim();
+  if (!id) throw new ApiError("Tournament id is required");
+  const reason = body?.reason?.trim();
+  await request<unknown>(API_ENDPOINTS.ADMIN.SPECIAL_TOURNAMENT_CANCEL(id), {
+    method: "POST",
+    body: { reason: reason || "Cancelled by admin" },
+    toast: false,
+  });
+}

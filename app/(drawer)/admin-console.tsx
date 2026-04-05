@@ -28,6 +28,8 @@ import type {
   AdminUserRoleFilter,
   AdminUserRow,
 } from "@/types/admin";
+import { useAppDispatch } from "@/store/hooks";
+import { hideLoader, showLoader } from "@/store/slices/loaderSlice";
 import { isAdminUser } from "@/utils/adminUser";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Redirect } from "expo-router";
@@ -338,6 +340,7 @@ export default function AdminScreen() {
   const scheme = useColorScheme() ?? "light";
   const colors = Colors[scheme];
   const { w, h } = useResponsive();
+  const dispatch = useAppDispatch();
   const [section, setSection] = useState<AdminSection>("overview");
 
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
@@ -358,9 +361,6 @@ export default function AdminScreen() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [userBlockPending, setUserBlockPending] = useState<
-    "block" | "unblock" | null
-  >(null);
 
   const selectedCount = selectedUserIds.size;
   const selectedIdsList = useMemo(
@@ -405,27 +405,33 @@ export default function AdminScreen() {
     netProfit: [],
   });
 
-  const loadUsers = useCallback(async () => {
-    setUsersError(null);
-    setUsersLoading(true);
-    try {
-      const res = await fetchAdminUsers({
-        page,
-        limit,
-        search: searchApplied || undefined,
-        role: roleFilter,
-      });
-      setUserRows(res.items);
-      setUserTotal(res.total);
-      setUserTotalPages(res.totalPages);
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Failed to load users";
-      setUsersError(msg);
-      Toast.show({ type: "error", text1: msg });
-    } finally {
-      setUsersLoading(false);
-    }
-  }, [page, limit, searchApplied, roleFilter]);
+  const loadUsers = useCallback(
+    async (opts?: { skipLoader?: boolean }) => {
+      const skipLoader = opts?.skipLoader === true;
+      setUsersError(null);
+      setUsersLoading(true);
+      if (!skipLoader) dispatch(showLoader());
+      try {
+        const res = await fetchAdminUsers({
+          page,
+          limit,
+          search: searchApplied || undefined,
+          role: roleFilter,
+        });
+        setUserRows(res.items);
+        setUserTotal(res.total);
+        setUserTotalPages(res.totalPages);
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : "Failed to load users";
+        setUsersError(msg);
+        Toast.show({ type: "error", text1: msg });
+      } finally {
+        setUsersLoading(false);
+        if (!skipLoader) dispatch(hideLoader());
+      }
+    },
+    [page, limit, searchApplied, roleFilter, dispatch],
+  );
 
   useEffect(() => {
     if (!isAuthenticated || !isAdminUser(user)) return;
@@ -497,9 +503,10 @@ export default function AdminScreen() {
 
   useEffect(() => {
     if (section !== "users") return;
+    if (authLoading) return;
     if (!isAuthenticated || !isAdminUser(user)) return;
-    loadUsers();
-  }, [section, isAuthenticated, user, loadUsers]);
+    void loadUsers();
+  }, [section, authLoading, isAuthenticated, user, loadUsers]);
 
   useEffect(() => {
     setSelectedUserIds(new Set());
@@ -575,7 +582,7 @@ export default function AdminScreen() {
         });
         return;
       }
-      setUserBlockPending(mode);
+      dispatch(showLoader());
       try {
         if (mode === "block") await blockAdminUsers(ids);
         else await unblockAdminUsers(ids);
@@ -587,7 +594,7 @@ export default function AdminScreen() {
               : "Selected users unblocked",
         });
         setSelectedUserIds(new Set());
-        await loadUsers();
+        await loadUsers({ skipLoader: true });
       } catch (e) {
         const msg =
           e instanceof ApiError
@@ -597,10 +604,10 @@ export default function AdminScreen() {
               : "Unblock request failed";
         Toast.show({ type: "error", text1: msg });
       } finally {
-        setUserBlockPending(null);
+        dispatch(hideLoader());
       }
     },
-    [selectedIdsList, user?.id, userRows, loadUsers],
+    [selectedIdsList, user?.id, userRows, loadUsers, dispatch],
   );
 
   const onRefresh = useCallback(async () => {
@@ -610,18 +617,22 @@ export default function AdminScreen() {
         await loadStats();
         const s = await loadFinanceSeries();
         setFinanceSeries(s);
-      } else await loadUsers();
+      } else await loadUsers({ skipLoader: true });
     } finally {
       setRefreshing(false);
     }
   }, [section, loadStats, loadUsers, loadFinanceSeries]);
 
+  useEffect(() => {
+    if (!authLoading) return;
+    dispatch(showLoader());
+    return () => {
+      void dispatch(hideLoader());
+    };
+  }, [authLoading, dispatch]);
+
   if (authLoading) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.tint} />
-      </View>
-    );
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 
   if (!isAuthenticated || !isAdminUser(user)) {
@@ -1039,18 +1050,12 @@ export default function AdminScreen() {
 
             <AdminUserBlockActionBar
               selectedCount={selectedCount}
-              pendingAction={userBlockPending}
               onBlock={() => void runBulkBlockUnblock("block")}
               onUnblock={() => void runBulkBlockUnblock("unblock")}
             />
 
             <Card style={{ marginTop: h(16) }} padded>
-              {usersLoading ? (
-                <ActivityIndicator
-                  color={colors.tint}
-                  style={{ marginVertical: h(16) }}
-                />
-              ) : usersError ? (
+              {usersLoading ? null : usersError ? (
                 <ClassicEmptyState
                   variant="error"
                   title="Couldn't load users"

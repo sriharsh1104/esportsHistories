@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { API_ENDPOINTS } from '@/constants/api';
 import { api } from './api.service';
 
@@ -26,6 +27,54 @@ export type JoinedTeamSlotRow = {
   slotLabel: string;
   primaryText: string;
   secondaryText?: string;
+};
+
+/** Leader roster from GET `/special-tournament/{id}` (`tournament.myTeam`). */
+export type SpecialTournamentMyTeam = {
+  teamName: string;
+  players: string[];
+  teammateNamesCount: number | null;
+  isEligibleForRound1: boolean | null;
+  teammatesNeededForRound1: number | null;
+};
+
+export type SpecialTournamentBracketOutlineEntry = {
+  roundNumber: number | null;
+  phase: string | null;
+  phaseLabel: string | null;
+  /** Groups / pools in this round (when API sends it). */
+  groupCount: number | null;
+  teamsPerGroup: number | null;
+};
+
+export type SpecialTournamentRoundSummary = {
+  roundNumber: number | null;
+  status: string | null;
+  slotCount: number | null;
+  groupCount: number | null;
+  teamsPerGroup: number | null;
+};
+
+export type SpecialTournamentUserSlotInfo = {
+  roundNumber: number | null;
+  slotIndex: number | null;
+  roomId: string | null;
+  roomPassword: string | null;
+};
+
+/**
+ * Parsed `tournament` object from GET `/special-tournament/{id}` (user-scoped; includes `myTeam`).
+ */
+export type SpecialTournamentUserDetail = {
+  status: string;
+  isParticipant: boolean;
+  myTeam: SpecialTournamentMyTeam | null;
+  participantCount: number | null;
+  maxSlots: number | null;
+  eligibleTeamCount: number | null;
+  bracketOutline: SpecialTournamentBracketOutlineEntry[] | null;
+  rounds: SpecialTournamentRoundSummary[] | null;
+  userSlotInfo: SpecialTournamentUserSlotInfo | null;
 };
 
 export type TournamentUiItem = {
@@ -65,6 +114,11 @@ export type TournamentUiItem = {
   /** Custom room credentials when host has set them (`room` object or flat fields). */
   lobbyRoomId?: string | null;
   lobbyRoomPassword?: string | null;
+  /**
+   * Sponsored special tournament: filled after GET `/special-tournament/{id}`.
+   * Drives `myTeam` / eligibility UI without scanning `joinedTeamsList`.
+   */
+  specialUserDetail?: SpecialTournamentUserDetail | null;
 };
 
 function normKey(input: unknown): string {
@@ -548,6 +602,340 @@ export async function joinUserTournament(payload: JoinTournamentPayload): Promis
   });
 }
 
+function firstNonEmptyString(...vals: unknown[]): string | null {
+  for (const v of vals) {
+    const s = String(v ?? '').trim();
+    if (s) return s;
+  }
+  return null;
+}
+
+function inviteFieldsFromRecord(rec: Record<string, unknown>): {
+  inviteLink: string | null;
+  inviteCode: string | null;
+} {
+  const inviteLink = firstNonEmptyString(
+    rec.inviteLink,
+    rec.invite_url,
+    rec.inviteUrl,
+    rec.shareUrl,
+    rec.share_url,
+    rec.joinUrl,
+    rec.join_url,
+    rec.deepLink,
+    rec.deeplink,
+    rec.deep_link,
+  );
+  const inviteCode = firstNonEmptyString(
+    rec.inviteCode,
+    rec.invite_code,
+    rec.teamInviteCode,
+    rec.team_invite_code,
+    rec.code,
+    rec.token,
+    rec.joinToken,
+    rec.join_token,
+  );
+  return { inviteLink, inviteCode };
+}
+
+/**
+ * Reads invite link/code from `POST /special-tournament/{id}/join` (and common envelope shapes).
+ */
+export function parseSpecialTournamentJoinInvite(raw: unknown): {
+  inviteLink: string | null;
+  inviteCode: string | null;
+} {
+  const root = asRecord(raw) ?? {};
+  const nested =
+    asRecord(root.data) ??
+    asRecord(root.result) ??
+    asRecord(root.team) ??
+    null;
+  const a = inviteFieldsFromRecord(root);
+  const b = nested ? inviteFieldsFromRecord(nested) : { inviteLink: null, inviteCode: null };
+  return {
+    inviteLink: a.inviteLink ?? b.inviteLink,
+    inviteCode: a.inviteCode ?? b.inviteCode,
+  };
+}
+
+/** App / universal link for teammates (path `special-team-invite`). */
+export function buildSpecialTeamInviteAppLink(
+  tournamentId: string,
+  inviteCode: string,
+): string {
+  const id = String(tournamentId ?? '').trim();
+  const code = String(inviteCode ?? '').trim();
+  if (!id || !code) return '';
+  return Linking.createURL('special-team-invite', {
+    queryParams: { tournamentId: id, invite: code },
+  });
+}
+
+export type SpecialTournamentLeaderJoinResult = {
+  inviteLink: string | null;
+  inviteCode: string | null;
+  /** Best URL to show/share (server link or built app link). */
+  shareUrl: string | null;
+};
+
+/** POST `/special-tournament/{id}/join` — leader registers team; response may include invite link/code. */
+export async function joinSpecialTournamentLeader(
+  payload: Omit<JoinTournamentPayload, 'tournamentId'> & { tournamentId: string },
+): Promise<SpecialTournamentLeaderJoinResult> {
+  const tournamentId = String(payload.tournamentId ?? '').trim();
+  const teamName = String(payload.teamName ?? '').trim();
+  if (!tournamentId) throw new Error('Tournament id is required');
+  if (!teamName) throw new Error('Team name is required');
+  const players = (Array.isArray(payload.players) ? payload.players : [])
+    .map((p) => String(p).trim())
+    .filter(Boolean);
+  const raw = await api.post<unknown>(API_ENDPOINTS.TOURNAMENT.SPECIAL_JOIN(tournamentId), {
+    teamName,
+    players,
+  });
+  const { inviteLink, inviteCode } = parseSpecialTournamentJoinInvite(raw);
+  const built =
+    inviteCode && !inviteLink ? buildSpecialTeamInviteAppLink(tournamentId, inviteCode) : '';
+  const shareUrl = (inviteLink && inviteLink.trim()) || (built && built.trim()) || null;
+  return { inviteLink, inviteCode, shareUrl };
+}
+
+/**
+ * POST `/special-tournament/{id}/join-team` — teammate accepts leader invite (body keys vary by backend).
+ */
+export async function joinSpecialTournamentAsTeammate(
+  tournamentId: string,
+  inviteCode: string,
+): Promise<void> {
+  const id = String(tournamentId ?? '').trim();
+  const code = String(inviteCode ?? '').trim();
+  if (!id) throw new Error('Tournament id is required');
+  if (!code) throw new Error('Invite code is required');
+  await api.post(API_ENDPOINTS.TOURNAMENT.SPECIAL_JOIN_TEAM(id), { inviteCode: code });
+}
+
+function parseStringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const el of raw) {
+    if (typeof el === 'string') {
+      const s = el.trim();
+      if (s) out.push(s);
+      continue;
+    }
+    const r = asRecord(el);
+    if (r) {
+      const s = String(
+        r.name ?? r.username ?? r.ign ?? r.playerName ?? r.player_name ?? '',
+      ).trim();
+      if (s) out.push(s);
+    }
+  }
+  return out;
+}
+
+function parseSpecialTournamentMyTeam(raw: unknown): SpecialTournamentMyTeam | null {
+  const r = asRecord(raw);
+  if (!r) return null;
+  const teamName = String(r.teamName ?? r.team_name ?? '').trim();
+  const players = parseStringList(r.players ?? r.teammateNames ?? r.teammate_names);
+  if (!teamName && players.length === 0) return null;
+  return {
+    teamName: teamName || 'Team',
+    players,
+    teammateNamesCount: toNumberOrNull(r.teammateNamesCount ?? r.teammate_names_count),
+    isEligibleForRound1:
+      typeof r.isEligibleForRound1 === 'boolean'
+        ? r.isEligibleForRound1
+        : typeof r.is_eligible_for_round1 === 'boolean'
+          ? r.is_eligible_for_round1
+          : null,
+    teammatesNeededForRound1: toNumberOrNull(
+      r.teammatesNeededForRound1 ?? r.teammates_needed_for_round1,
+    ),
+  };
+}
+
+function parseBracketOutline(raw: unknown): SpecialTournamentBracketOutlineEntry[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: SpecialTournamentBracketOutlineEntry[] = [];
+  for (const row of raw) {
+    const r = asRecord(row);
+    if (!r) continue;
+    out.push({
+      roundNumber: toNumberOrNull(r.roundNumber ?? r.round_number ?? r.round),
+      phase: firstNonEmptyString(r.phase, r.phaseKey, r.phase_key),
+      phaseLabel: firstNonEmptyString(r.phaseLabel, r.phase_label, r.label),
+      groupCount: toNumberOrNull(
+        r.groupCount ?? r.group_count ?? r.groups ?? r.numGroups ?? r.totalGroups,
+      ),
+      teamsPerGroup: toNumberOrNull(
+        r.teamsPerGroup ?? r.teams_per_group ?? r.maxTeamsPerGroup ?? r.slotSize,
+      ),
+    });
+  }
+  return out.length ? out : null;
+}
+
+function parseSpecialRoundsSummary(raw: unknown): SpecialTournamentRoundSummary[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: SpecialTournamentRoundSummary[] = [];
+  for (const row of raw) {
+    const r = asRecord(row);
+    if (!r) continue;
+    out.push({
+      roundNumber: toNumberOrNull(r.roundNumber ?? r.round_number ?? r.round),
+      status: firstNonEmptyString(r.status, r.state),
+      slotCount: toNumberOrNull(r.slotCount ?? r.slot_count ?? r.slots),
+      groupCount: toNumberOrNull(
+        r.groupCount ?? r.group_count ?? r.groups ?? r.numGroups ?? r.totalGroups,
+      ),
+      teamsPerGroup: toNumberOrNull(
+        r.teamsPerGroup ?? r.teams_per_group ?? r.maxTeamsPerGroup,
+      ),
+    });
+  }
+  return out.length ? out : null;
+}
+
+function parseSpecialUserSlotInfo(raw: unknown): SpecialTournamentUserSlotInfo | null {
+  const r = asRecord(raw);
+  if (!r) return null;
+  const room = asRecord(r.room);
+  const roomId = firstNonEmptyString(
+    room?.roomId,
+    room?.room_id,
+    r.roomId,
+    r.room_id,
+    r.customRoomId,
+  );
+  const roomPassword = firstNonEmptyString(
+    room?.password,
+    room?.roomPassword,
+    room?.room_password,
+    r.roomPassword,
+    r.room_password,
+    r.password,
+  );
+  const rn = toNumberOrNull(r.roundNumber ?? r.round_number);
+  const si = toNumberOrNull(r.slotIndex ?? r.slot_index);
+  if (roomId == null && roomPassword == null && rn == null && si == null) return null;
+  return {
+    roundNumber: rn,
+    slotIndex: si,
+    roomId,
+    roomPassword,
+  };
+}
+
+/**
+ * Extract `tournament` from GET `/special-tournament/{id}` envelopes.
+ */
+export function parseSpecialTournamentUserDetailPayload(raw: unknown): SpecialTournamentUserDetail | null {
+  const root = asRecord(raw) ?? {};
+  let t =
+    asRecord(root.tournament) ??
+    asRecord(root.tournamentData) ??
+    asRecord(root.tournament_data);
+  if (!t && root.data) {
+    const d = asRecord(root.data);
+    t = asRecord(d?.tournament) ?? d;
+  }
+  if (!t) return null;
+
+  const status = String(t.status ?? '').trim() || 'unknown';
+  const isParticipant =
+    typeof t.isParticipant === 'boolean'
+      ? t.isParticipant
+      : typeof t.is_participant === 'boolean'
+        ? t.is_participant
+        : false;
+
+  return {
+    status,
+    isParticipant,
+    myTeam: parseSpecialTournamentMyTeam(t.myTeam ?? t.my_team),
+    participantCount: toNumberOrNull(t.participantCount ?? t.participant_count ?? t.joinedCount),
+    maxSlots: toNumberOrNull(t.maxSlots ?? t.max_slots ?? t.maxTeams ?? t.max_teams),
+    eligibleTeamCount: toNumberOrNull(t.eligibleTeamCount ?? t.eligible_team_count),
+    bracketOutline: parseBracketOutline(t.bracketOutline ?? t.bracket_outline),
+    rounds: parseSpecialRoundsSummary(t.rounds),
+    userSlotInfo: parseSpecialUserSlotInfo(t.userSlotInfo ?? t.user_slot_info),
+  };
+}
+
+/**
+ * GET `/special-tournament/{id}` — user detail (`myTeam`, counts, bracket, slot room).
+ * Backend `getSpecialTournamentDetailsForUser` should return `tournament.myTeam` for leader binding.
+ */
+export async function fetchSpecialTournamentDetailsForUser(
+  tournamentId: string,
+): Promise<SpecialTournamentUserDetail | null> {
+  const id = String(tournamentId ?? '').trim();
+  if (!id) throw new Error('Tournament id is required');
+  const res = await api.get<unknown>(API_ENDPOINTS.TOURNAMENT.SPECIAL_DETAIL(id));
+  const payload = (res as { data?: unknown })?.data ?? res;
+  return parseSpecialTournamentUserDetailPayload(payload);
+}
+
+export type PatchSpecialTournamentTeamBody = {
+  players?: string[];
+  teamName?: string;
+};
+
+/** PATCH `/special-tournament/{id}/team` — roster change; caller should refetch GET detail after. */
+export async function patchSpecialTournamentTeam(
+  tournamentId: string,
+  body: PatchSpecialTournamentTeamBody,
+): Promise<void> {
+  const id = String(tournamentId ?? '').trim();
+  if (!id) throw new Error('Tournament id is required');
+  await api.patch(API_ENDPOINTS.TOURNAMENT.SPECIAL_PATCH_TEAM(id), body);
+}
+
+/**
+ * Merge GET special detail into list card model (counts, status, room from `userSlotInfo`, `specialUserDetail`).
+ */
+export function applySpecialTournamentUserDetailToUiItem(
+  base: TournamentUiItem,
+  detail: SpecialTournamentUserDetail | null,
+): TournamentUiItem {
+  if (!detail) {
+    return { ...base, specialUserDetail: undefined };
+  }
+  const maxSlots = detail.maxSlots ?? base.maxTeams;
+  const participantCount = detail.participantCount ?? base.joinedCount ?? null;
+  let slotsAvailable: number | null = base.slotsAvailable ?? null;
+  if (maxSlots != null && participantCount != null) {
+    slotsAvailable = Math.max(0, maxSlots - participantCount);
+  }
+
+  const st = detail.status.toLowerCase().replace(/\s+/g, '');
+  let apiStatus = base.apiStatus;
+  if (st === 'registration_open' || st === 'registrationopen') apiStatus = 'upcoming';
+  else if (st === 'running' || st === 'live') apiStatus = 'live';
+  else if (st === 'completed' || st === 'finished') apiStatus = 'completed';
+  else if (st === 'cancelled' || st === 'canceled') apiStatus = 'cancelled';
+  else if (detail.status) apiStatus = detail.status.toLowerCase();
+
+  const slot = detail.userSlotInfo;
+  const slotRoomId = slot ? String(slot.roomId ?? '').trim() : '';
+  const slotRoomPw = slot ? String(slot.roomPassword ?? '').trim() : '';
+
+  return {
+    ...base,
+    maxTeams: maxSlots ?? base.maxTeams,
+    joinedCount: participantCount ?? base.joinedCount,
+    slotsAvailable: slotsAvailable ?? base.slotsAvailable,
+    apiStatus,
+    lobbyRoomId: slotRoomId || base.lobbyRoomId,
+    lobbyRoomPassword: slotRoomPw || base.lobbyRoomPassword,
+    specialUserDetail: detail,
+  };
+}
+
 /** GET — slot-wise joined teams. */
 export async function fetchTournamentJoinedTeams(
   tournamentId: string,
@@ -593,6 +981,11 @@ export type TournamentLiveStandingsRow = {
   kills: number;
   booyah: number;
   totalPositionPoints: number;
+  /** When set, standings can be shown per group with ranks within the group. */
+  groupId?: string | null;
+  groupLabel?: string | null;
+  groupIndex?: number | null;
+  roundNumber?: number | null;
 };
 
 /** Per-match team line from `matchResults[].teams`. */
@@ -603,6 +996,9 @@ export type TournamentLiveMatchTeamRow = {
   positionPoints: number;
   totalPoint: number;
   booyah: number;
+  groupId?: string | null;
+  groupLabel?: string | null;
+  groupIndex?: number | null;
 };
 
 export type TournamentLiveMatchResult = {
@@ -632,6 +1028,17 @@ function toFiniteNum(v: unknown, fallback: number): number {
 
 function parseLiveStandingsRow(raw: unknown, index: number): TournamentLiveStandingsRow {
   const r = asRecord(raw) ?? {};
+  const gid = firstNonEmptyString(r.groupId, r.group_id, r.poolId, r.pool_id);
+  const glabel = firstNonEmptyString(
+    r.groupLabel,
+    r.group_label,
+    r.groupName,
+    r.group_name,
+    r.pool,
+    r.bracketGroup,
+  );
+  const gidx = toNumberOrNull(r.groupIndex ?? r.group_index ?? r.poolIndex);
+  const rn = toNumberOrNull(r.roundNumber ?? r.round_number ?? r.round);
   return {
     position: Math.floor(toFiniteNum(r.position ?? r.rank ?? index + 1, index + 1)),
     teamName: String(r.teamName ?? r.team ?? r.name ?? '').trim() || '—',
@@ -642,11 +1049,23 @@ function parseLiveStandingsRow(raw: unknown, index: number): TournamentLiveStand
       r.totalPositionPoints ?? r.positionPoints ?? r.placementPoints,
       0,
     ),
+    groupId: gid,
+    groupLabel: glabel,
+    groupIndex: gidx,
+    roundNumber: rn,
   };
 }
 
 function parseLiveMatchTeamRow(raw: unknown): TournamentLiveMatchTeamRow {
   const r = asRecord(raw) ?? {};
+  const gid = firstNonEmptyString(r.groupId, r.group_id, r.poolId, r.pool_id);
+  const glabel = firstNonEmptyString(
+    r.groupLabel,
+    r.group_label,
+    r.pool,
+    r.bracketGroup,
+  );
+  const gidx = toNumberOrNull(r.groupIndex ?? r.group_index);
   return {
     teamName: String(r.teamName ?? r.team ?? r.name ?? '').trim() || '—',
     position: Math.floor(toFiniteNum(r.position ?? r.rank ?? r.place, 0)),
@@ -654,6 +1073,9 @@ function parseLiveMatchTeamRow(raw: unknown): TournamentLiveMatchTeamRow {
     positionPoints: toFiniteNum(r.positionPoints ?? r.placementPoints, 0),
     totalPoint: toFiniteNum(r.totalPoint ?? r.totalPoints ?? r.points, 0),
     booyah: toFiniteNum(r.booyah, 0),
+    groupId: gid,
+    groupLabel: glabel,
+    groupIndex: gidx,
   };
 }
 
@@ -729,6 +1151,114 @@ export function normalizeTournamentLiveResultsPayload(root: unknown): Tournament
   };
 }
 
+export type LiveStandingsGroupSection = {
+  key: string;
+  title: string;
+  rows: TournamentLiveStandingsRow[];
+};
+
+function standingGroupKey(r: TournamentLiveStandingsRow): string {
+  if (r.groupId != null && String(r.groupId).trim()) return `id:${String(r.groupId).trim()}`;
+  if (r.groupLabel != null && String(r.groupLabel).trim()) {
+    return `lbl:${String(r.groupLabel).trim()}`;
+  }
+  if (r.groupIndex != null && Number.isFinite(r.groupIndex)) return `idx:${r.groupIndex}`;
+  return '_ungrouped';
+}
+
+function standingGroupTitle(r: TournamentLiveStandingsRow): string {
+  if (r.groupLabel != null && String(r.groupLabel).trim()) return String(r.groupLabel).trim();
+  if (r.groupId != null && String(r.groupId).trim()) return `Group ${String(r.groupId).trim()}`;
+  if (r.groupIndex != null && Number.isFinite(r.groupIndex)) return `Group ${r.groupIndex + 1}`;
+  return 'Other';
+}
+
+/**
+ * When API sends `groupId` / `groupLabel` / `groupIndex` on standings rows, split tables
+ * and rank within each group (caller shows 1..n per section).
+ */
+export function buildLiveStandingsGroupSections(
+  rows: TournamentLiveStandingsRow[],
+): LiveStandingsGroupSection[] | null {
+  if (!rows.length) return null;
+  const hasGroup = rows.some(
+    (r) =>
+      (r.groupId != null && String(r.groupId).trim() !== '') ||
+      (r.groupLabel != null && String(r.groupLabel).trim() !== '') ||
+      (r.groupIndex != null && Number.isFinite(r.groupIndex)),
+  );
+  if (!hasGroup) return null;
+
+  const map = new Map<string, { title: string; rows: TournamentLiveStandingsRow[] }>();
+  for (const r of rows) {
+    const key = standingGroupKey(r);
+    const title = standingGroupTitle(r);
+    if (!map.has(key)) map.set(key, { title, rows: [] });
+    map.get(key)!.rows.push(r);
+  }
+  for (const g of map.values()) {
+    g.rows.sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      return b.totalPoint - a.totalPoint;
+    });
+  }
+  return [...map.entries()]
+    .sort(([ka], [kb]) => ka.localeCompare(kb))
+    .map(([key, v]) => ({ key, title: v.title, rows: v.rows }));
+}
+
+export type LiveMatchTeamGroupSection = {
+  key: string;
+  title: string;
+  teams: TournamentLiveMatchTeamRow[];
+};
+
+function matchTeamGroupKey(t: TournamentLiveMatchTeamRow): string {
+  if (t.groupId != null && String(t.groupId).trim()) return `id:${String(t.groupId).trim()}`;
+  if (t.groupLabel != null && String(t.groupLabel).trim()) {
+    return `lbl:${String(t.groupLabel).trim()}`;
+  }
+  if (t.groupIndex != null && Number.isFinite(t.groupIndex)) return `idx:${t.groupIndex}`;
+  return '_ungrouped';
+}
+
+function matchTeamGroupTitle(t: TournamentLiveMatchTeamRow): string {
+  if (t.groupLabel != null && String(t.groupLabel).trim()) return String(t.groupLabel).trim();
+  if (t.groupId != null && String(t.groupId).trim()) return `Group ${String(t.groupId).trim()}`;
+  if (t.groupIndex != null && Number.isFinite(t.groupIndex)) return `Group ${t.groupIndex + 1}`;
+  return 'Other';
+}
+
+export function buildLiveMatchTeamsGroupSections(
+  teams: TournamentLiveMatchTeamRow[],
+): LiveMatchTeamGroupSection[] | null {
+  if (!teams.length) return null;
+  const hasGroup = teams.some(
+    (t) =>
+      (t.groupId != null && String(t.groupId).trim() !== '') ||
+      (t.groupLabel != null && String(t.groupLabel).trim() !== '') ||
+      (t.groupIndex != null && Number.isFinite(t.groupIndex)),
+  );
+  if (!hasGroup) return null;
+
+  const map = new Map<string, { title: string; teams: TournamentLiveMatchTeamRow[] }>();
+  for (const t of teams) {
+    const key = matchTeamGroupKey(t);
+    const title = matchTeamGroupTitle(t);
+    if (!map.has(key)) map.set(key, { title, teams: [] });
+    map.get(key)!.teams.push(t);
+  }
+  for (const g of map.values()) {
+    g.teams.sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      return b.totalPoint - a.totalPoint;
+    });
+  }
+  return [...map.entries()]
+    .sort(([ka], [kb]) => ka.localeCompare(kb))
+    .map(([key, v]) => ({ key, title: v.title, teams: v.teams }));
+}
+
 /** GET — live standings + partial match rows (host updates). */
 export async function fetchTournamentLiveResults(
   tournamentId: string,
@@ -763,6 +1293,23 @@ export function buildTournamentResultsStreamUrl(
       '',
     ) || '';
   const path = API_ENDPOINTS.TOURNAMENT.RESULTS_STREAM(id).replace(/^\//, '');
+  const t = encodeURIComponent(accessToken);
+  return `${base}/${path}?access_token=${t}`;
+}
+
+/** SSE URL for special tournament live counts / joinedTeams (web). */
+export function buildSpecialTournamentStreamUrl(
+  tournamentId: string,
+  accessToken: string,
+): string {
+  const id = String(tournamentId ?? '').trim();
+  if (!id) throw new Error('Tournament id is required');
+  const base =
+    (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined)?.replace(
+      /\/$/,
+      '',
+    ) || '';
+  const path = API_ENDPOINTS.TOURNAMENT.SPECIAL_STREAM(id).replace(/^\//, '');
   const t = encodeURIComponent(accessToken);
   return `${base}/${path}?access_token=${t}`;
 }

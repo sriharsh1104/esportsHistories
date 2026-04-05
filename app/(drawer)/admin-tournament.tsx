@@ -1,3 +1,4 @@
+import { AdminSpecialTournamentGenerator } from "@/components/admin";
 import { Button, Card, ClassicEmptyState, Input, Screen } from "@/components/ui";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
@@ -249,6 +250,9 @@ export default function AdminTournamentScreen() {
   const [showGamePicker, setShowGamePicker] = useState(false);
   const [gameSearchQuery, setGameSearchQuery] = useState("");
   const [lobbyName, setLobbyName] = useState("");
+  const [generatorTab, setGeneratorTab] = useState<"lobby" | "tournament">(
+    "lobby",
+  );
 
   const totalMatchesEffective = mode === "CS" ? 1 : totalMatches;
 
@@ -519,28 +523,56 @@ export default function AdminTournamentScreen() {
           contentContainerStyle={{ paddingBottom: h(32) }}
           keyboardShouldPersistTaps="handled"
         >
-          <Text
+          <View
             style={{
-              fontSize: w(22),
-              fontWeight: "700",
-              color: colors.text,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: w(8),
               marginBottom: h(16),
             }}
           >
-            Generate lobbies
-          </Text>
+            <Chip
+              label="Lobby generator"
+              selected={generatorTab === "lobby"}
+              onPress={() => setGeneratorTab("lobby")}
+              colors={colors}
+              w={w}
+              h={h}
+            />
+            <Chip
+              label="Tournament generator"
+              selected={generatorTab === "tournament"}
+              onPress={() => setGeneratorTab("tournament")}
+              colors={colors}
+              w={w}
+              h={h}
+            />
+          </View>
 
-          <Card style={{ marginBottom: h(12) }}>
-            <Text
-              style={{
-                fontSize: w(15),
-                fontWeight: "700",
-                color: colors.text,
-                marginBottom: h(6),
-              }}
-            >
-              Game
-            </Text>
+          {generatorTab === "lobby" ? (
+            <>
+              <Text
+                style={{
+                  fontSize: w(22),
+                  fontWeight: "700",
+                  color: colors.text,
+                  marginBottom: h(16),
+                }}
+              >
+                Generate lobbies
+              </Text>
+
+              <Card style={{ marginBottom: h(12) }}>
+                <Text
+                  style={{
+                    fontSize: w(15),
+                    fontWeight: "700",
+                    color: colors.text,
+                    marginBottom: h(6),
+                  }}
+                >
+                  Game
+                </Text>
             <Text
               style={{
                 fontSize: w(12),
@@ -1225,6 +1257,10 @@ export default function AdminTournamentScreen() {
           </Card>
 
           <Button title="Generate lobbies" onPress={submit} fullWidth />
+            </>
+          ) : (
+            <AdminSpecialTournamentGenerator colors={colors} w={w} h={h} />
+          )}
         </ScrollView>
       </Screen>
 

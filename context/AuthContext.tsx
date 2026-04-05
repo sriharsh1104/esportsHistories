@@ -9,6 +9,8 @@ import type {
   User,
   UserAddress,
 } from '@/types/auth';
+import { useAppDispatch } from '@/store/hooks';
+import { hideLoader, showLoader } from '@/store/slices/loaderSlice';
 import { router } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
@@ -35,6 +37,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const dispatch = useAppDispatch();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -118,10 +121,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authService.resendOtp(email);
   }, []);
 
-  const logout = useCallback(async (options?: { allDevices?: boolean }) => {
-    await authService.logout(options);
-    setUser(null);
-  }, []);
+  const logout = useCallback(
+    async (options?: { allDevices?: boolean }) => {
+      dispatch(showLoader());
+      try {
+        await authService.logout(options);
+        setUser(null);
+      } finally {
+        dispatch(hideLoader());
+      }
+    },
+    [dispatch],
+  );
 
   const updateProfile = useCallback(async (data: UpdateProfileData) => {
     const updated = await authService.updateProfile(data);

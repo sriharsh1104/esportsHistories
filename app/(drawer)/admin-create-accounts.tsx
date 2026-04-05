@@ -30,17 +30,12 @@ import type {
   AdminUserRoleFilter,
   AdminUserRow,
 } from "@/types/admin";
+import { useAppDispatch } from "@/store/hooks";
+import { hideLoader, showLoader } from "@/store/slices/loaderSlice";
 import { isAdminUser } from "@/utils/adminUser";
 import { Redirect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Toast from "react-native-toast-message";
 
 function emptyForm(): AdminManualAccountCreateBody {
@@ -212,8 +207,7 @@ function AccountForm({
   values,
   onChange,
   onSubmit,
-  submitting,
-  submitLabel,
+  submitTitle,
 }: {
   title: string;
   description: string;
@@ -223,8 +217,7 @@ function AccountForm({
   values: FormState;
   onChange: (patch: Partial<FormState>) => void;
   onSubmit: () => void;
-  submitting: boolean;
-  submitLabel: string;
+  submitTitle: string;
 }) {
   return (
     <Card style={{ marginBottom: h(20) }}>
@@ -267,12 +260,7 @@ function AccountForm({
         onChangeText={(t) => onChange({ password: t })}
         secure
       />
-      <Button
-        title={submitLabel}
-        onPress={onSubmit}
-        disabled={submitting}
-        fullWidth
-      />
+      <Button title={submitTitle} onPress={onSubmit} fullWidth />
     </Card>
   );
 }
@@ -377,10 +365,10 @@ function OrgManagementSection({
   w: (n: number) => number;
   h: (n: number) => number;
 }) {
+  const dispatch = useAppDispatch();
   const [createOrgForm, setCreateOrgForm] = useState<AdminCreateOrgBody>(() =>
     emptyCreateOrgForm(),
   );
-  const [createOrgSubmitting, setCreateOrgSubmitting] = useState(false);
 
   const [orgPage, setOrgPage] = useState(1);
   const orgLimit = 10;
@@ -394,14 +382,10 @@ function OrgManagementSection({
   const [selectedOrgIds, setSelectedOrgIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [bulkBlockPending, setBulkBlockPending] = useState<
-    "block" | "unblock" | null
-  >(null);
 
   // Update manager (single org, shown when exactly 1 checked)
   const [updateManagerForm, setUpdateManagerForm] =
     useState<AdminUpdateOrgManagerBody>(() => emptyUpdateManagerForm());
-  const [updateManagerSubmitting, setUpdateManagerSubmitting] = useState(false);
   const [showUpdateManager, setShowUpdateManager] = useState(false);
 
   const selectedCount = selectedOrgIds.size;
@@ -410,26 +394,32 @@ function OrgManagementSection({
       ? (orgRows.find((o) => selectedOrgIds.has(o.id)) ?? null)
       : null;
 
-  const loadOrgs = useCallback(async () => {
-    setOrgsError(null);
-    setOrgsLoading(true);
-    try {
-      const res = await fetchAdminOrganizations({
-        page: orgPage,
-        limit: orgLimit,
-      });
-      setOrgRows(res.items);
-      setOrgTotal(res.total);
-      setOrgTotalPages(res.totalPages);
-    } catch (e) {
-      const msg =
-        e instanceof ApiError ? e.message : "Failed to load organizations";
-      setOrgsError(msg);
-      Toast.show({ type: "error", text1: msg });
-    } finally {
-      setOrgsLoading(false);
-    }
-  }, [orgPage]);
+  const loadOrgs = useCallback(
+    async (opts?: { skipLoader?: boolean }) => {
+      const skipLoader = opts?.skipLoader === true;
+      setOrgsError(null);
+      setOrgsLoading(true);
+      if (!skipLoader) dispatch(showLoader());
+      try {
+        const res = await fetchAdminOrganizations({
+          page: orgPage,
+          limit: orgLimit,
+        });
+        setOrgRows(res.items);
+        setOrgTotal(res.total);
+        setOrgTotalPages(res.totalPages);
+      } catch (e) {
+        const msg =
+          e instanceof ApiError ? e.message : "Failed to load organizations";
+        setOrgsError(msg);
+        Toast.show({ type: "error", text1: msg });
+      } finally {
+        setOrgsLoading(false);
+        if (!skipLoader) dispatch(hideLoader());
+      }
+    },
+    [orgPage, dispatch],
+  );
 
   useEffect(() => {
     void loadOrgs();
@@ -462,7 +452,7 @@ function OrgManagementSection({
       });
       return;
     }
-    setCreateOrgSubmitting(true);
+    dispatch(showLoader());
     try {
       await createAdminOrganization({
         name,
@@ -471,15 +461,15 @@ function OrgManagementSection({
       });
       Toast.show({ type: "success", text1: "Organization created" });
       setCreateOrgForm(emptyCreateOrgForm());
-      await loadOrgs();
+      await loadOrgs({ skipLoader: true });
     } catch (e) {
       const msg =
         e instanceof ApiError ? e.message : "Could not create organization";
       Toast.show({ type: "error", text1: msg });
     } finally {
-      setCreateOrgSubmitting(false);
+      dispatch(hideLoader());
     }
-  }, [createOrgForm, loadOrgs]);
+  }, [createOrgForm, loadOrgs, dispatch]);
 
   const submitBulkBlockUnblock = useCallback(
     async (mode: "block" | "unblock") => {
@@ -488,7 +478,7 @@ function OrgManagementSection({
         Toast.show({ type: "info", text1: "Select at least one organization" });
         return;
       }
-      setBulkBlockPending(mode);
+      dispatch(showLoader());
       try {
         await Promise.all(
           ids.map((id) =>
@@ -505,15 +495,15 @@ function OrgManagementSection({
               : `${ids.length} org(s) unblocked`,
         });
         setSelectedOrgIds(new Set());
-        await loadOrgs();
+        await loadOrgs({ skipLoader: true });
       } catch (e) {
         const msg = e instanceof ApiError ? e.message : "Action failed";
         Toast.show({ type: "error", text1: msg });
       } finally {
-        setBulkBlockPending(null);
+        dispatch(hideLoader());
       }
     },
-    [selectedOrgIds, loadOrgs],
+    [selectedOrgIds, loadOrgs, dispatch],
   );
 
   const submitUpdateManager = useCallback(async () => {
@@ -528,7 +518,7 @@ function OrgManagementSection({
       });
       return;
     }
-    setUpdateManagerSubmitting(true);
+    dispatch(showLoader());
     try {
       await updateAdminOrgManager(singleSelectedOrg.id, {
         email,
@@ -542,15 +532,15 @@ function OrgManagementSection({
       setUpdateManagerForm(emptyUpdateManagerForm());
       setSelectedOrgIds(new Set());
       setShowUpdateManager(false);
-      await loadOrgs();
+      await loadOrgs({ skipLoader: true });
     } catch (e) {
       const msg =
         e instanceof ApiError ? e.message : "Could not update manager";
       Toast.show({ type: "error", text1: msg });
     } finally {
-      setUpdateManagerSubmitting(false);
+      dispatch(hideLoader());
     }
-  }, [singleSelectedOrg, updateManagerForm, loadOrgs]);
+  }, [singleSelectedOrg, updateManagerForm, loadOrgs, dispatch]);
 
   return (
     <View style={{ marginTop: h(24) }}>
@@ -633,9 +623,8 @@ function OrgManagementSection({
           secure
         />
         <Button
-          title={createOrgSubmitting ? "Creating…" : "Create Organization"}
+          title="Create Organization"
           onPress={() => void submitCreateOrg()}
-          disabled={createOrgSubmitting}
           fullWidth
         />
       </Card>
@@ -688,26 +677,21 @@ function OrgManagementSection({
             : "Select orgs to block / unblock"}
         </Text>
         <Button
-          title={bulkBlockPending === "block" ? "Blocking…" : "Block"}
+          title="Block"
           variant="outline"
-          disabled={selectedCount === 0 || bulkBlockPending !== null}
+          disabled={selectedCount === 0}
           onPress={() => void submitBulkBlockUnblock("block")}
         />
         <Button
-          title={bulkBlockPending === "unblock" ? "Unblocking…" : "Unblock"}
+          title="Unblock"
           variant="outline"
-          disabled={selectedCount === 0 || bulkBlockPending !== null}
+          disabled={selectedCount === 0}
           onPress={() => void submitBulkBlockUnblock("unblock")}
         />
       </View>
 
       <Card padded>
-        {orgsLoading ? (
-          <ActivityIndicator
-            color={colors.tint}
-            style={{ marginVertical: h(16) }}
-          />
-        ) : orgsError ? (
+        {orgsLoading ? null : orgsError ? (
           <Text style={{ color: colors.accent }}>{orgsError}</Text>
         ) : orgRows.length === 0 ? (
           <Text style={{ color: colors.tabIconDefault }}>
@@ -839,9 +823,8 @@ function OrgManagementSection({
                 secure
               />
               <Button
-                title={updateManagerSubmitting ? "Updating…" : "Confirm Update"}
+                title="Confirm Update"
                 onPress={() => void submitUpdateManager()}
-                disabled={updateManagerSubmitting}
                 fullWidth
               />
             </View>
@@ -856,10 +839,10 @@ export default function AdminCreateAccountsScreen() {
   const scheme = useColorScheme() ?? "light";
   const colors = Colors[scheme];
   const { w, h } = useResponsive();
+  const dispatch = useAppDispatch();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [hostForm, setHostForm] = useState<FormState>(() => emptyForm());
-  const [hostSubmitting, setHostSubmitting] = useState(false);
 
   const [roleFilter, setRoleFilter] = useState<AdminUserRoleFilter>("ALL");
   const [searchInput, setSearchInput] = useState("");
@@ -874,31 +857,34 @@ export default function AdminCreateAccountsScreen() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [userBulkPending, setUserBulkPending] = useState<
-    "block" | "unblock" | null
-  >(null);
 
-  const loadUsers = useCallback(async () => {
-    setUsersError(null);
-    setUsersLoading(true);
-    try {
-      const res = await fetchAdminUsers({
-        page,
-        limit,
-        search: searchApplied || undefined,
-        role: roleFilter,
-      });
-      setUserRows(res.items);
-      setUserTotal(res.total);
-      setUserTotalPages(res.totalPages);
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Failed to load users";
-      setUsersError(msg);
-      Toast.show({ type: "error", text1: msg });
-    } finally {
-      setUsersLoading(false);
-    }
-  }, [page, limit, searchApplied, roleFilter]);
+  const loadUsers = useCallback(
+    async (opts?: { skipLoader?: boolean }) => {
+      const skipLoader = opts?.skipLoader === true;
+      setUsersError(null);
+      setUsersLoading(true);
+      if (!skipLoader) dispatch(showLoader());
+      try {
+        const res = await fetchAdminUsers({
+          page,
+          limit,
+          search: searchApplied || undefined,
+          role: roleFilter,
+        });
+        setUserRows(res.items);
+        setUserTotal(res.total);
+        setUserTotalPages(res.totalPages);
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : "Failed to load users";
+        setUsersError(msg);
+        Toast.show({ type: "error", text1: msg });
+      } finally {
+        setUsersLoading(false);
+        if (!skipLoader) dispatch(hideLoader());
+      }
+    },
+    [page, limit, searchApplied, roleFilter, dispatch],
+  );
 
   const submitHost = useCallback(async () => {
     const email = hostForm.email.trim();
@@ -908,24 +894,25 @@ export default function AdminCreateAccountsScreen() {
       Toast.show({ type: "error", text1: "Fill email, name, and password" });
       return;
     }
-    setHostSubmitting(true);
+    dispatch(showLoader());
     try {
       await createAdminHost({ email, name, password });
       Toast.show({ type: "success", text1: "Host account created" });
       setHostForm(emptyForm());
-      await loadUsers();
+      await loadUsers({ skipLoader: true });
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Could not create host";
       Toast.show({ type: "error", text1: msg });
     } finally {
-      setHostSubmitting(false);
+      dispatch(hideLoader());
     }
-  }, [hostForm.email, hostForm.name, hostForm.password, loadUsers]);
+  }, [hostForm.email, hostForm.name, hostForm.password, loadUsers, dispatch]);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!isAuthenticated || !isAdminUser(user)) return;
     void loadUsers();
-  }, [isAuthenticated, user, loadUsers]);
+  }, [authLoading, isAuthenticated, user, loadUsers]);
 
   useEffect(() => {
     setSelectedUserIds(new Set());
@@ -960,7 +947,7 @@ export default function AdminCreateAccountsScreen() {
         });
         return;
       }
-      setUserBulkPending(mode);
+      dispatch(showLoader());
       try {
         if (mode === "block") await blockAdminUsers(eligible);
         else await unblockAdminUsers(eligible);
@@ -972,29 +959,28 @@ export default function AdminCreateAccountsScreen() {
               : `${eligible.length} user(s) unblocked`,
         });
         setSelectedUserIds(new Set());
-        await loadUsers();
+        await loadUsers({ skipLoader: true });
       } catch (e) {
         const msg = e instanceof ApiError ? e.message : "Action failed";
         Toast.show({ type: "error", text1: msg });
       } finally {
-        setUserBulkPending(null);
+        dispatch(hideLoader());
       }
     },
-    [selectedUserIds, user?.id, userRows, loadUsers],
+    [selectedUserIds, user?.id, userRows, loadUsers, dispatch],
   );
+
+  useEffect(() => {
+    if (!authLoading) return;
+    dispatch(showLoader());
+    return () => {
+      void dispatch(hideLoader());
+    };
+  }, [authLoading, dispatch]);
 
   if (authLoading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: colors.background,
-        }}
-      >
-        <Text style={{ color: colors.text }}>Loading…</Text>
-      </View>
+      <View style={{ flex: 1, backgroundColor: colors.background }} />
     );
   }
 
@@ -1064,9 +1050,8 @@ export default function AdminCreateAccountsScreen() {
               h={h}
               values={hostForm}
               onChange={(patch) => setHostForm((s) => ({ ...s, ...patch }))}
-              onSubmit={submitHost}
-              submitting={hostSubmitting}
-              submitLabel={hostSubmitting ? "Creating…" : "Create host"}
+              onSubmit={() => void submitHost()}
+              submitTitle="Create host"
             />
           )}
 
@@ -1130,21 +1115,15 @@ export default function AdminCreateAccountsScreen() {
                         : "Select users to block / unblock"}
                     </Text>
                     <Button
-                      title={
-                        userBulkPending === "block" ? "Blocking…" : "Block"
-                      }
+                      title="Block"
                       variant="outline"
-                      disabled={!hasBlockable || userBulkPending !== null}
+                      disabled={!hasBlockable}
                       onPress={() => void runBulkBlockUnblock("block")}
                     />
                     <Button
-                      title={
-                        userBulkPending === "unblock"
-                          ? "Unblocking…"
-                          : "Unblock"
-                      }
+                      title="Unblock"
                       variant="outline"
-                      disabled={!hasUnblockable || userBulkPending !== null}
+                      disabled={!hasUnblockable}
                       onPress={() => void runBulkBlockUnblock("unblock")}
                     />
                   </View>
@@ -1152,12 +1131,7 @@ export default function AdminCreateAccountsScreen() {
               })()}
 
               <Card padded>
-                {usersLoading ? (
-                  <ActivityIndicator
-                    color={colors.tint}
-                    style={{ marginVertical: h(16) }}
-                  />
-                ) : usersError ? (
+                {usersLoading ? null : usersError ? (
                   <ClassicEmptyState
                     variant="error"
                     title="Couldn't load users"

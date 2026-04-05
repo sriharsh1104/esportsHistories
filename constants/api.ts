@@ -146,6 +146,12 @@ export const API_ENDPOINTS = {
     HOST_APPLICATIONS_STREAM: "/admin/host-applications/stream",
     /** POST `{ tournamentId, hostId, forceAssign? }` — manual host assign (admin only). */
     ASSIGN_HOST: "/admin/assign-host",
+    /** POST — create sponsored / special multi-round tournament (draft; admin only). */
+    SPECIAL_TOURNAMENT_CREATE: "/special-tournament/create",
+    SPECIAL_TOURNAMENT_OPEN_REGISTRATION: (id: string) =>
+      `/special-tournament/${encodeURIComponent(id)}/open-registration`,
+    SPECIAL_TOURNAMENT_CANCEL: (id: string) =>
+      `/special-tournament/${encodeURIComponent(id)}/cancel`,
   },
   TOURNAMENT: {
     /**
@@ -160,6 +166,27 @@ export const API_ENDPOINTS = {
       `/tournament/${encodeURIComponent(tournamentId)}/chat`,
     /** POST — join as team leader `{ tournamentId, teamName, players }` (Swagger: `/api/tournament/join`). */
     JOIN: "/tournament/join",
+    /** POST — special (sponsored) lobby leader join `{ teamName, players? }` (Swagger: `/api/special-tournament/{id}/join`). */
+    SPECIAL_JOIN: (id: string) =>
+      `/special-tournament/${encodeURIComponent(id)}/join`,
+    /**
+     * POST — accept leader invite as teammate `{ inviteCode }` or `{ code }` (path may match your Swagger).
+     * Adjust if backend uses a different route (e.g. `/join-member`).
+     */
+    SPECIAL_JOIN_TEAM: (id: string) =>
+      `/special-tournament/${encodeURIComponent(id)}/join-team`,
+    /** GET — user-scoped special tournament detail (`tournament.myTeam`, counts, bracket, `userSlotInfo`). */
+    SPECIAL_DETAIL: (id: string) =>
+      `/special-tournament/${encodeURIComponent(id)}`,
+    /**
+     * GET (SSE) — `joinedTeams` / status updates; `access_token` query (same pattern as other streams).
+     * Socket `tournament:status-updated` / `subscribe:tournament` is server-side; client uses this SSE on web.
+     */
+    SPECIAL_STREAM: (id: string) =>
+      `/special-tournament/${encodeURIComponent(id)}/stream`,
+    /** PATCH — roster update; refetch GET `SPECIAL_DETAIL` after success. */
+    SPECIAL_PATCH_TEAM: (id: string) =>
+      `/special-tournament/${encodeURIComponent(id)}/team`,
     /** GET — joined teams / slot assignment for a tournament. */
     JOINED_TEAMS: (tournamentId: string) =>
       `/tournament/${encodeURIComponent(tournamentId)}/joined-teams`,

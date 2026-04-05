@@ -104,6 +104,9 @@ export const ROUTES = {
   TERMS: "/terms",
   HELP_FAQ: "/help-faq",
   BAN_CHECK: "/ban-check",
+
+  /** Deep link / web: join a special-tournament team via leader invite (`?tournamentId=&invite=`). */
+  SPECIAL_TEAM_INVITE: "/special-team-invite",
 } as const;
 
 /** Typed route path for type-safe navigation */

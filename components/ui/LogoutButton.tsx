@@ -15,23 +15,15 @@ export function LogoutButton() {
   const { w, h } = useResponsive();
   const colors = Colors[scheme];
   const [visible, setVisible] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   if (!isAuthenticated) return null;
 
-  const closeModal = () => {
-    if (!submitting) setVisible(false);
-  };
+  const closeModal = () => setVisible(false);
 
   const handleConfirm = async () => {
-    setSubmitting(true);
-    try {
-      await logout();
-      setVisible(false);
-      router.replace(ROUTES.LOGIN);
-    } finally {
-      setSubmitting(false);
-    }
+    setVisible(false);
+    await logout();
+    router.replace(ROUTES.LOGIN);
   };
 
   return (
@@ -101,14 +93,12 @@ export function LogoutButton() {
                 title="Cancel"
                 variant="outline"
                 onPress={closeModal}
-                disabled={submitting}
                 style={{ flex: 1 }}
               />
               <Button
-                title={submitting ? 'Signing out…' : 'Log out'}
+                title="Log out"
                 variant="destructive"
-                onPress={handleConfirm}
-                disabled={submitting}
+                onPress={() => void handleConfirm()}
                 style={{ flex: 1 }}
               />
             </View>

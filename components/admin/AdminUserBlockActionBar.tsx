@@ -3,13 +3,12 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useResponsive } from '@/context/ResponsiveContext';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 export type AdminUserBlockActionBarProps = {
   selectedCount: number;
   onBlock: () => void;
   onUnblock: () => void;
-  pendingAction?: 'block' | 'unblock' | null;
 };
 
 /**
@@ -20,13 +19,11 @@ export function AdminUserBlockActionBar({
   selectedCount,
   onBlock,
   onUnblock,
-  pendingAction,
 }: AdminUserBlockActionBarProps) {
   const scheme = useColorScheme() ?? 'light';
   const colors = Colors[scheme];
   const { w, h } = useResponsive();
-  const busy = pendingAction != null;
-  const disabled = selectedCount === 0 || busy;
+  const disabled = selectedCount === 0;
 
   return (
     <View style={{ marginBottom: h(12) }}>
@@ -47,14 +44,7 @@ export function AdminUserBlockActionBar({
           <Button title="Unblock" variant="outline" disabled={disabled} onPress={onUnblock} style={styles.btn} />
         </View>
       </View>
-      {busy ? (
-        <View style={[styles.busyRow, { marginTop: h(10), gap: w(8) }]}>
-          <ActivityIndicator size="small" color={colors.tint} />
-          <Text style={{ color: colors.tabIconDefault, fontSize: w(12) }}>
-            {pendingAction === 'block' ? 'Blocking…' : 'Unblocking…'}
-          </Text>
-        </View>
-      ) : selectedCount > 0 ? (
+      {selectedCount > 0 ? (
         <Text
           style={{
             color: colors.tabIconDefault,
@@ -80,9 +70,5 @@ const styles = StyleSheet.create({
   },
   btn: {
     paddingHorizontal: 8,
-  },
-  busyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
 });
